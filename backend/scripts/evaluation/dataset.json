@@ -1,0 +1,22 @@
+[
+    {
+        "question": "请解释一下 Go 语言中的 goroutine 和 channel 的关系",
+        "context": "Go 语言并发编程的核心概念包括 goroutine（轻量级线程）和 channel（通道，用于 goroutine 之间的通信）。goroutine 通过 channel 进行数据交换和同步。",
+        "ground_truth": "Goroutine 是 Go 语言中的轻量级线程，由 Go 运行时管理。Channel 是 goroutine 之间通信的管道，遵循 CSP（Communicating Sequential Processes）模型。通过 channel，goroutine 可以安全地传递数据，避免共享内存带来的竞态条件。Channel 可以是有缓冲或无缓冲的，无缓冲 channel 会阻塞发送方直到接收方准备好接收。"
+    },
+    {
+        "question": "什么是 MySQL 的 MVCC 机制？",
+        "context": "MVCC（Multi-Version Concurrency Control，多版本并发控制）是 MySQL InnoDB 存储引擎实现事务隔离的关键技术。",
+        "ground_truth": "MVCC 通过保存数据的多个版本来实现并发控制。每个事务看到的是数据的一个快照版本，而不是最新版本。InnoDB 通过 undo log 和隐藏列（事务 ID、回滚指针）来实现 MVCC。这样可以在不加锁的情况下实现读操作，提高并发性能。MVCC 主要用于实现 READ COMMITTED 和 REPEATABLE READ 隔离级别。"
+    },
+    {
+        "question": "请描述 Redis 的持久化机制",
+        "context": "Redis 是内存数据库，但提供了持久化机制来保证数据不丢失。主要有 RDB 和 AOF 两种方式。",
+        "ground_truth": "Redis 提供两种持久化方式：1) RDB（Redis Database）：定期生成数据快照保存到磁盘，恢复速度快但可能丢失最后一次快照后的数据。2) AOF（Append Only File）：记录每个写操作到日志文件，数据更安全但文件较大、恢复较慢。可以同时启用两种方式，Redis 4.0 后支持混合持久化，结合两者优点。"
+    },
+    {
+        "question": "Kafka 如何保证消息不丢失？",
+        "context": "Kafka 的可靠性依赖生产者确认、Broker 副本与消费者位移提交。",
+        "ground_truth": "生产者端：acks=all 并处理发送失败重试；Broker 端：多副本与 ISR，min.insync.replicas；消费者端：先处理再提交 offset，避免重复消费与丢失。"
+    }
+]

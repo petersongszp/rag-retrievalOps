@@ -1,0 +1,212 @@
+services:
+  # 1. MySQL 数据库
+  mysql:
+    image: mysql:8.0
+    container_name: app-mysql
+    restart: always
+    ports:
+      - "3306:3306"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
+      MYSQL_DATABASE: ${DB_NAME:-interview_agent}
+      TZ: Asia/Shanghai
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - app-network
+
+  # 2. Redis 缓存
+  redis:
+    image: redis:7-alpine
+    container_name: app-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-root}
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-root}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    volumes:
+      - redis-data:/data
+    networks:
+      - app-network
+
+  # 3. Etcd服务（Milvus依赖）
+  etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: milvus-etcd
+    restart: always
+    #    ports:
+    #      - "2379:2379"
+    #      - "2380:2380"
+    volumes:
+      - etcd-data:/etcd
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+      - ETCD_NAME=etcd-milvus
+      - ETCD_DATA_DIR=/etcd
+      - ETCD_LISTEN_CLIENT_URLS=http://0.0.0.0:2379
+      - ETCD_ADVERTISE_CLIENT_URLS=http://etcd:2379
+      - ETCD_LISTEN_PEER_URLS=http://0.0.0.0:2380
+      - ETCD_INITIAL_ADVERTISE_PEER_URLS=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER=etcd-milvus=http://etcd:2380
+      - ETCD_INITIAL_CLUSTER_TOKEN=milvus-etcd
+      - ETCD_INITIAL_CLUSTER_STATE=new
+    command: etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - app-network
+
+  # 4. MinIO对象存储服务（Milvus依赖）
+  # minio:
+  #   image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+  #   container_name: milvus-minio
+  #   restart: always
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   volumes:
+  #     - minio-data:/minio_data
+  #   command: server /minio_data --console-address ":9001"
+  #   environment:
+  #     - MINIO_ROOT_USER=minioadmin
+  #     - MINIO_ROOT_PASSWORD=minioadmin
+  #     - MINIO_REGION_NAME=us-east-1
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+  #     interval: 30s
+  #     timeout: 20s
+  #     retries: 3
+  #   networks:
+  #     - app-network
+
+  # # 5. Milvus向量数据库服务
+  # milvus:
+  #   image: milvusdb/milvus:v2.4.0
+  #   container_name: milvus-standalone
+  #   restart: always
+  #   ports:
+  #     - "19530:19530"
+  #     - "9091:9091"
+  #   volumes:
+  #     - milvus-data:/var/lib/milvus
+  #   depends_on:
+  #     etcd:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_healthy
+  #   environment:
+  #     - ETCD_ENDPOINTS=etcd:2379
+  #     - MINIO_ADDRESS=minio:9000
+  #     - MINIO_ROOT_USER=minioadmin
+  #     - MINIO_ROOT_PASSWORD=minioadmin
+  #     - MINIO_BUCKET_NAME=milvus-bucket
+  #     - MINIO_USE_SSL=false
+  #   command: ["milvus", "run", "standalone"]
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+  #     interval: 30s
+  #     start_period: 90s
+  #     timeout: 20s
+  #     retries: 3
+  #   networks:
+  #     - app-network
+
+  # # 6. Attu - Milvus管理界面
+  # attu:
+  #   image: zilliz/attu:v2.3.4
+  #   container_name: milvus-attu
+  #   restart: always
+  #   ports:
+  #     - "8000:3000"
+  #   depends_on:
+  #     milvus:
+  #       condition: service_healthy
+  #   environment:
+  #     - MILVUS_URL=milvus:19530
+  #   networks:
+  #     - app-network
+
+  # 12. 后端 API 服务
+  backend:
+    build:
+      context: apps/backend
+      dockerfile: Dockerfile
+    container_name: app-backend
+    restart: always
+    ports:
+      - "8888:8888"
+    environment:
+      DB_HOST: mysql
+      DB_PORT: 3306
+      DB_USER: ${DB_USER:-root}
+      DB_PASSWORD: ${DB_PASSWORD:-root}
+      DB_NAME: ${DB_NAME:-interview_agent}
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
+      # MILVUS_ADDRESS: milvus:19530
+      # PORT: 8888
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      # milvus:
+      #   condition: service_healthy
+    volumes:
+      - ./apps/backend/config.yaml:/app/config.yaml
+      - ./apps/backend/logs:/app/logs
+    networks:
+      - app-network
+
+  # 14. 前端应用
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://101.42.249.106:8888/api
+    container_name: app-frontend
+    restart: always
+    ports:
+      - "3000:3000"
+    environment:
+      NEXT_PUBLIC_API_BASE_URL: http://101.42.249.106:8888/api
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
+# 数据卷定义
+volumes:
+  mysql-data:
+    driver: local
+  redis-data:
+    driver: local
+  etcd-data:
+    driver: local
+  minio-data:
+    driver: local
+  # milvus-data:
+  #   driver: local
+
+# 网络定义
+networks:
+  app-network:
+    driver: bridge
+

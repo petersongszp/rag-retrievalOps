@@ -1,0 +1,7 @@
+ragas>=0.1.9
+datasets>=2.14.0
+requests>=2.31.0
+pandas>=2.0.0
+# 12.3.2 TruLens 评估维度（可选）
+trulens>=0.45.0
+trulens-providers-openai>=0.0.1

@@ -1,0 +1,10 @@
+{
+  "dimensions": [
+    "answer_relevancy",
+    "context_relevance",
+    "groundedness",
+    "ground_truth_agreement"
+  ],
+  "note": "安装 trulens 并设置 OPENAI_API_KEY 后可得到真实分数",
+  "num_items": 4
+}
