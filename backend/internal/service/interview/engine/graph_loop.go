@@ -476,8 +476,8 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 
 	const answerTimeout = 30 * time.Minute
 	const heartbeatInterval = 15 * time.Second
-	const maxQuestions = 20      // 最多生成30道问题
-	const historyContextSize = 5 // 保留前5道题作为历史上下文
+	const maxQuestions = 10      // 最多生成10道问题
+	const historyContextSize = 2 // 保留前2道题作为历史上下文
 
 	// 创建智能体服务
 	agentSvc := interview.NewInterviewAgentService(session.UserID)

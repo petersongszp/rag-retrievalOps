@@ -41,12 +41,12 @@ func NewInterviewEngine(sessionManager *SessionManager, interviewSvc interviewse
 
 // RunInterviewLoop 运行面试循环
 // 新逻辑：逐个生成问题，每次生成一道，用户回答后再生成下一道
-// 保留前5道题的历史作为上下文
+// 保留前2道题的历史作为上下文
 func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *InterviewSession) {
 	const answerTimeout = 30 * time.Minute
 	const heartbeatInterval = 15 * time.Second
-	const maxQuestions = 20      // 最多生成30道问题
-	const historyContextSize = 5 // 保留前5道题作为历史上下文
+	const maxQuestions = 10      // 最多生成10道问题
+	const historyContextSize = 2 // 保留前2道题作为历史上下文
 
 	// 创建智能体服务
 	agentSvc := interview.NewInterviewAgentService(session.UserID)
@@ -60,7 +60,7 @@ func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *Intervi
 	// 用于存储所有问题和回答
 	var allDialogues []*InterviewDialogueData
 
-	// 用于存储最近的历史记录（前5道题）
+	// 用于存储最近的历史记录（前2道题）
 	type HistoryItem struct {
 		Question string
 		Answer   string
@@ -89,7 +89,7 @@ func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *Intervi
 2. 必须包含身份前缀（如"我是主面试官："）
 `, session.ResumeId, session.Difficulty)
 		} else {
-			// 后续问题：包含最近5道题的历史上下文
+			// 后续问题：包含最近2道题的历史上下文
 			historyText := ""
 			for i, h := range recentHistory {
 				historyText += fmt.Sprintf("问题%d：%s\n回答%d：%s\n\n", i+1, h.Question, i+1, h.Answer)
@@ -205,7 +205,7 @@ func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *Intervi
 		// 更新会话中的问题计数
 		session.QuestionCount = int32(questionIndex)
 
-		// 更新最近的历史记录（保留最近5道题）
+		// 更新最近的历史记录（保留最近2道题）
 		recentHistory = append(recentHistory, HistoryItem{
 			Question: questionText,
 			Answer:   answer,

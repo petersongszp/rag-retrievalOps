@@ -379,7 +379,7 @@ export default function MultiAgentInterviewStartPage() {
 
     const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
     const ss = String(elapsed % 60).padStart(2, '0');
-    const percent = Math.min(100, Math.round((questionIndex / 20) * 100));
+    const percent = Math.min(100, Math.round((questionIndex / 10) * 100));
 
     return (
         <div className="min-h-screen bg-slate-50 relative flex flex-col font-sans -my-8">
