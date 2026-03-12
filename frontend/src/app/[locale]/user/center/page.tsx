@@ -1,38 +1,35 @@
 'use client';
 
 import {
+  UploadOutlined,
+  FileOutlined,
+  DeleteOutlined,
+  InboxOutlined,
+} from '@ant-design/icons';
+import { useEffect, useState, useCallback } from 'react';
+import { useTranslations } from 'next-intl';
+import Link from 'next/link';
+import type { UploadProps } from 'antd';
+import {
   Typography,
   Row,
   Col,
-  Card as AntCard,
   Avatar,
   Tag,
   Button,
-  Space,
-  Table,
-  Select,
   Upload,
   message,
   Spin,
   Popconfirm,
   Alert,
+  Table,
+  Space,
 } from 'antd';
-import {
-  UploadOutlined,
-  FileOutlined,
-  DeleteOutlined,
-  StarOutlined,
-  StarFilled,
-  InboxOutlined,
-} from '@ant-design/icons';
-import { useEffect, useState, useCallback } from 'react';
-import Link from 'next/link';
-import type { UploadProps } from 'antd';
 import apiClient from '@/services/api/client';
 import { API_BASE_URL } from '@/config/api';
 
-const { Title, Paragraph, Text } = Typography;
 const { Dragger } = Upload;
+const { Title } = Typography;
 
 // 简历信息类型
 interface ResumeInfo {
@@ -48,40 +45,69 @@ interface ResumeInfo {
   error_msg?: string;
 }
 
-const columns = [
-  { title: '项目', dataIndex: 'project' },
-  { title: '金币变动', dataIndex: 'coin' },
-  { title: '支付金额', dataIndex: 'amount' },
-  { title: '交易渠道', dataIndex: 'channel' },
-  { title: '交易时间', dataIndex: 'time' },
-  { title: '交易单号', dataIndex: 'orderId' },
-];
-
-const data = [
-  {
-    key: 1,
-    project: '专项面试-Redis',
-    coin: '+20',
-    amount: '¥0.00',
-    channel: '免费体验',
-    time: '2024-10-01 20:12',
-    orderId: 'FREE-001',
-  },
-  {
-    key: 2,
-    project: '简历押题',
-    coin: '-10',
-    amount: '¥9.90',
-    channel: '微信支付',
-    time: '2024-11-02 12:45',
-    orderId: 'WX-20241102-123456',
-  },
-];
-
 export default function UserCenterPage() {
+  const t = useTranslations('Center');
+  const tCommon = useTranslations('Common');
   const [profile, setProfile] = useState<{ id?: number; username?: string; email?: string } | null>(
     null
   );
+  
+  const columns = [
+    {
+      title: t('consumption.orderId'),
+      dataIndex: 'id',
+      key: 'id',
+      render: (text: string) => <span className="text-slate-500 font-mono">{text}</span>,
+    },
+    {
+      title: t('consumption.type'),
+      dataIndex: 'type',
+      key: 'type',
+      render: (text: string) => <span className="font-medium text-slate-700">{text}</span>,
+    },
+    {
+      title: t('consumption.amount'),
+      dataIndex: 'amount',
+      key: 'amount',
+      render: (amount: number) => <span className="text-slate-900 font-bold">¥{amount}</span>,
+    },
+    {
+      title: t('consumption.status'),
+      dataIndex: 'status',
+      key: 'status',
+      render: () => (
+        <Tag color="success" className="border-0 bg-green-50 text-green-600 rounded-full px-3">
+          {t('consumption.success')}
+        </Tag>
+      ),
+    },
+    {
+      title: t('consumption.time'),
+      dataIndex: 'time',
+      key: 'time',
+      render: (text: string) => <span className="text-slate-400 text-sm">{text}</span>,
+    },
+  ];
+
+  const data = [
+    {
+      key: '1',
+      id: 'ORDER_20241101_001',
+      type: 'VIP会员 - 月卡',
+      amount: 29.9,
+      status: 'success',
+      time: '2024-11-01 12:30:00',
+    },
+    {
+      key: '2',
+      id: 'ORDER_20241005_008',
+      type: '面试加油包',
+      amount: 9.9,
+      status: 'success',
+      time: '2024-10-05 09:15:00',
+    },
+  ];
+
   const [resumes, setResumes] = useState<ResumeInfo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loadingResumes, setLoadingResumes] = useState(false);
@@ -104,12 +130,12 @@ export default function UserCenterPage() {
   // 上传简历（异步处理）
   const handleUpload = async (file: File) => {
     if (modelConfigured === false) {
-      message.error('请先配置模型，否则无法上传简历');
+      message.error(tCommon('modelNotConfigured'));
       return false;
     }
 
     if (resumes.length >= 3) {
-      message.warning('最多只能上传 3 份简历');
+      message.warning(t('resume.maxLimit'));
       return false;
     }
 
@@ -125,13 +151,13 @@ export default function UserCenterPage() {
 
       // 检查返回状态
       if (res?.status === 'pending' || res?.status === 'processing') {
-        message.info('简历已上传，正在解析中...');
+        message.info(t('resume.parsing'));
         // 开始轮询检查状态
         if (res?.resume_id) {
           pollResumeStatus(res.resume_id);
         }
       } else {
-        message.success('简历上传成功');
+        message.success(t('resume.uploadSuccess'));
       }
       fetchResumes();
     } catch (err: any) {
@@ -155,18 +181,18 @@ export default function UserCenterPage() {
         const resume = data?.resume;
 
         if (resume?.status === 'completed') {
-          message.success('简历解析完成');
+          message.success(t('resume.parseSuccess'));
           fetchResumes();
           return;
         } else if (resume?.status === 'failed') {
-          message.error(`简历解析失败: ${resume?.error_msg || '未知错误'}`);
+          message.error(`${t('resume.parseFail')}: ${resume?.error_msg || '未知错误'}`);
           fetchResumes();
           return;
         } else if (attempts < maxAttempts) {
           // 继续轮询
           setTimeout(poll, interval);
         } else {
-          message.warning('简历解析超时，请稍后刷新页面查看');
+          message.warning(t('resume.parseTimeout'));
           fetchResumes();
         }
       } catch (err) {
@@ -185,21 +211,10 @@ export default function UserCenterPage() {
   const handleDelete = async (resumeId: number) => {
     try {
       await apiClient.delete(`/resume/${resumeId}`);
-      message.success('简历已删除');
+      message.success(t('resume.deleteSuccess'));
       fetchResumes();
     } catch (err: any) {
       message.error(err?.message || '删除失败');
-    }
-  };
-
-  // 设为默认简历
-  const handleSetDefault = async (resumeId: number) => {
-    try {
-      await apiClient.post('/resume/set-default', { resume_id: resumeId });
-      message.success('已设为默认简历');
-      fetchResumes();
-    } catch (err: any) {
-      message.error(err?.message || '设置默认简历失败');
     }
   };
 
@@ -260,6 +275,7 @@ export default function UserCenterPage() {
     })();
     fetchResumes();
   }, [fetchResumes]);
+
   return (
     <div className="min-h-screen relative font-sans">
       {/* Decorative Background */}
@@ -268,8 +284,8 @@ export default function UserCenterPage() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="mb-8 animate-fade-in-up">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">个人中心</h1>
-          <p className="text-slate-500 mt-2">管理你的个人信息、简历与消费记录</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('title')}</h1>
+          <p className="text-slate-500 mt-2">{t('description')}</p>
         </div>
 
         <Row gutter={[24, 24]}>
@@ -292,16 +308,16 @@ export default function UserCenterPage() {
                   color="blue"
                   className="border-0 bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium"
                 >
-                  面试吧学员
+                  {t('userInfo.student')}
                 </Tag>
 
                 <div className="w-full mt-8 space-y-3 text-left bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">用户名</span>
+                    <span className="text-slate-500">{t('userInfo.username')}</span>
                     <span className="font-medium text-slate-700">{profile?.username ?? '-'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">邮箱</span>
+                    <span className="text-slate-500">{t('userInfo.email')}</span>
                     <span className="font-medium text-slate-700">{profile?.email ?? '-'}</span>
                   </div>
                 </div>
@@ -319,7 +335,7 @@ export default function UserCenterPage() {
                         <FileOutlined />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">我的简历</h3>
+                        <h3 className="text-lg font-bold text-slate-800">{t('resume.title')}</h3>
                         <p className="text-xs text-slate-400">已上传 {resumes.length}/3 份</p>
                       </div>
                     </div>
@@ -359,11 +375,10 @@ export default function UserCenterPage() {
                               </div>
                             </div>
                             <Popconfirm
-                              title="确认删除"
-                              description="删除后无法恢复，确定删除吗？"
+                              title={t('resume.deleteConfirm')}
                               onConfirm={() => handleDelete(resume.id)}
-                              okText="确定"
-                              cancelText="取消"
+                              okText="Yes"
+                              cancelText="No"
                             >
                               <Button
                                 type="text"
@@ -383,17 +398,16 @@ export default function UserCenterPage() {
                       <>
                         {!checkingConfig && modelConfigured === false && (
                           <Alert
-                            message="模型未配置"
+                            message={tCommon('modelNotConfigured')}
                             description={
                               <span>
-                                无法上传简历，请先去{' '}
+                                {tCommon('modelNotConfiguredTip')}{' '}
                                 <Link
                                   href="/user/models"
                                   className="text-blue-600 font-medium underline hover:text-blue-700"
                                 >
-                                  用户模型页面
-                                </Link>{' '}
-                                配置模型
+                                  {t('title')}
+                                </Link>
                               </span>
                             }
                             type="warning"
@@ -416,13 +430,13 @@ export default function UserCenterPage() {
                           </p>
                           <p className="text-base font-medium text-slate-700 mb-2">
                             {uploading
-                              ? '上传中...'
+                              ? t('resume.parsing')
                               : modelConfigured === false
-                                ? '请先配置模型'
-                                : '点击或拖拽文件到此区域上传'}
+                                ? tCommon('modelNotConfigured')
+                                : t('resume.upload')}
                           </p>
                           <p className="text-sm text-slate-400">
-                            仅支持 PDF 格式，文件大小不超过 10MB
+                            {t('resume.support')}
                           </p>
                         </Dragger>
                       </>
@@ -430,7 +444,7 @@ export default function UserCenterPage() {
 
                     {resumes.length >= 3 && (
                       <div className="text-center text-slate-400 py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        已达到简历数量上限，如需上传新简历请先删除旧简历
+                        {t('resume.maxLimit')}
                       </div>
                     )}
                   </Spin>

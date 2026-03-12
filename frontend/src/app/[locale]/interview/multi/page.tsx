@@ -17,6 +17,7 @@ import {
 } from 'antd';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { TeamOutlined, CheckCircleOutlined, FileOutlined, StarOutlined } from '@ant-design/icons';
 import apiClient from '@/services/api/client';
@@ -31,6 +32,8 @@ interface ResumeInfo {
 }
 
 export default function MultiAgentInterviewPage() {
+    const t = useTranslations('Multi');
+    const tCommon = useTranslations('Common');
     const [form] = Form.useForm();
     const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
     const [resumes, setResumes] = useState<ResumeInfo[]>([]);
@@ -82,16 +85,23 @@ export default function MultiAgentInterviewPage() {
             });
     }, [fetchResumes]);
 
+    const features = [
+        { title: t('features.hr.title'), desc: t('features.hr.desc') },
+        { title: t('features.tech.title'), desc: t('features.tech.desc') },
+        { title: t('features.project.title'), desc: t('features.project.desc') },
+        { title: t('features.feedback.title'), desc: t('features.feedback.desc') },
+    ];
+
     return (
         <div className="min-h-screen py-12 bg-slate-50/50">
             <div className="max-w-5xl mx-auto px-4">
                 {/* Header */}
                 <div className="text-center mb-10">
                     <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-                        协作面试 · <span className="text-orange-600">多人模拟面试</span>
+                        {t('title')} · <span className="text-orange-600">{t('subtitle')}</span>
                     </Title>
                     <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-                        在多人面试模式中，你将面对由“主面试官”、“技术专家”和“项目负责人”组成的面试官小组，模拟最真实、最高压的大厂群面/终面环节。
+                        {t('description')}
                     </Paragraph>
                 </div>
 
@@ -113,28 +123,23 @@ export default function MultiAgentInterviewPage() {
                                     <div className="flex items-center gap-2 mb-2">
                                         <TeamOutlined className="text-orange-500 text-xl" />
                                         <Title level={4} className="!m-0 !font-bold text-slate-800">
-                                            面试官小组构成
+                                            {t('featuresTitle')}
                                         </Title>
                                     </div>
-                                    <Text className="text-slate-400 text-sm">多角色协作，全方位考察</Text>
+                                    <Text className="text-slate-400 text-sm">{t('featuresDesc')}</Text>
                                 </div>
 
                                 <div className="space-y-6 flex-1">
-                                    {[
-                                        { title: '主面试官 (HRD/经理)', desc: '掌控节奏，考察价值观与行为面试' },
-                                        { title: '技术专家 (架构师)', desc: '深度硬核提问，探测技能边界' },
-                                        { title: '项目负责人 (PO/Lead)', desc: '实战项目复盘，考察落地与避坑能力' },
-                                        { title: '多维动态反馈', desc: '各角色分工协作，模拟真实群面压力' },
-                                    ].map((t, i) => (
+                                    {features.map((item, i) => (
                                         <div key={i} className="flex gap-4 group">
                                             <div className="mt-1 w-10 h-10 rounded-2xl bg-orange-50 text-orange-600 flex items-center justify-center flex-shrink-0 group-hover:bg-orange-500 group-hover:text-white transition-colors duration-300">
                                                 <StarOutlined className="text-lg" />
                                             </div>
                                             <div>
                                                 <div className="font-medium text-slate-700 mb-1 group-hover:text-orange-600 transition-colors">
-                                                    {t.title}
+                                                    {item.title}
                                                 </div>
-                                                <div className="text-sm text-slate-400 leading-relaxed">{t.desc}</div>
+                                                <div className="text-sm text-slate-400 leading-relaxed">{item.desc}</div>
                                             </div>
                                         </div>
                                     ))}
@@ -142,7 +147,7 @@ export default function MultiAgentInterviewPage() {
 
                                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                                     <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                                        💡 策略：协作模式下，不同面试官会有不同的侧重点，请注意听清提问者的身份并分层次回答。
+                                        {t('tip')}
                                     </div>
                                 </div>
                             </div>
@@ -156,7 +161,7 @@ export default function MultiAgentInterviewPage() {
                                     className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                                 >
                                     <span className="w-1.5 h-6 bg-orange-500 rounded-full block"></span>
-                                    面试团队配置
+                                    {t('configTitle')}
                                 </Title>
 
                                 <Form
@@ -167,20 +172,20 @@ export default function MultiAgentInterviewPage() {
                                     className="flex flex-col gap-4"
                                 >
                                     <Form.Item
-                                        label={<span className="font-medium text-slate-700">加载简历</span>}
+                                        label={<span className="font-medium text-slate-700">{t('form.resumeLabel')}</span>}
                                         name="resume_id"
-                                        rules={[{ required: true, message: '请选择简历' }]}
+                                        rules={[{ required: true, message: t('form.resumePlaceholder') }]}
                                         className="!mb-2"
                                     >
                                         <Select
-                                            placeholder="加载简历进行针对性面试"
+                                            placeholder={t('form.resumePlaceholder')}
                                             loading={loadingResumes}
                                             disabled={starting}
                                             className="!h-12"
                                             variant="filled"
                                             onChange={(value) => setSelectedResumeId(value)}
                                             notFoundContent={
-                                                loadingResumes ? <Spin size="small" /> : '暂无简历，请先在个人中心上传'
+                                                loadingResumes ? <Spin size="small" /> : t('noResume')
                                             }
                                             options={resumes.map((r) => ({
                                                 value: r.id,
@@ -196,42 +201,42 @@ export default function MultiAgentInterviewPage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         <Form.Item
-                                            label={<span className="font-medium text-slate-700">面试职位</span>}
+                                            label={<span className="font-medium text-slate-700">{t('form.jobLabel')}</span>}
                                             name="job"
-                                            rules={[{ required: true, message: '请输入意向职位' }]}
+                                            rules={[{ required: true, message: t('form.jobPlaceholder') }]}
                                             className="!mb-2"
                                         >
                                             <Input
-                                                placeholder="如：腾讯 Go 后端工程师"
+                                                placeholder={t('form.jobPlaceholder')}
                                                 className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                                             />
                                         </Form.Item>
 
                                         <Form.Item
-                                            label={<span className="font-medium text-slate-700">面试难度</span>}
+                                            label={<span className="font-medium text-slate-700">{t('form.levelLabel')}</span>}
                                             name="level"
-                                            rules={[{ required: true, message: '请选择难度等级' }]}
+                                            rules={[{ required: true, message: t('form.levelLabel') }]}
                                             className="!mb-2"
                                         >
                                             <Select
                                                 className="!h-12"
                                                 variant="filled"
                                                 options={[
-                                                    { value: '简单', label: '初级 (Junior)' },
-                                                    { value: '中等', label: '中高级 (Senior)' },
-                                                    { value: '复杂', label: '架构级 (Expert)' },
+                                                    { value: '简单', label: t('options.level.entry') },
+                                                    { value: '中等', label: t('options.level.medium') },
+                                                    { value: '复杂', label: t('options.level.hard') },
                                                 ]}
                                             />
                                         </Form.Item>
                                     </div>
 
                                     <Form.Item
-                                        label={<span className="font-medium text-slate-700">目标大厂（选填，用于模拟固定风格）</span>}
+                                        label={<span className="font-medium text-slate-700">{t('form.companyLabel')}</span>}
                                         name="company_name"
                                         className="!mb-6"
                                     >
                                         <Input
-                                            placeholder="如：阿里巴巴、字节跳动"
+                                            placeholder={t('form.companyPlaceholder')}
                                             maxLength={100}
                                             className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                                         />
@@ -278,7 +283,7 @@ export default function MultiAgentInterviewPage() {
                                                     return;
                                                 }
                                                 if (!modelConfigured) {
-                                                    message.error('未配置模型，无法开始面试');
+                                                    message.error(t('modelNotConfigured'));
                                                     return;
                                                 }
                                                 const values = form.getFieldsValue();
@@ -298,10 +303,10 @@ export default function MultiAgentInterviewPage() {
                                                 router.push('/interview/multi/start');
                                             }}
                                         >
-                                            开启多人面试挑战 (Eino)
+                                            {t('startInterview')}
                                         </Button>
                                         <div className="text-center text-slate-400 text-sm mt-4">
-                                            多人面试基于 Eino 架构，能够提供极具真实感的团队面试反馈
+                                            {t('footerText')}
                                         </div>
                                     </div>
                                 </Form>
@@ -312,23 +317,23 @@ export default function MultiAgentInterviewPage() {
             </div>
             <Modal
                 open={showNoResumeModal}
-                title="温馨提示"
+                title={tCommon('noResumeTitle')}
                 footer={null}
                 onCancel={() => setShowNoResumeModal(false)}
                 centered
             >
                 <div className="text-center py-6">
-                    <div className="mb-4 text-slate-600 text-lg">检测到您尚未上传简历，无法进行多人面试。</div>
+                    <div className="mb-4 text-slate-600 text-lg">{tCommon('noResumeDesc')}</div>
                     <div className="mb-8 text-slate-500">
-                        AI 面试官团队需要阅读您的简历才能制定针对性的面试计划。
+                        {tCommon('noResumeTip')}
                     </div>
                     <Button
                         type="primary"
                         size="large"
                         onClick={() => router.push('/user/center')}
-                        className="w-full bg-orange-600 hover:bg-orange-500"
+                        className="w-full bg-indigo-600 hover:bg-indigo-500"
                     >
-                        去上传简历
+                        {tCommon('uploadResume')}
                     </Button>
                 </div>
             </Modal>

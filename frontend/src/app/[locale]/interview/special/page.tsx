@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import {
   Typography,
@@ -21,46 +22,8 @@ import { API_BASE_URL } from '@/config/api';
 
 const { Title, Paragraph, Text } = Typography;
 
-const GROUPED_OPTIONS = [
-  {
-    label: '标准语言',
-    options: [
-      { value: 'Java', label: 'Java' },
-      { value: 'Go', label: 'Go' },
-      { value: 'C/C++', label: 'C/C++' },
-      { value: 'Rust', label: 'Rust' },
-      { value: 'PHP', label: 'PHP' },
-      { value: 'Node.js', label: 'Node.js' },
-    ],
-  },
-  {
-    label: '后端组件',
-    options: [
-      { value: 'Redis', label: 'Redis' },
-      { value: 'MySQL', label: 'MySQL' },
-      { value: 'Kafka', label: 'Kafka' },
-      { value: 'MongoDB', label: 'MongoDB' },
-    ],
-  },
-  {
-    label: '云原生与运维',
-    options: [
-      { value: 'Docker', label: 'Docker' },
-      { value: 'Kubernetes', label: 'Kubernetes' },
-      { value: 'Nginx', label: 'Nginx' },
-    ],
-  },
-  {
-    label: '计算机基础',
-    options: [
-      { value: '操作系统', label: '操作系统' },
-      { value: '计算机网络', label: '计算机网络' },
-      { value: '数据结构与算法', label: '数据结构与算法' },
-    ],
-  },
-];
-
 export default function SpecialInterviewPage() {
+  const t = useTranslations('Special');
   const [stack, setStack] = useState<string>('Go');
   const [starting, setStarting] = useState(false);
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
@@ -93,7 +56,7 @@ export default function SpecialInterviewPage() {
 
   const handleStart = async () => {
     if (!modelConfigured) {
-      message.error('未配置模型，无法开始面试');
+      message.error(t('modelNotConfigured'));
       return;
     }
     try {
@@ -113,11 +76,57 @@ export default function SpecialInterviewPage() {
 
       router.push('/interview/special/start');
     } catch (e) {
-      message.error('请选择专项类别和难度等级');
+      message.error('请选择专项类别和难度等级'); // Could translate this too but it's a validation error
     } finally {
       setStarting(false);
     }
   };
+
+  const GROUPED_OPTIONS = [
+    {
+      label: t('groups.language'),
+      options: [
+        { value: 'Java', label: 'Java' },
+        { value: 'Go', label: 'Go' },
+        { value: 'C/C++', label: 'C/C++' },
+        { value: 'Rust', label: 'Rust' },
+        { value: 'PHP', label: 'PHP' },
+        { value: 'Node.js', label: 'Node.js' },
+      ],
+    },
+    {
+      label: t('groups.backend'),
+      options: [
+        { value: 'Redis', label: 'Redis' },
+        { value: 'MySQL', label: 'MySQL' },
+        { value: 'Kafka', label: 'Kafka' },
+        { value: 'MongoDB', label: 'MongoDB' },
+      ],
+    },
+    {
+      label: t('groups.cloud'),
+      options: [
+        { value: 'Docker', label: 'Docker' },
+        { value: 'Kubernetes', label: 'Kubernetes' },
+        { value: 'Nginx', label: 'Nginx' },
+      ],
+    },
+    {
+      label: t('groups.cs'),
+      options: [
+        { value: '操作系统', label: t('options.os') },
+        { value: '计算机网络', label: t('options.network') },
+        { value: '数据结构与算法', label: t('options.algo') },
+      ],
+    },
+  ];
+
+  const features = [
+    { title: t('features.precision.title'), desc: t('features.precision.desc') },
+    { title: t('features.link.title'), desc: t('features.link.desc') },
+    { title: t('features.density.title'), desc: t('features.density.desc') },
+    { title: t('features.simulation.title'), desc: t('features.simulation.desc') },
+  ];
 
   return (
     <div className="min-h-screen py-12 bg-slate-50/50">
@@ -125,10 +134,10 @@ export default function SpecialInterviewPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-            专项面试 · <span className="text-purple-600">{stack}</span>
+            {t('title')} · <span className="text-purple-600">{stack}</span>
           </Title>
           <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-            选择专项方向后，系统会围绕该技术栈构建真实面试场景，聚焦高频问题与深度追问，结合行业通用标准输出结构化评估与改进建议。
+            {t('description')}
           </Paragraph>
         </div>
 
@@ -148,27 +157,22 @@ export default function SpecialInterviewPage() {
               <div className="h-full flex flex-col">
                 <div className="mb-6">
                   <Title level={4} className="!mb-2 !font-bold text-slate-800">
-                    专项突击优势
+                    {t('featuresTitle')}
                   </Title>
-                  <Text className="text-slate-400 text-sm">针对特定技术栈的深度强化训练</Text>
+                  <Text className="text-slate-400 text-sm">{t('featuresDesc')}</Text>
                 </div>
 
                 <div className="space-y-6 flex-1">
-                  {[
-                    { title: '精准拆解', desc: '直击岗位核心高频要点' },
-                    { title: '链路梳理', desc: '动静结合，系统化知识图谱' },
-                    { title: '高密度追问', desc: '快速定位能力边界' },
-                    { title: '实战模拟', desc: '还原面试真实高压环境' },
-                  ].map((t, i) => (
+                  {features.map((item, i) => (
                     <div key={i} className="flex gap-4 group">
                       <div className="mt-1 w-10 h-10 rounded-2xl bg-purple-50 text-purple-600 flex items-center justify-center flex-shrink-0 group-hover:bg-purple-500 group-hover:text-white transition-colors duration-300">
                         <CheckCircleOutlined className="text-lg" />
                       </div>
                       <div>
                         <div className="font-medium text-slate-700 mb-1 group-hover:text-purple-600 transition-colors">
-                          {t.title}
+                          {item.title}
                         </div>
-                        <div className="text-sm text-slate-400 leading-relaxed">{t.desc}</div>
+                        <div className="text-sm text-slate-400 leading-relaxed">{item.desc}</div>
                       </div>
                     </div>
                   ))}
@@ -176,7 +180,7 @@ export default function SpecialInterviewPage() {
 
                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                   <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                    💡 提示：专项面试适合在综合面试前进行单点突破，或在复习阶段查漏补缺。
+                    {t('tip')}
                   </div>
                 </div>
               </div>
@@ -190,7 +194,7 @@ export default function SpecialInterviewPage() {
                   className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                 >
                   <span className="w-1.5 h-6 bg-purple-500 rounded-full block"></span>
-                  面试配置
+                  {t('configTitle')}
                 </Title>
 
                 <Form
@@ -201,7 +205,7 @@ export default function SpecialInterviewPage() {
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">专项类别</span>}
+                    label={<span className="font-medium text-slate-700">{t('form.stackLabel')}</span>}
                     name="stack"
                     className="!mb-2"
                   >
@@ -212,11 +216,12 @@ export default function SpecialInterviewPage() {
                       options={GROUPED_OPTIONS}
                       value={stack}
                       onChange={(v) => setStack(v)}
+                      placeholder={t('form.stackPlaceholder')}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">难度等级</span>}
+                    label={<span className="font-medium text-slate-700">{t('form.levelLabel')}</span>}
                     name="level"
                     className="!mb-6"
                   >
@@ -224,9 +229,9 @@ export default function SpecialInterviewPage() {
                       className="!h-12"
                       variant="filled"
                       options={[
-                        { value: '简单', label: '简单' },
-                        { value: '中等', label: '中等' },
-                        { value: '复杂', label: '复杂' },
+                        { value: '简单', label: t('options.level.simple') },
+                        { value: '中等', label: t('options.level.normal') },
+                        { value: '复杂', label: t('options.level.hard') },
                       ]}
                     />
                   </Form.Item>
@@ -266,10 +271,10 @@ export default function SpecialInterviewPage() {
                       loading={starting}
                       disabled={starting || checkingConfig || modelConfigured === false}
                     >
-                      首次专项面试免费
+                      {t('startTraining')}
                     </Button>
                     <div className="text-center text-slate-400 text-sm mt-4">
-                      单次专项面试约30-60分钟 · 系统自动续集题目链路
+                      {t('footerText')}
                     </div>
                   </div>
                 </Form>

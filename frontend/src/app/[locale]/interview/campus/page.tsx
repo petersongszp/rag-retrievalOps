@@ -16,6 +16,7 @@ import {
 } from 'antd';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
+import { useTranslations } from 'next-intl';
 import Link from 'next/link';
 import { CheckCircleOutlined, FileOutlined } from '@ant-design/icons';
 import apiClient from '@/services/api/client';
@@ -30,6 +31,8 @@ interface ResumeInfo {
 }
 
 export default function CampusInterviewPage() {
+  const t = useTranslations('Campus');
+  const tCommon = useTranslations('Common');
   const [form] = Form.useForm();
   const [, setSelectedResumeId] = useState<number | null>(null);
   const [resumes, setResumes] = useState<ResumeInfo[]>([]);
@@ -87,10 +90,10 @@ export default function CampusInterviewPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-            综合面试 · <span className="text-green-600">校招简历面试</span>
+            {t('title')} · <span className="text-green-600">{t('subtitle')}</span>
           </Title>
           <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-            立标校招面试要求，围绕简历条目与技术栈进行真实追问；从基础能力到应用能力、学习与思考、技术热情与潜力，构建符合校招的结构化评估。
+            {t('description')}
           </Paragraph>
         </div>
 
@@ -110,27 +113,27 @@ export default function CampusInterviewPage() {
               <div className="h-full flex flex-col">
                 <div className="mb-6">
                   <Title level={4} className="!mb-2 !font-bold text-slate-800">
-                    核心评估维度
+                    {t('featuresTitle')}
                   </Title>
-                  <Text className="text-slate-400 text-sm">系统将重点考察以下能力</Text>
+                  <Text className="text-slate-400 text-sm">{t('featuresDesc')}</Text>
                 </div>
 
                 <div className="space-y-6 flex-1">
                   {[
-                    { title: '系统基础能力', desc: '重视基础测评，构建逻辑理解力' },
-                    { title: '链路化表达', desc: '校招岗位标准化题目，链路清晰' },
-                    { title: '知识掌握度', desc: '构建学习与举例表达，深度验证' },
-                    { title: '潜力与成长', desc: '将解题过程结构化，判断潜力' },
-                  ].map((t, i) => (
+                    { title: t('features.basis.title'), desc: t('features.basis.desc') },
+                    { title: t('features.expression.title'), desc: t('features.expression.desc') },
+                    { title: t('features.knowledge.title'), desc: t('features.knowledge.desc') },
+                    { title: t('features.potential.title'), desc: t('features.potential.desc') },
+                  ].map((item, i) => (
                     <div key={i} className="flex gap-4 group">
                       <div className="mt-1 w-10 h-10 rounded-2xl bg-green-50 text-green-600 flex items-center justify-center flex-shrink-0 group-hover:bg-green-500 group-hover:text-white transition-colors duration-300">
                         <CheckCircleOutlined className="text-lg" />
                       </div>
                       <div>
                         <div className="font-medium text-slate-700 mb-1 group-hover:text-green-600 transition-colors">
-                          {t.title}
+                          {item.title}
                         </div>
-                        <div className="text-sm text-slate-400 leading-relaxed">{t.desc}</div>
+                        <div className="text-sm text-slate-400 leading-relaxed">{item.desc}</div>
                       </div>
                     </div>
                   ))}
@@ -138,7 +141,7 @@ export default function CampusInterviewPage() {
 
                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                   <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                    💡 提示：上传一份内容完善的简历能帮助 AI 更好地生成针对性题目。
+                    {t('tip')}
                   </div>
                 </div>
               </div>
@@ -152,7 +155,7 @@ export default function CampusInterviewPage() {
                   className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                 >
                   <span className="w-1.5 h-6 bg-green-500 rounded-full block"></span>
-                  面试配置
+                  {t('configTitle')}
                 </Title>
 
                 <Form
@@ -163,20 +166,20 @@ export default function CampusInterviewPage() {
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">选择简历</span>}
+                    label={<span className="font-medium text-slate-700">{t('form.resumeLabel')}</span>}
                     name="resume_id"
-                    rules={[{ required: true, message: '请选择简历' }]}
+                    rules={[{ required: true, message: t('form.resumePlaceholder') }]}
                     className="!mb-2"
                   >
                     <Select
-                      placeholder="请选择已上传的简历"
+                      placeholder={t('form.resumePlaceholder')}
                       loading={loadingResumes}
                       disabled={starting}
                       className="!h-12"
                       variant="filled"
                       onChange={(value) => setSelectedResumeId(value)}
                       notFoundContent={
-                        loadingResumes ? <Spin size="small" /> : '暂无简历，请先在个人中心上传'
+                        loadingResumes ? <Spin size="small" /> : tCommon('noResumeDesc')
                       }
                       options={resumes.map((r) => ({
                         value: r.id,
@@ -192,41 +195,41 @@ export default function CampusInterviewPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <Form.Item
-                      label={<span className="font-medium text-slate-700">岗位意向</span>}
+                      label={<span className="font-medium text-slate-700">{t('form.jobLabel')}</span>}
                       name="job"
                       className="!mb-2"
                     >
                       <Input
-                        placeholder="如：Java后端开发"
+                        placeholder={t('form.jobPlaceholder')}
                         className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                       />
                     </Form.Item>
 
                     <Form.Item
-                      label={<span className="font-medium text-slate-700">难度等级</span>}
+                      label={<span className="font-medium text-slate-700">{t('form.levelLabel')}</span>}
                       name="level"
-                      rules={[{ required: true, message: '请选择难度等级' }]}
+                      rules={[{ required: true, message: t('form.levelLabel') }]}
                       className="!mb-2"
                     >
                       <Select
                         className="!h-12"
                         variant="filled"
                         options={[
-                          { value: '简单', label: '简单' },
-                          { value: '中等', label: '中等' },
-                          { value: '复杂', label: '复杂' },
+                          { value: '简单', label: t('options.level.simple') },
+                          { value: '中等', label: t('options.level.normal') },
+                          { value: '复杂', label: t('options.level.hard') },
                         ]}
                       />
                     </Form.Item>
                   </div>
 
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">目标公司（可选）</span>}
+                    label={<span className="font-medium text-slate-700">{t('form.companyLabel')}</span>}
                     name="company_name"
                     className="!mb-6"
                   >
                     <Input
-                      placeholder="如：字节跳动"
+                      placeholder={t('form.companyPlaceholder')}
                       maxLength={100}
                       className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                     />
@@ -235,14 +238,13 @@ export default function CampusInterviewPage() {
                   <div className="mt-2">
                     {!checkingConfig && modelConfigured === false && (
                       <Alert
-                        message="模型未配置"
+                        message={tCommon('modelNotConfigured')}
                         description={
                           <>
-                            请去{' '}
+                            {tCommon('modelNotConfiguredTip')}{' '}
                             <Link href="/user/models" className="text-blue-500 underline">
-                              用户模型页面
-                            </Link>{' '}
-                            配置模型
+                              {t('configTitle')}
+                            </Link>
                           </>
                         }
                         type="warning"
@@ -273,7 +275,7 @@ export default function CampusInterviewPage() {
                           return;
                         }
                         if (!modelConfigured) {
-                          message.error('未配置模型，无法开始面试');
+                          message.error(tCommon('modelNotConfigured'));
                           return;
                         }
                         const values = form.getFieldsValue();
@@ -295,10 +297,10 @@ export default function CampusInterviewPage() {
                         router.push('/interview/campus/start');
                       }}
                     >
-                      开始面试
+                      {t('startInterview')}
                     </Button>
                     <div className="text-center text-slate-400 text-sm mt-4">
-                      1次体验价约等于20次AI陪练 · 单次2小时题目自动续集
+                      {t('footerText')}
                     </div>
                   </div>
                 </Form>
@@ -309,15 +311,15 @@ export default function CampusInterviewPage() {
       </div>
       <Modal
         open={showNoResumeModal}
-        title="温馨提示"
+        title={tCommon('noResumeTitle')}
         footer={null}
         onCancel={() => setShowNoResumeModal(false)}
         centered
       >
         <div className="text-center py-6">
-          <div className="mb-4 text-slate-600 text-lg">检测到您尚未上传简历，无法进行面试。</div>
+          <div className="mb-4 text-slate-600 text-lg">{tCommon('noResumeDesc')}</div>
           <div className="mb-8 text-slate-500">
-            请前往个人中心上传您的简历，AI 将根据您的简历内容生成针对性的面试题目。
+            {tCommon('noResumeTip')}
           </div>
           <Button
             type="primary"
@@ -325,7 +327,7 @@ export default function CampusInterviewPage() {
             onClick={() => router.push('/user/center')}
             className="w-full bg-indigo-600 hover:bg-indigo-500"
           >
-            前往上传简历
+            {tCommon('uploadResume')}
           </Button>
         </div>
       </Modal>

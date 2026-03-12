@@ -13,13 +13,15 @@ import {
   message,
   Steps,
 } from 'antd';
-import Link from 'next/link';
+import { Link } from '@/navigation';
 import { BellOutlined, UserOutlined, DownOutlined, TeamOutlined } from '@ant-design/icons';
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import apiClient from '@/services/api/client';
 import { useAuth } from '@/hooks/useAuth';
+import { useTranslations } from 'next-intl';
+import LanguageSwitcher from '@/components/common/LanguageSwitcher';
 
 const { Header } = Layout;
 const { Title } = Typography;
@@ -29,20 +31,14 @@ const Navbar: FC = () => {
   const { user, isAuthenticated: authed, login, logout: authLogout } = useAuth();
   const [openAuth, setOpenAuth] = useState(false);
   const [activeKey, setActiveKey] = useState<'login' | 'register' | 'forgot'>('login');
-  // const [authed, setAuthed] = useState(false);
-  // const [user, setUser] = useState<{ username?: string; email?: string } | null>(null);
   const [loginForm] = Form.useForm();
   const [registerForm] = Form.useForm();
   const [forgotPasswordForm] = Form.useForm();
   const [guideModalOpen, setGuideModalOpen] = useState(false);
   const [forgotLoading, setForgotLoading] = useState(false);
 
-  // useEffect(() => {
-  //   const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-  //   const u = typeof window !== 'undefined' ? localStorage.getItem('user') : null;
-  //   setAuthed(!!token);
-  //   setUser(u ? JSON.parse(u) : null);
-  // }, []);
+  const t = useTranslations('Navbar');
+  const tLogin = useTranslations('Login');
 
   const doLogin = async (values: { email: string; password: string }) => {
     try {
@@ -50,7 +46,7 @@ const Navbar: FC = () => {
       const data = res?.data || res;
       const token = data?.token || data?.accessToken;
       if (!token) {
-        message.error('登录失败：缺少令牌');
+        message.error(t('loginFailed') + '：' + tLogin('emailPlaceholder')); // Using placeholder as generic error or keep generic
         return;
       }
       localStorage.setItem('token', token);
@@ -65,9 +61,9 @@ const Navbar: FC = () => {
         login({ id: '0', email: values.email, name: values.email, username: values.email });
       }
       setOpenAuth(false);
-      message.success('登录成功');
+      message.success(t('loginSuccess'));
     } catch (e: any) {
-      message.error(e?.response?.data?.message || '登录失败');
+      message.error(e?.response?.data?.message || t('loginFailed'));
     }
   };
 
@@ -77,7 +73,7 @@ const Navbar: FC = () => {
       const token = data?.token;
       const userData = data?.user;
       if (!token || !userData) {
-        message.error('注册失败：返回数据缺失');
+        message.error(t('registerFailed'));
         return;
       }
       localStorage.setItem('token', token);
@@ -88,9 +84,9 @@ const Navbar: FC = () => {
       login(userData);
       setOpenAuth(false);
       setGuideModalOpen(true);
-      message.success('注册并登录成功');
+      message.success(t('registerSuccess'));
     } catch (e: any) {
-      message.error(e?.response?.data?.message || '注册失败');
+      message.error(e?.response?.data?.message || t('registerFailed'));
     }
   };
 
@@ -98,7 +94,7 @@ const Navbar: FC = () => {
     setForgotLoading(true);
     try {
       await apiClient.post('/user/password/forgot', values);
-      message.success('重置链接已发送到您的邮箱，请查收');
+      message.success('重置链接已发送到您的邮箱，请查收'); // Need translation
       setActiveKey('login');
     } catch (e: any) {
       message.error(e?.response?.data?.message || '发送失败');
@@ -114,7 +110,7 @@ const Navbar: FC = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     authLogout();
-    message.success('已退出登录');
+    message.success(t('logout'));
     router.push('/');
   };
 
@@ -140,14 +136,14 @@ const Navbar: FC = () => {
             href="/"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            首页
+            {t('home')}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Link
             href="/resume"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            简历押题
+            {t('resumePrediction')}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Dropdown
@@ -161,8 +157,8 @@ const Navbar: FC = () => {
                         <UserOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">社招简历面试</span>
-                        <span className="text-xs text-slate-400">针对社招人员的深度面试</span>
+                        <span className="font-medium">{t('socialInterview')}</span>
+                        <span className="text-xs text-slate-400">{t('socialDesc')}</span>
                       </div>
                     </Link>
                   ),
@@ -175,8 +171,8 @@ const Navbar: FC = () => {
                         <TeamOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">校招简历面试</span>
-                        <span className="text-xs text-slate-400">针对应届生的基础面试</span>
+                        <span className="font-medium">{t('campusInterview')}</span>
+                        <span className="text-xs text-slate-400">{t('campusDesc')}</span>
                       </div>
                     </Link>
                   ),
@@ -187,7 +183,7 @@ const Navbar: FC = () => {
             overlayClassName="pt-2"
           >
             <a className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer group">
-              综合面试{' '}
+              {t('comprehensiveInterview')}{' '}
               <DownOutlined className="text-xs transition-transform group-hover:rotate-180" />
               <Badge
                 count={'HOT'}
@@ -201,7 +197,7 @@ const Navbar: FC = () => {
             href="/interview/multi"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            多人面试
+            {t('multiInterview')}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
             <Badge
               count={'New'}
@@ -214,7 +210,7 @@ const Navbar: FC = () => {
             href="/interview/special"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            专项面试
+            {t('specialInterview')}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Link
@@ -222,12 +218,13 @@ const Navbar: FC = () => {
             target="_blank"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            使用手册
+            {t('manual')}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
         </nav>
 
         <div className="flex items-center gap-4">
+          <LanguageSwitcher />
           <Button
             type="text"
             shape="circle"
@@ -239,17 +236,17 @@ const Navbar: FC = () => {
               trigger={['hover']}
               menu={{
                 items: [
-                  { key: 'center', label: <Link href="/user/center">个人中心</Link> },
-                  { key: 'interviews', label: <Link href="/user/interviews">面试记录</Link> },
-                  { key: 'press', label: <Link href="/user/press">押题记录</Link> },
-                  { key: 'notes', label: <Link href="/user/notes">笔记列表</Link> },
-                  { key: 'models', label: <Link href="/user/models">用户模型</Link> },
+                  { key: 'center', label: <Link href="/user/center">{t('center')}</Link> },
+                  { key: 'interviews', label: <Link href="/user/interviews">{t('interviews')}</Link> },
+                  { key: 'press', label: <Link href="/user/press">{t('press')}</Link> },
+                  { key: 'notes', label: <Link href="/user/notes">{t('notes')}</Link> },
+                  { key: 'models', label: <Link href="/user/models">{t('models')}</Link> },
                   { type: 'divider' },
                   {
                     key: 'logout',
                     label: (
                       <a onClick={logout} className="text-red-500">
-                        退出登录
+                        {t('logout')}
                       </a>
                     ),
                   },
@@ -273,7 +270,7 @@ const Navbar: FC = () => {
               }}
               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 h-9 px-6 rounded-full shadow-lg shadow-blue-200 font-medium transition-all hover:scale-105"
             >
-              登录 / 注册
+              {t('loginRegister')}
             </Button>
           )}
         </div>
@@ -282,7 +279,7 @@ const Navbar: FC = () => {
         open={openAuth}
         onCancel={() => setOpenAuth(false)}
         footer={null}
-        title="账号登录 / 注册"
+        title={tLogin('title')}
         destroyOnClose
       >
         <Tabs
@@ -291,7 +288,7 @@ const Navbar: FC = () => {
           items={[
             {
               key: 'login',
-              label: '登录',
+              label: tLogin('loginTab'),
               children: (
                 <Form
                   form={loginForm}
@@ -300,21 +297,21 @@ const Navbar: FC = () => {
                   initialValues={{ email: '', password: '' }}
                 >
                   <Form.Item
-                    label="邮箱"
+                    label={tLogin('emailLabel')}
                     name="email"
                     rules={[
-                      { required: true, message: '请输入邮箱' },
-                      { type: 'email', message: '请输入有效的邮箱格式' },
+                      { required: true, message: tLogin('emailPlaceholder') },
+                      { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder="请输入邮箱" />
+                    <Input placeholder={tLogin('emailPlaceholder')} />
                   </Form.Item>
                   <Form.Item
-                    label="密码"
+                    label={tLogin('passwordLabel')}
                     name="password"
-                    rules={[{ required: true, message: '请输入密码' }]}
+                    rules={[{ required: true, message: tLogin('passwordPlaceholder') }]}
                   >
-                    <Input.Password placeholder="请输入密码" />
+                    <Input.Password placeholder={tLogin('passwordPlaceholder')} />
                   </Form.Item>
                   <div className="flex justify-end mb-4">
                     <a
@@ -324,18 +321,18 @@ const Navbar: FC = () => {
                         setActiveKey('forgot');
                       }}
                     >
-                      忘记密码？
+                      {tLogin('forgotPasswordLink')}
                     </a>
                   </div>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    登录
+                    {tLogin('loginButton')}
                   </Button>
                 </Form>
               ),
             },
             {
               key: 'register',
-              label: '注册',
+              label: tLogin('registerTab'),
               children: (
                 <Form
                   form={registerForm}
@@ -344,38 +341,38 @@ const Navbar: FC = () => {
                   initialValues={{ username: '', email: '', password: '' }}
                 >
                   <Form.Item
-                    label="用户名"
+                    label={tLogin('usernameLabel')}
                     name="username"
-                    rules={[{ required: true, message: '请输入用户名' }]}
+                    rules={[{ required: true, message: tLogin('usernamePlaceholder') }]}
                   >
-                    <Input placeholder="请输入用户名" />
+                    <Input placeholder={tLogin('usernamePlaceholder')} />
                   </Form.Item>
                   <Form.Item
-                    label="邮箱"
+                    label={tLogin('emailLabel')}
                     name="email"
                     rules={[
-                      { required: true, message: '请输入邮箱' },
-                      { type: 'email', message: '请输入有效的邮箱格式' },
+                      { required: true, message: tLogin('emailPlaceholder') },
+                      { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder="请输入邮箱" />
+                    <Input placeholder={tLogin('emailPlaceholder')} />
                   </Form.Item>
                   <Form.Item
-                    label="密码"
+                    label={tLogin('passwordLabel')}
                     name="password"
-                    rules={[{ required: true, message: '请输入密码' }]}
+                    rules={[{ required: true, message: tLogin('passwordPlaceholder') }]}
                   >
-                    <Input.Password placeholder="请输入密码" />
+                    <Input.Password placeholder={tLogin('passwordPlaceholder')} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    注册并登录
+                    {tLogin('registerButton')}
                   </Button>
                 </Form>
               ),
             },
             {
               key: 'forgot',
-              label: '找回密码',
+              label: tLogin('forgotTab'),
               children: (
                 <Form
                   form={forgotPasswordForm}
@@ -384,17 +381,17 @@ const Navbar: FC = () => {
                   initialValues={{ email: '' }}
                 >
                   <Form.Item
-                    label="邮箱"
+                    label={tLogin('emailLabel')}
                     name="email"
                     rules={[
-                      { required: true, message: '请输入邮箱' },
-                      { type: 'email', message: '请输入有效的邮箱格式' },
+                      { required: true, message: tLogin('emailPlaceholder') },
+                      { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder="请输入注册时的邮箱" />
+                    <Input placeholder={tLogin('emailPlaceholder')} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={forgotLoading} className="w-full mb-4">
-                    发送重置链接
+                    {tLogin('sendResetLink')}
                   </Button>
                   <div className="text-center">
                     <a
@@ -404,7 +401,7 @@ const Navbar: FC = () => {
                         setActiveKey('login');
                       }}
                     >
-                      返回登录
+                      {tLogin('backToLogin')}
                     </a>
                   </div>
                 </Form>
@@ -418,15 +415,15 @@ const Navbar: FC = () => {
         open={guideModalOpen}
         onCancel={() => setGuideModalOpen(false)}
         footer={null}
-        title="欢迎加入面试吧"
+        title={tLogin('welcomeTitle')}
         centered
         width={600}
       >
         <div className="py-6 px-4">
           <div className="mb-8 text-center">
-            <Title level={4}>开启您的智能面试之旅</Title>
+            <Title level={4}>{tLogin('welcomeSubtitle')}</Title>
             <Typography.Text type="secondary">
-              只需简单两步，让 AI 为您定制专属面试计划
+              {tLogin('welcomeSubtitle')}
             </Typography.Text>
           </div>
 
@@ -435,13 +432,12 @@ const Navbar: FC = () => {
             current={0}
             items={[
               {
-                title: '第一步：配置用户模型',
-                description:
-                  '配置您的大模型key(火山、百炼都有免费大模型)，AI 将根据您的模型生成面试题目。',
+                title: tLogin('step1Title'),
+                description: tLogin('step1Desc'),
               },
               {
-                title: '第二步：上传个人简历',
-                description: '前往个人中心上传简历，AI 将根据您的简历内容生成针对性的面试题目。',
+                title: tLogin('step2Title'),
+                description: tLogin('step2Desc'),
               },
             ]}
           />
@@ -456,7 +452,7 @@ const Navbar: FC = () => {
               }}
               className="w-full md:w-auto px-8"
             >
-              立即去配置用户模型
+              {tLogin('configModelButton')}
             </Button>
           </div>
         </div>

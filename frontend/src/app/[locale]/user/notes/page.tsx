@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import { useTranslations } from 'next-intl';
 import { Typography, Input, Select, Space, Button, Table, Tag, Empty, message, Card } from 'antd';
 import {
   BookOutlined,
@@ -8,13 +9,12 @@ import {
   DeleteOutlined,
   CopyOutlined,
   ReloadOutlined,
-  TagsOutlined,
   FileTextOutlined,
 } from '@ant-design/icons';
 
 type Note = {
   key: number;
-  type: '押题笔记' | '面试笔记';
+  type: 'press' | 'interview';
   title: string;
   source: string;
   time: string;
@@ -24,7 +24,7 @@ type Note = {
 const NOTES: Note[] = [
   {
     key: 1,
-    type: '押题笔记',
+    type: 'press',
     title: 'Redis持久化要点',
     source: '简历押题-Redis',
     time: '2024-11-02 12:40',
@@ -32,7 +32,7 @@ const NOTES: Note[] = [
   },
   {
     key: 2,
-    type: '面试笔记',
+    type: 'interview',
     title: 'Go并发最佳实践',
     source: '综合面试-社招',
     time: '2024-11-06 19:20',
@@ -40,7 +40,7 @@ const NOTES: Note[] = [
   },
   {
     key: 3,
-    type: '押题笔记',
+    type: 'press',
     title: 'MySQL索引设计',
     source: '简历押题-MySQL',
     time: '2024-11-03 21:05',
@@ -55,7 +55,9 @@ const ANSWERS: Record<number, string> = {
 };
 
 export default function NotesPage() {
-  const [active, setActive] = useState<'押题笔记' | '面试笔记'>('押题笔记');
+  const t = useTranslations('Notes');
+  const tCommon = useTranslations('Common');
+  const [active, setActive] = useState<'press' | 'interview'>('press');
   const [keyword, setKeyword] = useState('');
   const [tag, setTag] = useState<string | undefined>();
   const [notes, setNotes] = useState<Note[]>(NOTES);
@@ -76,15 +78,15 @@ export default function NotesPage() {
 
   const handleDelete = (key: number) => {
     setNotes((prev) => prev.filter((n) => n.key !== key));
-    message.success('笔记已删除');
+    message.success(t('content.deleteSuccess'));
   };
 
-  const handleCopy = async (key: number) => {
+  const handleCopy = async (text: string) => {
     try {
-      await navigator.clipboard.writeText(ANSWERS[key] || '');
-      message.success('答案已复制到剪贴板');
+      await navigator.clipboard.writeText(text || '');
+      message.success(t('content.copySuccess'));
     } catch {
-      message.error('复制失败');
+      message.error(t('content.copyFail'));
     }
   };
 
@@ -98,9 +100,9 @@ export default function NotesPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <BookOutlined className="text-emerald-500" />
-            笔记列表
+            {t('title')}
           </h1>
-          <p className="text-slate-500 mt-2 ml-11">整理你的面试知识库，温故而知新</p>
+          <p className="text-slate-500 mt-2 ml-11">{t('description')}</p>
         </div>
 
         <div
@@ -110,24 +112,27 @@ export default function NotesPage() {
           {/* Tabs & Filters */}
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div className="bg-slate-100/80 p-1 rounded-xl inline-flex">
-              {(['押题笔记', '面试笔记'] as const).map((type) => (
+              {([
+                { key: 'press', label: t('tabs.press') },
+                { key: 'interview', label: t('tabs.interview') },
+              ] as const).map((tab) => (
                 <button
-                  key={type}
-                  onClick={() => setActive(type)}
+                  key={tab.key}
+                  onClick={() => setActive(tab.key)}
                   className={`px-6 py-2 rounded-lg text-sm font-medium transition-all duration-300 ${
-                    active === type
+                    active === tab.key
                       ? 'bg-white text-emerald-600 shadow-sm shadow-slate-200'
                       : 'text-slate-500 hover:text-slate-700'
                   }`}
                 >
-                  {type}
+                  {tab.label}
                 </button>
               ))}
             </div>
 
             <div className="flex flex-wrap items-center gap-3">
               <Input
-                placeholder="搜索关键词..."
+                placeholder={t('filter.searchPlaceholder')}
                 prefix={<SearchOutlined className="text-slate-400" />}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
@@ -135,7 +140,7 @@ export default function NotesPage() {
                 variant="filled"
               />
               <Select
-                placeholder="选择标签"
+                placeholder={t('filter.tagPlaceholder')}
                 allowClear
                 value={tag}
                 onChange={setTag}
@@ -158,7 +163,7 @@ export default function NotesPage() {
                 }}
                 className="h-10 px-4 rounded-lg border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200"
               >
-                重置
+                {t('filter.reset')}
               </Button>
             </div>
           </div>
@@ -170,8 +175,8 @@ export default function NotesPage() {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   <div className="text-slate-400">
-                    <p className="mb-2">暂无{active}</p>
-                    <p className="text-xs">尝试切换筛选条件或添加新笔记</p>
+                    <p className="mb-2">{t('empty.text', { type: active === 'press' ? t('tabs.press') : t('tabs.interview') })}</p>
+                    <p className="text-xs">{t('empty.subtext')}</p>
                   </div>
                 }
               />
@@ -190,12 +195,12 @@ export default function NotesPage() {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-3">
-                              <h4 className="font-bold text-slate-800 m-0">参考答案与思路</h4>
+                              <h4 className="font-bold text-slate-800 m-0">{t('content.answer')}</h4>
                               <Tag
                                 color="success"
                                 className="rounded-full px-2 border-0 bg-emerald-50 text-emerald-600"
                               >
-                                AI 生成
+                                {t('content.aiGenerated')}
                               </Tag>
                             </div>
                             <div className="text-slate-600 leading-relaxed text-base">
@@ -208,11 +213,11 @@ export default function NotesPage() {
                                 icon={<CopyOutlined />}
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleCopy(row.key);
+                                  handleCopy(ANSWERS[row.key] || '');
                                 }}
                                 className="text-slate-500 hover:text-emerald-600 hover:border-emerald-300"
                               >
-                                复制内容
+                                {t('content.copy')}
                               </Button>
                             </div>
                           </div>
@@ -231,12 +236,12 @@ export default function NotesPage() {
                 pagination={{
                   pageSize: 10,
                   className: 'px-6 py-4',
-                  showTotal: (total) => <span className="text-slate-400">共 {total} 条笔记</span>,
+                  showTotal: (total) => <span className="text-slate-400">{tCommon('pagination.total', { total })}</span>,
                 }}
                 dataSource={filtered}
                 columns={[
                   {
-                    title: '标题',
+                    title: t('table.title'),
                     dataIndex: 'title',
                     className: 'pl-6',
                     render: (text) => (
@@ -246,7 +251,7 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: '来源',
+                    title: t('table.source'),
                     dataIndex: 'source',
                     render: (text) => (
                       <span className="text-slate-500 text-sm bg-slate-100 px-2 py-1 rounded-md">
@@ -255,7 +260,7 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: '标签',
+                    title: t('table.tags'),
                     dataIndex: 'tags',
                     render: (tags: string[]) => (
                       <div className="flex gap-1">
@@ -272,21 +277,21 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: '创建时间',
+                    title: t('table.time'),
                     dataIndex: 'time',
                     render: (text) => (
                       <span className="text-slate-400 text-xs font-mono">{text}</span>
                     ),
                   },
                   {
-                    title: '操作',
+                    title: t('table.action'),
                     width: 120,
                     render: (_: any, row: Note) => (
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
                         <Button
                           type="text"
                           icon={<CopyOutlined />}
-                          onClick={() => handleCopy(row.key)}
+                          onClick={() => handleCopy(ANSWERS[row.key] || '')}
                           className="text-slate-400 hover:text-blue-600 hover:bg-blue-50"
                         />
                         <Button
@@ -300,7 +305,6 @@ export default function NotesPage() {
                     ),
                   },
                 ]}
-                className="modern-table"
               />
             </div>
           )}
