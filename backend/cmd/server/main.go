@@ -29,16 +29,21 @@ import (
 )
 
 func main() {
-	// 1. 加载 .env 文件（如果存在）
-	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: Could not load .env file: %v", err)
-		log.Println("Application will use system environment variables or config.yaml defaults")
-	} else {
-		log.Println("Successfully loaded .env file")
+	// 1. 按相对路径加载 .env（当前目录、上一级、上两级、上三级，便于从项目根 / backend / backend/cmd/server 任一目录启动）
+	// 建议：从项目根执行 go run ./backend/cmd/server/main.go 或 cd backend && go run ./cmd/server/main.go，.env 放在项目根目录
+	envLoaded := false
+	for _, p := range []string{".env", "../.env", "../../.env", "../../../.env"} {
+		if err := godotenv.Load(p); err == nil {
+			log.Printf("Successfully loaded .env file: %s", p)
+			envLoaded = true
+			break
+		}
+	}
+	if !envLoaded {
+		log.Println("No .env file found; using system environment variables or config.yaml defaults")
 	}
 
 	// 2. 加载配置文件
-	// 获取配置文件路径（相对于 main.go 所在目录）
 	configPath := findConfigFile()
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {

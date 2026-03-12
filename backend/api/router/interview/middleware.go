@@ -17,6 +17,8 @@ var jwtPublicRoutes = map[string]struct{}{
 	"/api/user/logout":          {},
 	"/api/user/wechat/login":    {},
 	"/api/user/wechat/callback": {},
+	"/api/user/github/login":    {},
+	"/api/user/github/callback": {},
 	"/api/demo/create/model":    {},
 	"/api/user/password/forgot": {},
 	"/api/user/password/reset":  {},
@@ -122,6 +124,18 @@ func _wechatcallbackMw() []app.HandlerFunc {
 }
 
 func _wechatloginMw() []app.HandlerFunc {
+	return nil
+}
+
+func _githubMw() []app.HandlerFunc {
+	return nil
+}
+
+func _githubloginMw() []app.HandlerFunc {
+	return nil
+}
+
+func _githubcallbackMw() []app.HandlerFunc {
 	return nil
 }
 

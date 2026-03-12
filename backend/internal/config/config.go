@@ -26,9 +26,17 @@ type Config struct {
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
 	Wechat           WechatConfig       `yaml:"wechat"`     // 微信配置
+	GitHub           GitHubConfig       `yaml:"github"`     // GitHub OAuth 配置
 	Feishu           FeishuConfig       `yaml:"feishu"`     // 飞书配置
 	Email            EmailConfig        `yaml:"email"`      // 邮件配置
 	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"` // LLM API 限流配置
+}
+
+// GitHubConfig GitHub OAuth 配置
+type GitHubConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	RedirectURL  string `yaml:"redirect_url"`
 }
 
 // EmailConfig 邮件配置
@@ -279,6 +287,11 @@ func (c *Config) ExpandEnv() {
 
 	// 展开 Feishu 配置
 	c.Feishu.WebhookURL = expandEnvVar(c.Feishu.WebhookURL)
+
+	// 展开 GitHub 配置
+	c.GitHub.ClientID = expandEnvVar(c.GitHub.ClientID)
+	c.GitHub.ClientSecret = expandEnvVar(c.GitHub.ClientSecret)
+	c.GitHub.RedirectURL = expandEnvVar(c.GitHub.RedirectURL)
 }
 
 // expandEnvVar 展开字符串中的环境变量引用

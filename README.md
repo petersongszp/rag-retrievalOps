@@ -20,11 +20,22 @@
 cp .env.example .env
 ```
 
-### 2. 启动依赖服务
-使用 Docker Compose 一键启动 MySQL, Redis, Milvus 等基础组件。
+### 2. 启动依赖服务（Docker）
+使用 Docker Compose 启动 MySQL、Redis 等；如需向量检索再启动 Milvus 及其依赖。
+
+**仅需 MySQL + Redis（推荐本地开发）：**
 ```bash
-docker-compose up -d mysql redis milvus etcd minio
+docker-compose up -d mysql redis
 ```
+此时 MySQL 映射到宿主机 **3307** 端口（避免与本机 3306 冲突），Redis 为 **6379**。根目录 `.env` 中已按此配置（`DB_PORT=3307`、`REDIS_PASSWORD=root`），可直接使用。
+
+**需要 Milvus 时再启动：**
+```bash
+docker-compose up -d mysql redis etcd minio milvus
+```
+
+**使用本机已运行的 MySQL/Redis 容器：**  
+若你已有其他 Docker 或本机 MySQL/Redis，只需在 `.env` 中设置 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 以及 `REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD` 指向现有服务即可，无需再起本项目 compose 中的 mysql/redis。
 
 ### 3. 后端服务 (Backend)
 *   **配置文件**：`backend/config.yaml`（已支持环境变量注入，无需手动修改）

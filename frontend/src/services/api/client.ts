@@ -15,7 +15,11 @@ apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
     const url = config.url || '';
     const isAuthFree =
-      url.includes('/user/register') || url.includes('/user/login') || url.includes('/user/logout');
+      url.includes('/user/register') ||
+      url.includes('/user/login') ||
+      url.includes('/user/logout') ||
+      url.includes('/user/github/login') ||
+      url.includes('/user/github/callback');
     const token = localStorage.getItem('token');
     if (token && !isAuthFree) {
       config.headers = (config.headers || {}) as any;

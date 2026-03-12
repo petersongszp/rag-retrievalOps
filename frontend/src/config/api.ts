@@ -21,4 +21,6 @@ export const USER_API = {
   REGISTER: `${API_BASE_URL}/user/register`,
   GET_PROFILE: `${API_BASE_URL}/user/profile`,
   SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
+  GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
+  GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
 };

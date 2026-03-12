@@ -381,6 +381,50 @@ func WechatCallback(ctx context.Context, c *app.RequestContext) {
 	response.Success(ctx, c, data)
 }
 
+// GitHubLogin 返回 GitHub 授权跳转 URL，前端可重定向到该 URL
+// @router /api/user/github/login [GET]
+func GitHubLogin(ctx context.Context, c *app.RequestContext) {
+	var req user.EmptyRequest
+	if err := c.BindAndValidate(&req); err != nil {
+		response.BadRequest(ctx, c, "Invalid request: "+err.Error())
+		return
+	}
+
+	manager := userservice.NewUserManager()
+	resp, err := manager.GitHubLogin(ctx)
+	if err != nil {
+		response.InternalServerError(ctx, c, err.Error())
+		return
+	}
+
+	response.Success(ctx, c, resp)
+}
+
+// GitHubCallback 用前端回调拿到的 code 换取 token 与用户信息（前端 POST code）
+// @router /api/user/github/callback [POST]
+func GitHubCallback(ctx context.Context, c *app.RequestContext) {
+	var body struct {
+		Code string `json:"code"`
+	}
+	if err := c.BindJSON(&body); err != nil {
+		response.BadRequest(ctx, c, "Invalid request: "+err.Error())
+		return
+	}
+
+	manager := userservice.NewUserManager()
+	loginResp, err := manager.GitHubCallback(ctx, body.Code)
+	if err != nil {
+		response.InternalServerError(ctx, c, err.Error())
+		return
+	}
+
+	data := map[string]interface{}{
+		"token": loginResp.GetToken(),
+		"user":  loginResp.GetUser(),
+	}
+	response.Success(ctx, c, data)
+}
+
 // CheckUserModelConfigured .
 // @router /api/user/model/check [GET]
 func CheckUserModelConfigured(ctx context.Context, c *app.RequestContext) {
