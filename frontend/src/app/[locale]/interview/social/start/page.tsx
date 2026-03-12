@@ -299,8 +299,8 @@ export default function SocialInterviewStartPage() {
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const ss = String(elapsed % 60).padStart(2, '0');
-  // 总共20道题，根据当前题目序号计算进度
-  const percent = Math.min(100, Math.round((questionIndex / 20) * 100));
+  // 总共10道题，根据当前题目序号计算进度
+  const percent = Math.min(100, Math.round((questionIndex / 10) * 100));
 
   const onSubmit = async (act?: 'next' | 'quit') => {
     if (!sessionId) {
