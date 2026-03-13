@@ -24,6 +24,7 @@ const { Title, Paragraph, Text } = Typography;
 
 export default function SpecialInterviewPage() {
   const t = useTranslations('Special');
+  const tCommon = useTranslations('Common');
   const [stack, setStack] = useState<string>('Go');
   const [starting, setStarting] = useState(false);
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
@@ -56,7 +57,7 @@ export default function SpecialInterviewPage() {
 
   const handleStart = async () => {
     if (!modelConfigured) {
-      message.error(t('modelNotConfigured'));
+      message.error(tCommon('modelNotConfigured'));
       return;
     }
     try {
@@ -76,7 +77,7 @@ export default function SpecialInterviewPage() {
 
       router.push('/interview/special/start');
     } catch (e) {
-      message.error('请选择专项类别和难度等级'); // Could translate this too but it's a validation error
+      message.error(tCommon('formIncomplete')); // Use common form incomplete message
     } finally {
       setStarting(false);
     }
@@ -239,14 +240,13 @@ export default function SpecialInterviewPage() {
                   <div className="mt-2">
                     {!checkingConfig && modelConfigured === false && (
                       <Alert
-                        message="模型未配置"
+                        message={tCommon('modelNotConfigured')}
                         description={
                           <span>
-                            请去{' '}
+                            {tCommon('modelNotConfiguredTip')}{' '}
                             <Link href="/user/models" className="text-blue-500 underline">
-                              用户模型页面
-                            </Link>{' '}
-                            配置模型
+                              {tCommon('userModelPage')}
+                            </Link>
                           </span>
                         }
                         type="warning"
@@ -257,7 +257,7 @@ export default function SpecialInterviewPage() {
                     {checkingConfig && (
                       <div className="mb-4 flex justify-center">
                         <Tag color="default" className="px-3 py-1 rounded-full">
-                          正在检查模型配置...
+                          {tCommon('checkingConfig')}
                         </Tag>
                       </div>
                     )}

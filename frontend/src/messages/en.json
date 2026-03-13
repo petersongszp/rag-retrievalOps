@@ -3,153 +3,173 @@
     "login": "Login",
     "register": "Register",
     "forgotPassword": "Forgot Password",
-    "loginSuccess": "Login successful",
-    "loginFailed": "Login failed",
-    "registerSuccess": "Registration successful",
-    "registerFailed": "Registration failed",
+    "loginSuccess": "Login Successful",
+    "loginFailed": "Login Failed",
+    "registerSuccess": "Registration Successful",
+    "registerFailed": "Registration Failed",
     "logout": "Logout",
     "dashboard": "Dashboard",
     "home": "Home",
     "resumePrediction": "Resume Prediction",
-    "socialInterview": "Social Recruitment Interview",
-    "socialDesc": "In-depth interview for experienced hires",
-    "campusInterview": "Campus Recruitment Interview",
+    "socialInterview": "Experienced Interview",
+    "socialDesc": "Deep interview for experienced professionals",
+    "campusInterview": "Campus Interview",
     "campusDesc": "Basic interview for fresh graduates",
     "comprehensiveInterview": "Comprehensive Interview",
-    "multiInterview": "Multi-person Interview",
-    "specialInterview": "Special Interview",
+    "multiInterview": "Multi-Agent Interview",
+    "specialInterview": "Specialized Interview",
     "manual": "User Manual",
-    "center": "Personal Center",
+    "center": "User Center",
     "interviews": "Interview Records",
     "press": "Prediction Records",
     "notes": "Note List",
     "models": "User Models",
-    "loginRegister": "Login / Register"
+    "loginRegister": "Login / Register",
+    "brandName": "Interview Master",
+    "defaultUser": "User"
   },
   "Login": {
-    "title": "Login / Register",
+    "title": "Account Login / Register",
     "loginTab": "Login",
     "registerTab": "Register",
     "forgotTab": "Forgot Password",
     "emailLabel": "Email",
-    "emailPlaceholder": "Please enter email",
+    "emailPlaceholder": "Please enter your email",
     "passwordLabel": "Password",
-    "passwordPlaceholder": "Please enter password",
+    "passwordPlaceholder": "Please enter your password",
     "usernameLabel": "Username",
-    "usernamePlaceholder": "Please enter username",
-    "forgotPasswordLink": "Forgot Password?",
+    "usernamePlaceholder": "Please enter your username",
+    "forgotPasswordLink": "Forgot password?",
     "loginButton": "Login",
-    "registerButton": "Register & Login",
+    "registerButton": "Register and Login",
     "sendResetLink": "Send Reset Link",
     "backToLogin": "Back to Login",
     "welcomeTitle": "Welcome to Interview Master",
-    "welcomeSubtitle": "Start your intelligent interview journey",
+    "welcomeSubtitle": "Just two simple steps to let AI customize your interview plan",
     "step1Title": "Step 1: Configure User Model",
     "step1Desc": "Configure your large model key (Volcano, Bailian have free models), AI will generate questions based on your model.",
     "step2Title": "Step 2: Upload Resume",
     "step2Desc": "Go to personal center to upload resume, AI will generate targeted questions based on your resume.",
-    "configModelButton": "Configure Model Now"
+    "configModelButton": "Configure Model Now",
+    "resetLinkSent": "Reset link has been sent to your email, please check.",
+    "sendFailed": "Failed to send.",
+    "githubLinkFailed": "Failed to get GitHub login URL.",
+    "githubLoginFailed": "GitHub login failed.",
+    "thirdPartyLogin": "Or use third-party login",
+    "githubLogin": "GitHub Login"
   },
   "Home": {
     "badge": "AI-Driven Interview Preparation Platform 2.0 Launched",
-    "titlePrefix": "Interviews have never been so",
+    "titlePrefix": "Interview Never Been So",
     "titleSuffix": "Simple and Confident",
-    "description": "Based on real interview questions from top companies, simulating real interview scenarios with AI. From resume analysis to targeted breakthroughs, comprehensively improve your interview pass rate.",
-    "startFreeTrial": "Start Free Trial",
-    "watchDemo": "Watch Demo",
+    "description": "Based on real big factory question banks, simulate real interview scenarios via AI.<br />From resume analysis to specialized breakthroughs, improve your interview pass rate in all directions.",
+    "startFreeTrial": "Start Free Trial Now",
+    "watchDemo": "Watch Demo Video",
     "videoTutorial": "Video Tutorial",
     "courseIntro": "Course Introduction",
     "stats": {
-      "registeredUsers": "Registered Users",
+      "registeredUsers": "Users",
       "mockInterviews": "Mock Interviews",
-      "questionBank": "Questions Bank",
-      "offers": "Offers Received"
+      "questionBank": "Questions",
+      "offers": "Offers Won"
     },
     "features": {
-      "title": "Comprehensive Interview Preparation Plan",
-      "subtitle": "Whether you are a fresh graduate or an experienced professional, we have suitable practice modes for you",
+      "title": "All-round Interview Preparation",
+      "subtitle": "Whether you are a campus novice or a social veteran, we have the right mode for you",
       "card1": {
         "title": "Comprehensive Mock Interview",
-        "desc": "Highly realistic interview scenarios, covering self-introduction, project deep dive, and technical assessment.",
-        "button": "Start Comprehensive Mock"
+        "desc": "Highly restore real interview scenarios, including self-intro, project digging, and technical tests.",
+        "button": "Start Comprehensive",
+        "points": ["Full process simulation", "Intelligent follow-up", "Multi-dim evaluation"]
       },
       "card2": {
-        "title": "Multi-person Mock Interview",
-        "desc": "Interview panel composed of 3 AI experts with different backgrounds (Lead, Tech, Project) to challenge group interviews.",
-        "button": "Start Expert Panel Interview"
+        "title": "Multi-Agent Mock Interview",
+        "desc": "An interview panel of 3 AI experts (Main, Tech, Project) to challenge big factory group interviews.",
+        "button": "Start Expert Panel",
+        "points": ["Eino Agent collab", "Panel mode", "Cross-domain questions"]
       },
       "card3": {
         "title": "Resume Prediction",
-        "desc": "Upload your resume, AI will deeply analyze your project experience and tech stack to accurately predict high-frequency interview points.",
-        "button": "Upload Resume for Prediction"
+        "desc": "Upload your resume, AI will analyze your experience and skills to precisely predict high-frequency points.",
+        "button": "Upload Resume Now",
+        "points": ["Deep resume analysis", "Project details", "Customized bank"]
       },
       "card4": {
-        "title": "Special Technical Breakthrough",
-        "desc": "Focused training for specific tech stacks (High Concurrency, JVM, MySQL tuning, etc.) to quickly fill in the gaps.",
-        "button": "Select Special Training"
+        "title": "Specialized Breakthrough",
+        "desc": "Concentrated training for specific stacks (High concurrency, JVM, MySQL tuning, etc.) to quickly fix weaknesses.",
+        "button": "Choose Specialized",
+        "points": ["Stack training", "Architecture design", "Algo & Data structure"]
       }
     },
     "whyChooseUs": {
       "title": "Why Choose Interview Master?",
       "items": [
         {
-          "title": "Top Company Questions",
-          "desc": "Based on actual questions from first-tier companies, no outdated content"
+          "title": "Big Factory Bank",
+          "desc": "Trained on real questions from top companies, refuse outdated materials"
         },
         {
           "title": "Personalized",
-          "desc": "Dynamic difficulty adjustment based on your resume and ability"
+          "desc": "Dynamically adjust difficulty based on your resume and ability"
         },
         {
-          "title": "In-depth Review",
-          "desc": "Detailed evaluation reports and improvement suggestions after each interview"
+          "title": "Deep Review",
+          "desc": "Detailed evaluation report and improvement suggestions for each interview"
         },
         {
-          "title": "Fast Feedback",
-          "desc": "No waiting, start interviews anytime, anywhere with real-time feedback"
+          "title": "Instant Feedback",
+          "desc": "No waiting, start interview anytime anywhere with real-time feedback"
         },
         {
-          "title": "High Value",
-          "desc": "Enjoy 24h service at only 1/10 the price of traditional private coaching"
+          "title": "High Cost-Performance",
+          "desc": "Only 1/10 price of traditional tutors for 24h service"
         },
         {
           "title": "Controllable Difficulty",
-          "desc": "Switch difficulty freely from beginner to expert level"
+          "desc": "From entry to expert level, switch as you wish"
+        },
+        {
+          "title": "Real Combat",
+          "desc": "High-pressure environment simulation to overcome nervousness"
+        },
+        {
+          "title": "Role Play",
+          "desc": "Simulate various interview styles to handle any situation"
         }
       ]
     },
     "testimonials": {
-      "title": "Real User Feedback",
-      "subtitle": "See how they got their dream offers",
+      "title": "User Feedback",
+      "subtitle": "See how they got their dream offers through us",
       "items": [
         {
-          "text": "Not a CS major, self-taught for over a year, always felt my foundation was weak. Interview Master's resume prediction is amazing. The questions generated based on my project experience had a high hit rate, 90% were encountered in actual interviews. Especially deep questions on Spring framework, from IOC to AOP, starting from the logic of the question allowed me to connect the knowledge system from shallow to deep. This feeling of going from value to depth is really great.",
-          "user": "35-year-old Career Restart",
-          "title": "Experienced Hire - Java Developer"
+          "text": "Coming from a non-CS background, I felt my foundation was weak. The resume prediction is incredible; it precisely hit 90% of the questions I faced in real interviews. It helped me connect knowledge from Spring IHC to AOP logically.",
+          "user": "35+ Restarting",
+          "title": "Social Java Dev"
         },
         {
-          "text": "The 996 work schedule left me no time to find someone for mock interviews. Interview Master is available 24/7 for practice, highly efficient. Practicing for 30 minutes every night, the position interviewer would ask about system architecture design and link combing thinking, Interview Master covered it all. Finally gave improvement suggestions. After interviewing with real big tech companies, I encountered 70% similar questions as in the formal interview!",
+          "text": "With a 996 schedule, I had no time for mock interviews. This platform is efficient and available 24/7. My interviewer asked about system design and logic, and the platform covered them all. I faced 70% similar questions in the final interview!",
           "user": "smartbob",
-          "title": "In-service Promotion - Go Developer"
+          "title": "Go Developer"
         },
         {
-          "text": "Used Interview Master mock interview, the ability to follow up on technical details has improved significantly! The mock interview would follow up deeply based on my answers, even details like Redis AOF and optimization could be expanded, and finally gave improvement suggestions. After interviewing with real big tech companies, I encountered 70% similar questions as in the formal interview!",
+          "text": "The follow-up questions drastically improved my ability to explain technical details. It dug into Redis AOF and optimization, exactly what I needed for senior roles.",
           "user": "Lex",
           "title": "Architect"
         },
         {
-          "text": "Worked for three years and wanted to aim for big tech companies, but system design has always been a shortcoming. Interview Master's detailed evaluation report + improvement suggestions and question analysis, efficient tempering, continuous improvement, practical combat. Now I can explain the plan clearly in the interview and get a satisfactory salary.",
-          "user": "Cultivate Oneself",
+          "text": "I wanted to join a top company but system design was my weak point. The detailed reports and suggestions helped me clear my thoughts. I can now explain solutions clearly and got a great salary bump.",
+          "user": "Quiet Mind",
           "title": "Backend Developer"
         },
         {
-          "text": "Great! The price might be 1/10 of manual services, the effect is at least 80-90%, super high cost performance!",
+          "text": "Great! 1/10 price of manual services with 90% effectiveness. Best investment!",
           "user": "jackey",
           "title": "Backend Developer"
         },
         {
-          "text": "Django ORM optimization and export views are all involved, interview preparation is very comprehensive.",
-          "user": "Silent",
+          "text": "Covered everything from Django ORM optimization to export views. Very comprehensive preparation.",
+          "user": "Mo Ran",
           "title": "Python Developer"
         }
       ]
@@ -158,16 +178,16 @@
       "title": "FAQ",
       "items": [
         {
-          "question": "Why use Interview Master instead of general AI like Doubao or ChatGPT?",
-          "answer": "Interview Master is deeply customized for job interview scenarios. The real interview standards, follow-up logic, and evaluation system are closer to the requirements of employers."
+          "question": "Why use Interview Master instead of general AI like ChatGPT?",
+          "answer": "We are deeply customized for interview scenarios. Our standard, follow-up logic, and evaluation system are much closer to real employer requirements."
         },
         {
-          "question": "What problem does Interview Master solve?",
-          "answer": "Helps you find weak points before the real interview and provides targeted training, outputting structured evaluation and improvement suggestions."
+          "question": "What problem does it solve?",
+          "answer": "It helps you find weaknesses before real interviews and provides structured evaluation and suggestions."
         },
         {
-          "question": "Who is Interview Master suitable for?",
-          "answer": "From campus recruitment to experienced hires, from job transfer to promotion, everyone can use it; supports multi-position interview simulation."
+          "question": "Who is it for?",
+          "answer": "From campus recruitment to experienced professionals, for anyone seeking technical roles or career changes."
         }
       ]
     }
@@ -175,19 +195,22 @@
   "Common": {
     "switchLanguage": "Switch Language",
     "noResumeTitle": "Friendly Reminder",
-    "noResumeDesc": "Detected no resume uploaded, cannot proceed with interview.",
-    "noResumeTip": "Please go to personal center to upload your resume, AI will generate targeted interview questions based on your resume content.",
+    "noResumeDesc": "No resume detected, cannot start interview.",
+    "noResumeTip": "Please go to personal center to upload your resume, AI will generate questions based on it.",
     "uploadResume": "Go to Upload Resume",
     "modelNotConfigured": "Model not configured, cannot start interview",
-    "modelNotConfiguredTip": "Please go to User Models page to configure"
+    "modelNotConfiguredTip": "Please go to User Models page to configure",
+    "checkingConfig": "Checking model configuration...",
+    "formIncomplete": "Please complete the form before starting interview",
+    "userModelPage": "User Models Page"
   },
   "Resume": {
     "title": "Resume Prediction",
-    "description": "Based on your resume content and job intention, utilize large model technology to accurately predict interview questions for you, helping you cope with every interview with ease.",
+    "description": "Predict interview questions based on your resume and job intention, helping you prepare with precision.",
     "warningTitle": "Friendly Reminder",
     "warningItems": [
-      "Predictions will be generated based on your resume content, providing at least 20 questions at a time.",
-      "Adding/Switching resume content will affect the scope of predictions, the system will keep historical questions for you."
+      "Predictions will be generated based on your resume, providing at least 20 questions.",
+      "Changing resume content will affect predictions, history will be kept."
     ],
     "form": {
       "resumeLabel": "Select Resume",
@@ -198,14 +221,15 @@
       "languagePlaceholder": "Select language",
       "jobLabel": "Job Intention",
       "jobPlaceholder": "e.g., Java Backend Developer",
+      "jobDefault": "Java Backend Developer",
       "levelLabel": "Difficulty Level",
       "levelPlaceholder": "Select difficulty",
       "companyLabel": "Target Company",
       "companyPlaceholder": "e.g., ByteDance"
     },
     "options": {
-      "campus": "Campus Recruitment",
-      "social": "Experienced Recruitment",
+      "campus": "Campus",
+      "social": "Experienced",
       "frontend": "Frontend (JS/TS)",
       "level": {
         "junior": "Junior",
@@ -217,56 +241,58 @@
     "startPrediction": "Start Prediction",
     "loading": "Loading...",
     "generating": "Generating predictions...",
-    "submitSuccess": "Started generating predictions...",
+    "submitSuccess": "Started generating...",
     "submitError": "Submission failed, please try again",
-    "footerText": "First free prediction with 20 questions · Generation takes about 30 seconds",
+    "footerText": "First free prediction with 20 questions · Takes about 30 seconds",
     "sideCards": {
       "card1": {
         "title": "Quick Positioning",
-        "desc": "Deeply analyze resume items, generate corresponding Q&A list, hit the exam points directly."
+        "desc": "Deeply analyze resume items, generate corresponding Q&A list."
       },
       "card2": {
         "title": "Quick Analysis",
-        "desc": "Combine job requirements and project experience, output structured follow-up path."
+        "desc": "Combine job requirements and project experience for follow-up paths."
       },
       "card3": {
         "title": "Direct Learning",
-        "desc": "Pair question list with reference answers and extended reading, improve immediately."
+        "desc": "Paired with reference answers and extended reading."
       }
     }
   },
   "Social": {
     "title": "Comprehensive Interview",
-    "subtitle": "Experienced Hire Interview",
-    "description": "In the comprehensive interview mode, the system will build a real interview scenario with continuous follow-up questions based on your resume, project experience, and job competency, covering technical foundation, project implementation, design ability, and communication and collaboration.",
+    "subtitle": "Experienced Interview",
+    "description": "Simulate real interview scenarios with deep follow-up questions based on your resume, project experience, and job competency.",
     "featuresTitle": "Core Assessment Points",
     "featuresDesc": "For experienced engineers, deep digging",
     "features": {
       "logic": {
-        "title": "Technical Essence Logic",
-        "desc": "Dig deep into underlying principles, build continuous follow-up questions"
+        "title": "Technical Essence",
+        "desc": "Dig deep into principles, build continuous follow-up"
       },
       "design": {
-        "title": "Design and Decision",
-        "desc": "Combine project implementation difficulties to assess architectural ability"
+        "title": "Design & Decision",
+        "desc": "Assess architectural ability via project difficulties"
       },
       "communication": {
-        "title": "Communication and Display",
-        "desc": "From passive answering to active display, improve influence"
+        "title": "Communication",
+        "desc": "From passive answering to active display"
       },
       "level": {
-        "title": "Level Capability Positioning",
-        "desc": "Benchmark against big factory level system, precise positioning"
+        "title": "Level Positioning",
+        "desc": "Benchmark against big factory level systems"
       }
     },
-    "tip": "💡 Tip: It is recommended to upload a resume containing detailed project difficulties and solutions to get a more challenging interview experience.",
+    "tip": "💡 Tip: Detailed project difficulties in your resume yield a better experience.",
     "configTitle": "Interview Configuration",
     "form": {
       "resumeLabel": "Select Resume",
-      "resumePlaceholder": "Please select an uploaded resume",
+      "resumePlaceholder": "Please select a resume",
       "jobLabel": "Job Intention",
       "jobPlaceholder": "e.g., Java Backend Developer",
+      "jobDefault": "Java Backend Developer",
       "levelLabel": "Difficulty Level",
+      "levelPlaceholder": "Select difficulty",
       "companyLabel": "Target Company",
       "companyPlaceholder": "e.g., ByteDance"
     },
@@ -279,93 +305,94 @@
       }
     },
     "startInterview": "Start Interview",
-    "noResume": "No resume yet, please upload in personal center first",
+    "noResume": "No resume, please upload in personal center",
     "modelNotConfigured": "Model not configured, cannot start interview",
-    "footerText": "Social recruitment mode will include deeper architectural design and scenario question follow-ups"
+    "footerText": "Includes deep architecture design and scenario follow-ups"
   },
   "Multi": {
     "title": "Collaborative Interview",
-    "subtitle": "Multi-person Mock Interview",
-    "description": "In the multi-person interview mode, you will face an interview panel composed of \"Lead Interviewer\", \"Technical Expert\", and \"Project Leader\", simulating the most real and high-pressure group interview/final interview of big factories.",
-    "featuresTitle": "Interview Panel Composition",
-    "featuresDesc": "Multi-role collaboration, comprehensive assessment",
+    "subtitle": "Multi-Agent Interview",
+    "description": "Face an interview panel (Main, Tech, Project) for the most realistic and high-pressure experience.",
+    "featuresTitle": "Interview Panel",
+    "featuresDesc": "Multi-role collab, all-round assessment",
     "features": {
       "hr": {
-        "title": "Lead Interviewer (HRD/Manager)",
-        "desc": "Control the rhythm, assess values and behavioral interviews"
+        "title": "Main Interviewer (Lead/Manager)",
+        "desc": "Handle rhythm, values and behavior interview"
       },
       "tech": {
         "title": "Technical Expert (Architect)",
-        "desc": "Deep hardcore questioning, probing skill boundaries"
+        "desc": "Hardcore questions, explore skill boundaries"
       },
       "project": {
-        "title": "Project Leader (PO/Lead)",
-        "desc": "Practical project review, assess implementation and pitfall avoidance ability"
+        "title": "Project Lead (PO/Lead)",
+        "desc": "Project review, assessment of implementation"
       },
       "feedback": {
-        "title": "Multi-dimensional Dynamic Feedback",
-        "desc": "Role division and collaboration, simulating real group interview pressure"
+        "title": "Dynamic Feedback",
+        "desc": "Roles work together to simulate real pressure"
       }
     },
-    "tip": "💡 Strategy: In collaborative mode, different interviewers will have different focuses. Please pay attention to the identity of the questioner and answer in layers.",
-    "configTitle": "Interview Team Configuration",
+    "tip": "💡 Strategy: Different roles focus on different aspects, listen carefully to who is asking.",
+    "configTitle": "Panel Configuration",
     "form": {
       "resumeLabel": "Load Resume",
       "resumePlaceholder": "Load resume for targeted interview",
       "jobLabel": "Interview Position",
       "jobPlaceholder": "e.g., Senior Frontend Engineer",
+      "jobDefault": "Senior Frontend Engineer",
       "levelLabel": "Difficulty Level",
-      "companyLabel": "Target Company (Optional)",
-      "companyPlaceholder": "e.g., Alibaba, ByteDance"
+      "companyLabel": "Target Company",
+      "companyPlaceholder": "e.g., ByteDance"
     },
     "options": {
       "level": {
-        "entry": "Junior (Entry)",
-        "medium": "Senior (Medium)",
-        "hard": "Architect (Hard)",
+        "entry": "Junior",
+        "medium": "Senior",
+        "hard": "Expert",
         "hell": "Hell"
       }
     },
     "startInterview": "Enter Interview Room",
-    "noResume": "No resume yet, please upload in personal center first",
+    "noResume": "No resume, please upload in personal center",
     "modelNotConfigured": "Model not configured, cannot start interview",
-    "footerText": "Simulate real group interview process · Multi-role cross-examination"
+    "footerText": "Simulate real group interview process"
   },
   "Special": {
-    "title": "Special Interview",
-    "description": "After selecting a special direction, the system will build a real interview scenario around that tech stack, focusing on high-frequency questions and deep follow-ups, combined with industry general standards to output structured evaluation and improvement suggestions.",
-    "featuresTitle": "Special Breakthrough Advantages",
-    "featuresDesc": "Deep intensive training for specific tech stacks",
+    "title": "Specialized Interview",
+    "description": "Focus on high-frequency questions and deep digging for specific tech stacks.",
+    "featuresTitle": "Specialized Advantages",
+    "featuresDesc": "Deep reinforcement for specific stacks",
     "features": {
       "precision": {
-        "title": "Precise Disassembly",
-        "desc": "Directly hit the core high-frequency points of the position"
+        "title": "Precision",
+        "desc": "Directly hit core high-frequency points"
       },
       "link": {
-        "title": "Link Combing",
-        "desc": "Combination of dynamic and static, systematic knowledge graph"
+        "title": "Chain Analysis",
+        "desc": "Systematic knowledge map"
       },
       "density": {
-        "title": "High Density Follow-up",
+        "title": "High Density",
         "desc": "Quickly locate capability boundaries"
       },
       "simulation": {
-        "title": "Practical Simulation",
-        "desc": "Restore the real high-pressure environment of interviews"
+        "title": "Simulation",
+        "desc": "Restore real high-pressure environment"
       }
     },
-    "tip": "💡 Tip: Special interviews are suitable for single-point breakthroughs before comprehensive interviews, or checking for omissions during the review phase.",
+    "tip": "💡 Tip: Great for point breakthroughs or final reviews.",
     "configTitle": "Interview Configuration",
     "form": {
-      "stackLabel": "Special Direction",
-      "stackPlaceholder": "Please select tech stack",
+      "stackLabel": "Specialization",
+      "stackPlaceholder": "Select tech stack",
       "levelLabel": "Difficulty Level"
     },
     "groups": {
-      "language": "Standard Languages",
+      "language": "Languages",
       "backend": "Backend Components",
-      "cloud": "Cloud Native & DevOps",
-      "cs": "Computer Basics"
+      "cloud": "Cloud Native & Ops",
+      "cs": "CS Fundamentals"
     },
     "options": {
       "level": {
@@ -374,32 +401,33 @@
         "hard": "Hard",
         "expert": "Expert"
       },
-      "os": "Operating System",
+      "os": "Operating Systems",
       "network": "Computer Network",
-      "algo": "Data Structures & Algorithms"
+      "algo": "Data Structures & Algos"
     },
-    "startTraining": "Start Special Training",
-    "footerText": "Single special interview about 30-60 mins · System automatically continues question link"
+    "startTraining": "Start Specialized Training",
+    "footerText": "Approx 30-60 mins per session"
   },
   "Campus": {
     "title": "Comprehensive Interview",
-    "subtitle": "Campus Recruitment",
-    "description": "Benchmarking campus recruitment requirements, real follow-up questions based on resume items and tech stack; structural assessment covering basic ability, application ability, learning & thinking, technical enthusiasm & potential.",
-    "featuresTitle": "Core Assessment Dimensions",
-    "featuresDesc": "The system will focus on assessing the following capabilities",
+    "subtitle": "Campus Interview",
+    "description": "Targeting campus requirements, digging into resume items and technical foundation.",
+    "featuresTitle": "Core Dimensions",
+    "featuresDesc": "System will focus on these abilities",
     "features": {
-      "basis": { "title": "System Basic Ability", "desc": "Focus on basic assessment, build logical understanding" },
-      "expression": { "title": "Link Expression", "desc": "Standardized questions for campus recruitment, clear links" },
-      "knowledge": { "title": "Knowledge Mastery", "desc": "Build learning and example expression, deep verification" },
-      "potential": { "title": "Potential & Growth", "desc": "Structure the problem-solving process to judge potential" }
+      "basis": { "title": "System Foundation", "desc": "Focus on fundamentals and logic" },
+      "expression": { "title": "Chained Expression", "desc": "Clear logic path for standard roles" },
+      "knowledge": { "title": "Knowledge Mastery", "desc": "Deep verification of learning" },
+      "potential": { "title": "Potential & Growth", "desc": "Structured problem solving" }
     },
-    "tip": "💡 Tip: Uploading a well-contented resume can help AI generate more targeted questions.",
+    "tip": "💡 Tip: A well-prepared resume helps AI generate better questions.",
     "configTitle": "Interview Configuration",
     "form": {
       "resumeLabel": "Select Resume",
-      "resumePlaceholder": "Please select uploaded resume",
+      "resumePlaceholder": "Please select a resume",
       "jobLabel": "Job Intention",
       "jobPlaceholder": "e.g., Java Backend Developer",
+      "jobDefault": "Java Backend Developer",
       "levelLabel": "Difficulty Level",
       "companyLabel": "Target Company (Optional)",
       "companyPlaceholder": "e.g., ByteDance"
@@ -407,45 +435,45 @@
     "options": {
       "level": {
         "simple": "Simple",
-        "normal": "Medium",
-        "hard": "Complex"
+        "normal": "Normal",
+        "hard": "Hard"
       }
     },
     "startInterview": "Start Interview",
-    "footerText": "1 trial price ≈ 20 AI practice sessions · Single 2-hour session with auto-continuation"
+    "footerText": "Cost approx 20x AI practice · Auto follow-up"
   },
   "Center": {
-    "title": "Personal Center",
-    "description": "Manage your personal information, resume, and consumption records",
+    "title": "User Center",
+    "description": "Manage your personal info, resumes, and records",
     "userInfo": {
       "username": "Username",
       "userId": "User ID",
-      "registerTime": "Register Time",
+      "registerTime": "Registration Time",
       "email": "Bound Email",
       "version": "Current Version",
-      "student": "Student"
+      "student": "Member"
     },
     "resume": {
-      "title": "My Resume",
+      "title": "My Resumes",
       "upload": "Upload Resume",
-      "support": "Supports PDF format, max 10MB",
+      "support": "PDF supported, max 10MB",
       "setDefault": "Set Default",
       "delete": "Delete",
       "preview": "Preview",
       "defaultTag": "Default",
-      "empty": "No resume yet, please upload",
-      "maxLimit": "Can only upload up to 3 resumes",
+      "empty": "No resume, please upload",
+      "maxLimit": "Max 3 resumes allowed",
       "uploadSuccess": "Resume uploaded successfully",
-      "parsing": "Resume uploaded, parsing in progress...",
-      "parseSuccess": "Resume parsing completed",
-      "parseFail": "Resume parsing failed",
-      "parseTimeout": "Resume parsing timeout, please refresh page later",
+      "parsing": "Uploaded, parsing...",
+      "parseSuccess": "Parsing completed",
+      "parseFail": "Parsing failed",
+      "parseTimeout": "Parsing timeout, please refresh later",
       "deleteSuccess": "Resume deleted",
-      "setDefaultSuccess": "Set as default resume",
-      "deleteConfirm": "Are you sure to delete this resume?"
+      "setDefaultSuccess": "Set as default",
+      "deleteConfirm": "Are you sure you want to delete this resume?"
     },
     "consumption": {
-      "title": "Consumption Records",
+      "title": "Billing Records",
       "orderId": "Order ID",
       "type": "Type",
       "amount": "Amount",
@@ -456,10 +484,10 @@
   },
   "Interviews": {
     "title": "Interview Records",
-    "description": "View all your interview history, evaluation reports, and detailed feedback",
+    "description": "View your history, evaluation reports and feedback",
     "stats": {
       "total": "Total Interviews",
-      "completed": "Completed Interviews"
+      "completed": "Completed"
     },
     "dailyQuote": {
       "title": "Daily Quote",
@@ -468,13 +496,13 @@
     "filter": {
       "label": "Filter Records:",
       "all": "All Types",
-      "social": "Social Recruitment",
-      "campus": "Campus Recruitment",
+      "social": "Experienced",
+      "campus": "Campus",
       "comprehensive": "Comprehensive"
     },
     "empty": {
-      "text": "No related interview records yet",
-      "btnSocial": "Social Interview",
+      "text": "No related interview records found",
+      "btnSocial": "Experienced Interview",
       "btnCampus": "Campus Interview"
     },
     "status": {
@@ -483,31 +511,31 @@
       "completed": "Completed"
     },
     "card": {
-      "job": "Position",
-      "type": "Type",
-      "domain": "Domain",
+      "job": "Interview Position",
+      "type": "Interview Type",
+      "domain": "Domain/Direction",
       "level": "Difficulty",
-      "time": "Time",
-      "viewReport": "View Details",
-      "continue": "Continue",
-      "delete": "Delete"
+      "time": "Interview Time",
+      "viewReport": "View Details & Feedback",
+      "continue": "Continue Interview",
+      "delete": "Delete Record"
     },
     "pagination": {
-      "total": "Total {total} items"
+      "total": "Total {total} records"
     }
   },
   "Press": {
     "title": "Prediction Records",
-    "description": "Review your history predictions, track interview prediction accuracy",
+    "description": "Review your history and track prediction accuracy",
     "filter": {
       "status": "All Status",
-      "searchPlaceholder": "Search company name...",
+      "searchPlaceholder": "Search company...",
       "refresh": "Refresh"
     },
     "table": {
       "id": "ID",
       "type": "Type",
-      "level": "Difficulty",
+      "level": "Level",
       "company": "Company",
       "job": "Position",
       "language": "Language",
@@ -516,33 +544,33 @@
       "view": "View Details"
     },
     "batch": {
-      "selected": "Selected {count} items",
+      "selected": "{count} items selected",
       "delete": "Batch Delete"
     },
-    "error": "Failed to fetch prediction records"
+    "error": "Failed to load records"
   },
   "Notes": {
     "title": "Note List",
-    "description": "Organize your interview knowledge base, review and learn new things",
+    "description": "Organize your knowledge base",
     "tabs": {
       "press": "Prediction Notes",
       "interview": "Interview Notes"
     },
     "filter": {
       "searchPlaceholder": "Search keywords...",
-      "tagPlaceholder": "Select Tag",
+      "tagPlaceholder": "Select tags",
       "reset": "Reset"
     },
     "empty": {
       "text": "No {type} yet",
-      "subtext": "Try switching filters or adding new notes"
+      "subtext": "Try changing filters or add a new note"
     },
     "content": {
-      "answer": "Reference Answer & Thoughts",
+      "answer": "Reference & Logic",
       "aiGenerated": "AI Generated",
       "copy": "Copy Answer",
       "delete": "Delete Note",
-      "copySuccess": "Answer copied to clipboard",
+      "copySuccess": "Copied to clipboard",
       "copyFail": "Copy failed",
       "deleteSuccess": "Note deleted"
     },
@@ -550,7 +578,7 @@
       "title": "Title",
       "source": "Source",
       "tags": "Tags",
-      "time": "Created At",
+      "time": "Time",
       "action": "Action"
     }
   },
@@ -558,9 +586,9 @@
     "title": "User Model Management",
     "description": "Configure and manage your AI model interfaces",
     "manual": {
-      "text": "If you don't know how to configure or get free large models, please see the ",
+      "text": "If you don't know how to configure or get free models, please see the",
       "link": "User Manual",
-      "suffix": " in the top navigation bar, we will provide detailed guidance."
+      "suffix": " in the navigation bar."
     },
     "create": "Create Model",
     "table": {
@@ -569,32 +597,32 @@
       "protocol": "Protocol",
       "provider": "Provider",
       "status": "Status",
-      "created": "Created At",
+      "created": "Created",
       "action": "Action",
       "enable": "Enable",
       "disable": "Disable",
-      "edit": "Edit Config",
-      "delete": "Delete Model"
+      "edit": "Edit",
+      "delete": "Delete"
     },
     "confirm": {
       "deleteTitle": "Confirm Delete",
-      "deleteContent": "Are you sure to delete model \"{name}\"?"
+      "deleteContent": "Are you sure you want to delete model \"{name}\"?"
     },
     "modal": {
       "createTitle": "Create New Model",
       "editTitle": "Edit Model",
-      "baseConfig": "Basic Config",
+      "baseConfig": "Base Config",
       "nameLabel": "Model Name",
-      "namePlaceholder": "e.g., My GPT-4 Model",
+      "namePlaceholder": "e.g., My Model",
       "keyLabel": "API Key",
-      "keyPlaceholder": "Enter Platform API Key",
+      "keyPlaceholder": "Enter API Key",
       "idLabel": "Model ID",
-      "idPlaceholder": "e.g., gpt-4",
+      "idPlaceholder": "e.g., gpt-4o",
       "protocolLabel": "Protocol",
       "statusLabel": "Status",
       "urlLabel": "Base URI",
-      "urlPlaceholder": "API Base URL, e.g., https://api.xxx.com",
-      "okText": "Create"
+      "urlPlaceholder": "e.g., https://api.openai.com",
+      "okText": "Save"
     },
     "messages": {
       "createSuccess": "Created successfully",
@@ -606,5 +634,11 @@
       "loadFail": "Failed to load",
       "needLogin": "Please login first"
     }
+  },
+  "Footer": {
+    "copyright": "© 2024 Interview Master AI",
+    "privacy": "Privacy Policy",
+    "terms": "Terms of Service",
+    "contact": "Contact Us"
   }
 }

@@ -168,7 +168,7 @@ export default function MultiAgentInterviewPage() {
                                     form={form}
                                     layout="vertical"
                                     size="large"
-                                    initialValues={{ job: '', level: '中等' }}
+                                    initialValues={{ job: t('form.jobDefault'), level: '中等' }}
                                     className="flex flex-col gap-4"
                                 >
                                     <Form.Item
@@ -245,14 +245,13 @@ export default function MultiAgentInterviewPage() {
                                     <div className="mt-2">
                                         {!checkingConfig && modelConfigured === false && (
                                             <Alert
-                                                message="模型未配置"
+                                                message={tCommon('modelNotConfigured')}
                                                 description={
                                                     <span>
-                                                        请去{' '}
+                                                        {tCommon('modelNotConfiguredTip')}{' '}
                                                         <Link href="/user/models" className="text-blue-500 underline">
-                                                            用户模型页面
-                                                        </Link>{' '}
-                                                        配置模型
+                                                            {tCommon('userModelPage')}
+                                                        </Link>
                                                     </span>
                                                 }
                                                 type="warning"
@@ -263,7 +262,7 @@ export default function MultiAgentInterviewPage() {
                                         {checkingConfig && (
                                             <div className="mb-4 flex justify-center">
                                                 <Tag color="default" className="px-3 py-1 rounded-full">
-                                                    正在检查模型配置...
+                                                    {tCommon('checkingConfig')}
                                                 </Tag>
                                             </div>
                                         )}
@@ -279,11 +278,11 @@ export default function MultiAgentInterviewPage() {
                                                 try {
                                                     await form.validateFields();
                                                 } catch (e) {
-                                                    message.error('请完善配置后再挑战多人面试');
+                                                    message.error(tCommon('formIncomplete'));
                                                     return;
                                                 }
                                                 if (!modelConfigured) {
-                                                    message.error(t('modelNotConfigured'));
+                                                    message.error(tCommon('modelNotConfigured'));
                                                     return;
                                                 }
                                                 const values = form.getFieldsValue();

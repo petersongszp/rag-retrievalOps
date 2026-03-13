@@ -95,10 +95,10 @@ const Navbar: FC = () => {
     setForgotLoading(true);
     try {
       await apiClient.post('/user/password/forgot', values);
-      message.success('重置链接已发送到您的邮箱，请查收'); // Need translation
+      message.success(tLogin('resetLinkSent'));
       setActiveKey('login');
     } catch (e: any) {
-      message.error(e?.response?.data?.message || '发送失败');
+      message.error(e?.response?.data?.message || tLogin('sendFailed'));
     } finally {
       setForgotLoading(false);
     }
@@ -110,12 +110,12 @@ const Navbar: FC = () => {
       const res: any = await apiClient.get('/user/github/login');
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('获取 GitHub 登录地址失败');
+        message.error(tLogin('githubLinkFailed'));
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'GitHub 登录失败');
+      message.error(e?.response?.data?.message || e?.message || tLogin('githubLoginFailed'));
       setGithubLoading(false);
     }
   };
@@ -143,7 +143,7 @@ const Navbar: FC = () => {
               面试吧
             </span>
             <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium leading-none scale-90 origin-left">
-              Interview Master
+              INTERVIEW MASTER
             </span>
           </div>
         </div>
@@ -274,7 +274,7 @@ const Navbar: FC = () => {
               <Button className="border-slate-200 hover:border-blue-400 hover:text-blue-600 px-4 h-9 rounded-full flex items-center gap-2 transition-all">
                 <UserOutlined />
                 <span className="max-w-[100px] truncate">
-                  {user?.username || user?.email?.split('@')[0] || '用户'}
+                  {user?.username || user?.email?.split('@')[0] || t('defaultUser')}
                 </span>
               </Button>
             </Dropdown>
@@ -385,7 +385,7 @@ const Navbar: FC = () => {
                     {tLogin('registerButton')}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">{tLogin('thirdPartyLogin')}</div>
                     <Button
                       type="default"
                       className="w-full flex items-center justify-center gap-2"
@@ -399,7 +399,7 @@ const Navbar: FC = () => {
                           clipRule="evenodd"
                         />
                       </svg>
-                      GitHub 登录
+                      {tLogin('githubLogin')}
                     </Button>
                   </div>
                 </Form>
