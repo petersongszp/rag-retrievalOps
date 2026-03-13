@@ -24,7 +24,9 @@
     "press": "押题记录",
     "notes": "笔记列表",
     "models": "用户模型",
-    "loginRegister": "登录 / 注册"
+    "loginRegister": "登录 / 注册",
+    "brandName": "面试吧",
+    "defaultUser": "用户"
   },
   "Login": {
     "title": "账号登录 / 注册",
@@ -48,7 +50,13 @@
     "step1Desc": "配置您的大模型key(火山、百炼都有免费大模型)，AI 将根据您的模型生成面试题目。",
     "step2Title": "第二步：上传个人简历",
     "step2Desc": "前往个人中心上传简历，AI 将根据您的简历内容生成针对性的面试题目。",
-    "configModelButton": "立即去配置用户模型"
+    "configModelButton": "立即去配置用户模型",
+    "resetLinkSent": "重置链接已发送到您的邮箱，请查收",
+    "sendFailed": "发送失败",
+    "githubLinkFailed": "获取 GitHub 登录地址失败",
+    "githubLoginFailed": "GitHub 登录失败",
+    "thirdPartyLogin": "或使用第三方登录",
+    "githubLogin": "GitHub 登录"
   },
   "Home": {
     "badge": "AI 驱动的面试备战平台 2.0 全新上线",
@@ -71,22 +79,26 @@
       "card1": {
         "title": "综合模拟面试",
         "desc": "高度还原真实面试场景，包含自我介绍、项目深挖、技术考察等全流程。",
-        "button": "开始综合模拟"
+        "button": "开始综合模拟",
+        "points": ["全真流程模拟", "智能追问机制", "多维度能力评估"]
       },
       "card2": {
         "title": "多人模拟面试",
         "desc": "由 3 位不同背景 of AI 专家（主面、技术、项目）组成的面试组，挑战大厂群面。",
-        "button": "开启专家群面"
+        "button": "开启专家群面",
+        "points": ["Eino 智能体协作", "面试官小组模式", "跨领域联合提问"]
       },
       "card3": {
         "title": "简历押题",
         "desc": "上传你的简历，AI 将深度分析你的项目经历与技能栈，精准预测面试高频考点。",
-        "button": "立即上传简历押题"
+        "button": "立即上传简历押题",
+        "points": ["简历深度解析", "项目细节拷问", "定制化题库生成"]
       },
       "card4": {
         "title": "专项技术突破",
         "desc": "针对特定技术栈（高并发、JVM、MySQL调优等）进行集中训练，快速补齐短板。",
-        "button": "选择专项训练"
+        "button": "选择专项训练",
+        "points": ["技术栈专项训练", "架构设计专题", "算法与数据结构"]
       }
     },
     "whyChooseUs": {
@@ -115,6 +127,14 @@
         {
           "title": "难度可控",
           "desc": "从入门到专家级，难度随心切换"
+        },
+        {
+          "title": "实战演练",
+          "desc": "高压环境模拟，克服面试紧张感"
+        },
+        {
+          "title": "角色扮演",
+          "desc": "模拟不同风格面试官，从容应对各种情况"
         }
       ]
     },
@@ -266,6 +286,7 @@
       "resumePlaceholder": "请选择已上传的简历",
       "jobLabel": "岗位意向",
       "jobPlaceholder": "如：Java后端开发",
+      "jobDefault": "Java后端开发",
       "levelLabel": "难度等级",
       "companyLabel": "目标公司",
       "companyPlaceholder": "如：字节跳动"
@@ -606,5 +627,11 @@
       "loadFail": "加载失败",
       "needLogin": "请先登录"
     }
+  },
+  "Footer": {
+    "copyright": "© 2024 面试吧AI面试平台",
+    "privacy": "隐私政策",
+    "terms": "服务条款",
+    "contact": "联系我们"
   }
 }

@@ -225,7 +225,7 @@ export default function Home() {
                   {t('features.card1.desc')}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {['全真流程模拟', '智能追问机制', '多维度能力评估'].map((item, i) => (
+                  {(t.raw('features.card1.points') as string[]).map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-blue-500" /> {item}
                     </li>
@@ -260,7 +260,7 @@ export default function Home() {
                   {t('features.card2.desc')}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {['Eino 智能体协作', '面试官小组模式', '跨领域联合提问'].map((item, i) => (
+                  {(t.raw('features.card2.points') as string[]).map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-orange-500" /> {item}
                     </li>
@@ -295,8 +295,8 @@ export default function Home() {
                   {t('features.card3.desc')}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {['简历深度解析', '项目细节拷问', '定制化题库生成'].map((item, i) => (
-                    <li key={i} className="flex items-center gap-2 text-slate-200 text-sm">
+                  {(t.raw('features.card3.points') as string[]).map((item, i) => (
+                    <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-indigo-400" /> {item}
                     </li>
                   ))}
@@ -324,7 +324,7 @@ export default function Home() {
                   {t('features.card4.desc')}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {['技术栈专项训练', '架构设计专题', '算法与数据结构'].map((item, i) => (
+                  {(t.raw('features.card4.points') as string[]).map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-purple-500" /> {item}
                     </li>
@@ -400,15 +400,15 @@ export default function Home() {
               },
               {
                 icon: <SendOutlined />,
-                title: '实战演练',
-                desc: '高压环境模拟，克服面试紧张感',
+                title: t('whyChooseUs.items.6.title'),
+                desc: t('whyChooseUs.items.6.desc'),
                 color: 'text-cyan-500',
                 bg: 'bg-cyan-50',
               },
               {
                 icon: <TeamOutlined />,
-                title: '角色扮演',
-                desc: '模拟不同风格面试官，从容应对各种情况',
+                title: t('whyChooseUs.items.7.title'),
+                desc: t('whyChooseUs.items.7.desc'),
                 color: 'text-orange-500',
                 bg: 'bg-orange-50',
               },

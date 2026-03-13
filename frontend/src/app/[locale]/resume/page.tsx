@@ -128,7 +128,7 @@ export default function ResumePressPage() {
                 onFinish={onFinish}
                 initialValues={{
                   language: 'Java',
-                  job: '后端开发',
+                  job: t('form.jobDefault'),
                   level: '进阶',
                   prediction_type: '校招',
                 }}

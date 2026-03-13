@@ -165,7 +165,7 @@ export default function SocialInterviewPage() {
                   form={form}
                   layout="vertical"
                   size="large"
-                  initialValues={{ job: 'Java后端开发', level: '简单' }}
+                  initialValues={{ job: t('form.jobDefault'), level: '简单' }}
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
@@ -241,14 +241,14 @@ export default function SocialInterviewPage() {
                   <div className="mt-2">
                     {!checkingConfig && modelConfigured === false && (
                       <Alert
-                        message="模型未配置"
+                        message={tCommon('modelNotConfigured')}
                         description={
                           <span>
-                            请去{' '}
+                            {tCommon('modelNotConfiguredTip')}{' '}
                             <Link href="/user/models" className="text-blue-500 underline">
-                              用户模型页面
+                              {tCommon('userModelPage')}
                             </Link>{' '}
-                            配置模型
+                            {t('configTitle').toLowerCase()}
                           </span>
                         }
                         type="warning"
@@ -259,7 +259,7 @@ export default function SocialInterviewPage() {
                     {checkingConfig && (
                       <div className="mb-4 flex justify-center">
                         <Tag color="default" className="px-3 py-1 rounded-full">
-                          正在检查模型配置...
+                          {tCommon('checkingConfig')}
                         </Tag>
                       </div>
                     )}
@@ -275,11 +275,11 @@ export default function SocialInterviewPage() {
                         try {
                           await form.validateFields();
                         } catch (e) {
-                          message.error('请完善表单后再开始面试');
+                          message.error(tCommon('formIncomplete'));
                           return;
                         }
                         if (!modelConfigured) {
-                          message.error(t('modelNotConfigured'));
+                          message.error(tCommon('modelNotConfigured'));
                           return;
                         }
                         const values = form.getFieldsValue();
