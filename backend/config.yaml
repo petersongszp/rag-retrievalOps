@@ -132,6 +132,12 @@ wechat:
   app_secret: appsecret
   redirect_url: "http://localhost:8888/api/v1/user/wechat/callback"
 
+# GitHub OAuth（redirect_url 需与 GitHub 应用里填写的 Authorization callback URL 一致，如前端回调页）
+github:
+  client_id: "${GITHUB_CLIENT_ID}"
+  client_secret: "${GITHUB_CLIENT_SECRET}"
+  redirect_url: "${GITHUB_REDIRECT_URL}"
+
 # 飞书配置
 feishu:
   enabled: false  # 是否启用飞书告警

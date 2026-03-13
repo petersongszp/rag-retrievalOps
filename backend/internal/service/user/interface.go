@@ -65,6 +65,8 @@ type UserManager interface {
 	UpdateProfile(ctx context.Context, userID uint, req userapi.UpdateProfileRequest) (*userapi.UserProfile, error)
 	WechatLogin(ctx context.Context) (*userapi.WechatLoginQRResponse, error)
 	WechatCallback(ctx context.Context, req userapi.WechatCallbackRequest) (*userapi.LoginResponse, error)
+	GitHubLogin(ctx context.Context) (*userapi.WechatLoginQRResponse, error)
+	GitHubCallback(ctx context.Context, code string) (*userapi.LoginResponse, error)
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, token, newPassword string) error
 }

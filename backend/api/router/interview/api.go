@@ -100,6 +100,11 @@ func Register(r *server.Hertz) {
 				_wechat.GET("/callback", append(_wechatcallbackMw(), interview.WechatCallback)...)
 				_wechat.GET("/login", append(_wechatloginMw(), interview.WechatLogin)...)
 			}
+			{
+				_github := _user.Group("/github", _githubMw()...)
+				_github.GET("/login", append(_githubloginMw(), interview.GitHubLogin)...)
+				_github.POST("/callback", append(_githubcallbackMw(), interview.GitHubCallback)...)
+			}
 		}
 	}
 }
