@@ -142,37 +142,33 @@ services:
   #     - app-network
 
   # 12. 后端 API 服务
-  backend:
-    build:
-      context: apps/backend
-      dockerfile: Dockerfile
-    container_name: app-backend
-    restart: always
-    ports:
-      - "8888:8888"
-    environment:
-      DB_HOST: mysql
-      DB_PORT: 3306
-      DB_USER: ${DB_USER:-root}
-      DB_PASSWORD: ${DB_PASSWORD:-root}
-      DB_NAME: ${DB_NAME:-interview_agent}
-      REDIS_HOST: redis
-      REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
-      # MILVUS_ADDRESS: milvus:19530
-      # PORT: 8888
-    depends_on:
-      mysql:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
-      # milvus:
-      #   condition: service_healthy
-    volumes:
-      - ./apps/backend/config.yaml:/app/config.yaml
-      - ./apps/backend/logs:/app/logs
-    networks:
-      - app-network
+backend:
+  build:
+    context: backend  
+    dockerfile: Dockerfile
+  container_name: app-backend
+  restart: always
+  ports:
+    - "8888:8888"
+  environment:
+    DB_HOST: mysql
+    DB_PORT: 3306
+    DB_USER: ${DB_USER:-root}
+    DB_PASSWORD: ${DB_PASSWORD:-root}
+    DB_NAME: ${DB_NAME:-interview_agent}
+    REDIS_HOST: redis
+    REDIS_PORT: 6379
+    REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
+  depends_on:
+    mysql:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+  volumes:
+    - ./backend/config.yaml:/app/config.yaml  
+    - ./backend/logs:/app/logs  
+  networks:
+    - app-network
 
   # 14. 前端应用
   frontend:
