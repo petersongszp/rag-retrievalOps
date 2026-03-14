@@ -21,8 +21,11 @@ import {
   CustomerServiceOutlined,
   QuestionCircleOutlined,
   SendOutlined,
+  StopOutlined,
 } from '@ant-design/icons';
 import { INTERVIEW_API } from '@/config/api';
+import { useASRCapability } from '@/hooks/useASRCapability';
+import { useSpeechAnswerInput } from '@/hooks/useSpeechAnswerInput';
 
 const { Title, Text } = Typography;
 
@@ -49,7 +52,35 @@ export default function SocialInterviewStartPage() {
   const [failoverData, setFailoverData] = useState<FailoverData | null>(null);
   const [showFailoverModal, setShowFailoverModal] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const asrCapability = useASRCapability();
+  const speechInput = useSpeechAnswerInput({
+    enabled: asrCapability.enabled,
+    sessionId,
+    interviewType: '综合面试',
+    onTranscript: (transcript) => {
+      setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
+    },
+  });
   const router = useRouter();
+  const speechDisabled =
+    !asrCapability.enabled ||
+    !sessionId ||
+    waitingNextQuestion ||
+    starting ||
+    speechInput.isTranscribing ||
+    speechInput.isStopping;
+  const speechHint =
+    !asrCapability.loading && !asrCapability.enabled
+      ? '语音识别暂不可用'
+      : speechInput.status === 'recording'
+        ? '正在录音，点击停止录音按钮结束'
+        : speechInput.status === 'stopping'
+          ? '正在结束录音，请稍候...'
+          : speechInput.status === 'transcribing'
+            ? '语音识别中，请稍候...'
+            : speechInput.status === 'error'
+              ? '语音识别失败，可重新尝试'
+              : '支持语音输入，识别结果会回填到输入框';
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
@@ -207,7 +238,11 @@ export default function SocialInterviewStartPage() {
                   setSubmitting(false);
                   setWaitingNextQuestion(false);
                   break; // Interrupt the stream loop
-                } else if (payload?.type === 'chunk' || payload?.type === 'question' || payload?.type === 'follow_up_question') {
+                } else if (
+                  payload?.type === 'chunk' ||
+                  payload?.type === 'question' ||
+                  payload?.type === 'follow_up_question'
+                ) {
                   // 兼容新旧两种格式
                   // 新格式: { type: "chunk", content: "...", role: "..." }
                   // 旧格式: { type: "chunk", data: { question_text: "..." } }
@@ -335,7 +370,7 @@ export default function SocialInterviewStartPage() {
       }
       try {
         abortControllerRef.current?.abort();
-      } catch { }
+      } catch {}
       message.success('面试已结束，正在跳转...');
       router.push('/user/interviews');
       return;
@@ -510,9 +545,10 @@ export default function SocialInterviewStartPage() {
                   <div
                     className={`
                       relative px-6 py-4 text-[15px] leading-relaxed shadow-sm
-                      ${isQuestion
-                        ? 'bg-white text-slate-700 rounded-2xl rounded-tl-none border border-slate-100'
-                        : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl rounded-tr-none shadow-blue-200'
+                      ${
+                        isQuestion
+                          ? 'bg-white text-slate-700 rounded-2xl rounded-tl-none border border-slate-100'
+                          : 'bg-gradient-to-br from-blue-500 to-indigo-600 text-white rounded-2xl rounded-tr-none shadow-blue-200'
                       }
                     `}
                   >
@@ -571,8 +607,19 @@ export default function SocialInterviewStartPage() {
             <Input.TextArea
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
-              placeholder={waitingNextQuestion ? '面试官正在提问...' : '请输入你的回答...'}
+              placeholder={
+                speechInput.status === 'recording'
+                  ? '正在录音，点击停止录音按钮结束...'
+                  : speechInput.status === 'stopping'
+                    ? '正在结束录音，请稍候...'
+                    : speechInput.status === 'transcribing'
+                      ? '语音识别中，请稍候...'
+                      : waitingNextQuestion
+                        ? '面试官正在提问...'
+                        : '请输入你的回答...'
+              }
               disabled={waitingNextQuestion || starting}
+              readOnly={speechInput.isRecording || speechInput.isStopping}
               autoSize={{ minRows: 1, maxRows: 6 }}
               className="!border-0 !shadow-none !bg-transparent !text-base !px-4 !py-3 !resize-none placeholder:text-slate-400 focus:!shadow-none"
               onKeyDown={(e) => {
@@ -583,15 +630,30 @@ export default function SocialInterviewStartPage() {
               }}
             />
 
-            <div className="flex justify-between items-center px-2 pb-2 pt-1 border-t border-slate-50">
+            <div className="relative z-10 flex justify-between items-center px-2 pb-2 pt-1 border-t border-slate-50">
               <div className="flex gap-1">
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<AudioOutlined className="text-slate-400" />}
-                  disabled
-                  className="!text-slate-400"
-                />
+                {speechInput.isRecording || speechInput.isStopping ? (
+                  <Button
+                    danger
+                    shape="round"
+                    size="small"
+                    icon={<StopOutlined />}
+                    disabled={speechInput.isStopping}
+                    onClick={speechInput.handleMicClick}
+                    className="!h-9 !px-4 !font-medium"
+                  >
+                    {speechInput.isStopping ? '结束中...' : '停止录音'}
+                  </Button>
+                ) : (
+                  <Button
+                    type="text"
+                    size="small"
+                    icon={<AudioOutlined className="text-slate-400" />}
+                    disabled={speechDisabled || asrCapability.loading}
+                    onClick={speechInput.handleMicClick}
+                    className="!text-slate-400 !w-9 !h-9"
+                  />
+                )}
                 <Button
                   type="text"
                   size="small"
@@ -606,7 +668,15 @@ export default function SocialInterviewStartPage() {
                   shape="round"
                   icon={<SendOutlined />}
                   loading={submitting}
-                  disabled={!sessionId || waitingNextQuestion || starting || !answer.trim()}
+                  disabled={
+                    !sessionId ||
+                    waitingNextQuestion ||
+                    starting ||
+                    speechInput.isRecording ||
+                    speechInput.isStopping ||
+                    speechInput.isTranscribing ||
+                    !answer.trim()
+                  }
                   onClick={() => onSubmit()}
                   className="!bg-blue-500 hover:!bg-blue-600 !shadow-blue-200 !border-0"
                 >
@@ -614,6 +684,9 @@ export default function SocialInterviewStartPage() {
                 </Button>
               </div>
             </div>
+          </div>
+          <div className="mt-2 px-2">
+            <p className="text-xs text-slate-400">{speechHint}</p>
           </div>
           <div className="text-center mt-2">
             <p className="text-xs text-slate-300">面试吧</p>

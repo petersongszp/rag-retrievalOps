@@ -14,6 +14,13 @@ export const INTERVIEW_API = {
   GET_ANSWER_RECORD: `${API_BASE_URL}/interview/answer-record`,
   // 获取评估报告
   GET_EVALUATION: `${API_BASE_URL}/interview/evaluation`,
+  // 查询语音识别能力
+  ASR_CAPABILITY: `${API_BASE_URL}/interview/asr/capability`,
+  // 批量音频转写
+  ASR_TRANSCRIBE: `${API_BASE_URL}/interview/asr/transcribe`,
+  // axios client 路径
+  ASR_CAPABILITY_PATH: '/interview/asr/capability',
+  ASR_TRANSCRIBE_PATH: '/interview/asr/transcribe',
 };
 
 export const USER_API = {
