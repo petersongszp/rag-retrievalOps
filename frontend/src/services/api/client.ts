@@ -26,6 +26,11 @@ apiClient.interceptors.request.use(
       (config.headers as any).Authorization = `Bearer ${token}`;
       (config.headers as any)['X-Auth-Token'] = token;
     }
+    if (typeof FormData !== 'undefined' && config.data instanceof FormData) {
+      config.headers = (config.headers || {}) as any;
+      delete (config.headers as any)['Content-Type'];
+      delete (config.headers as any)['content-type'];
+    }
     // 为面试评估和答题记录接口设置 3 分钟超时
     if (url.includes('/interview/evaluation') || url.includes('/interview/answer-record')) {
       config.timeout = 180000; // 3 分钟 = 180 秒

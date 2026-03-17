@@ -13,15 +13,15 @@ import {
   message,
   Steps,
 } from 'antd';
-import { Link } from '@/navigation';
+import Link from 'next/link';
 import { BellOutlined, UserOutlined, DownOutlined, TeamOutlined } from '@ant-design/icons';
 import type { FC } from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import apiClient from '@/services/api/client';
 import { useAuth } from '@/hooks/useAuth';
-import { useTranslations } from 'next-intl';
-import LanguageSwitcher from '@/components/common/LanguageSwitcher';
+import { USER_API } from '@/config/api';
+
 
 const { Header } = Layout;
 const { Title } = Typography;
@@ -38,16 +38,16 @@ const Navbar: FC = () => {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
 
-  const t = useTranslations('Navbar');
-  const tLogin = useTranslations('Login');
+  
+  
 
   const doLogin = async (values: { email: string; password: string }) => {
     try {
-      const res: any = await apiClient.post('/user/login', values);
+      const res: any = await apiClient.post(USER_API.LOGIN, values);
       const data = res?.data || res;
       const token = data?.token || data?.accessToken;
       if (!token) {
-        message.error(t('loginFailed') + '：' + tLogin('emailPlaceholder')); // Using placeholder as generic error or keep generic
+        message.error("Login Failed" + '：' + "Please enter your email"); // Using placeholder as generic error or keep generic
         return;
       }
       localStorage.setItem('token', token);
@@ -62,19 +62,19 @@ const Navbar: FC = () => {
         login({ id: '0', email: values.email, name: values.email, username: values.email });
       }
       setOpenAuth(false);
-      message.success(t('loginSuccess'));
+      message.success("Login Successful");
     } catch (e: any) {
-      message.error(e?.response?.data?.message || t('loginFailed'));
+      message.error(e?.response?.data?.message || "Login Failed");
     }
   };
 
   const doRegister = async (values: { username: string; email: string; password: string }) => {
     try {
-      const data: any = await apiClient.post('/user/register', values);
+      const data: any = await apiClient.post(USER_API.REGISTER, values);
       const token = data?.token;
       const userData = data?.user;
       if (!token || !userData) {
-        message.error(t('registerFailed'));
+        message.error("Registration Failed");
         return;
       }
       localStorage.setItem('token', token);
@@ -85,9 +85,9 @@ const Navbar: FC = () => {
       login(userData);
       setOpenAuth(false);
       setGuideModalOpen(true);
-      message.success(t('registerSuccess'));
+      message.success("Registration Successful");
     } catch (e: any) {
-      message.error(e?.response?.data?.message || t('registerFailed'));
+      message.error(e?.response?.data?.message || "Registration Failed");
     }
   };
 
@@ -95,10 +95,10 @@ const Navbar: FC = () => {
     setForgotLoading(true);
     try {
       await apiClient.post('/user/password/forgot', values);
-      message.success('重置链接已发送到您的邮箱，请查收'); // Need translation
+      message.success("Reset link has been sent to your email, please check.");
       setActiveKey('login');
     } catch (e: any) {
-      message.error(e?.response?.data?.message || '发送失败');
+      message.error(e?.response?.data?.message || "Failed to send.");
     } finally {
       setForgotLoading(false);
     }
@@ -107,15 +107,15 @@ const Navbar: FC = () => {
   const doGitHubLogin = async () => {
     setGithubLoading(true);
     try {
-      const res: any = await apiClient.get('/user/github/login');
+      const res: any = await apiClient.get(USER_API.GITHUB_LOGIN);
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('获取 GitHub 登录地址失败');
+        message.error("Failed to get GitHub login URL.");
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'GitHub 登录失败');
+      message.error(e?.response?.data?.message || e?.message || "GitHub login failed.");
       setGithubLoading(false);
     }
   };
@@ -127,7 +127,7 @@ const Navbar: FC = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     authLogout();
-    message.success(t('logout'));
+    message.success("Logout");
     router.push('/');
   };
 
@@ -143,7 +143,7 @@ const Navbar: FC = () => {
               面试吧
             </span>
             <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium leading-none scale-90 origin-left">
-              Interview Master
+              INTERVIEW MASTER
             </span>
           </div>
         </div>
@@ -153,14 +153,14 @@ const Navbar: FC = () => {
             href="/"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {t('home')}
+            {"Home"}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Link
             href="/resume"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {t('resumePrediction')}
+            {"Resume Prediction"}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Dropdown
@@ -174,8 +174,8 @@ const Navbar: FC = () => {
                         <UserOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">{t('socialInterview')}</span>
-                        <span className="text-xs text-slate-400">{t('socialDesc')}</span>
+                        <span className="font-medium">{"Experienced Interview"}</span>
+                        <span className="text-xs text-slate-400">{"Deep interview for experienced professionals"}</span>
                       </div>
                     </Link>
                   ),
@@ -188,8 +188,8 @@ const Navbar: FC = () => {
                         <TeamOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">{t('campusInterview')}</span>
-                        <span className="text-xs text-slate-400">{t('campusDesc')}</span>
+                        <span className="font-medium">{"Campus Interview"}</span>
+                        <span className="text-xs text-slate-400">{"Basic interview for fresh graduates"}</span>
                       </div>
                     </Link>
                   ),
@@ -200,7 +200,7 @@ const Navbar: FC = () => {
             overlayClassName="pt-2"
           >
             <a className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer group">
-              {t('comprehensiveInterview')}{' '}
+              {"Comprehensive Interview"}{' '}
               <DownOutlined className="text-xs transition-transform group-hover:rotate-180" />
               <Badge
                 count={'HOT'}
@@ -214,7 +214,7 @@ const Navbar: FC = () => {
             href="/interview/multi"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {t('multiInterview')}
+            {"Multi-Agent Interview"}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
             <Badge
               count={'New'}
@@ -227,7 +227,7 @@ const Navbar: FC = () => {
             href="/interview/special"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {t('specialInterview')}
+            {"Specialized Interview"}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Link
@@ -235,13 +235,12 @@ const Navbar: FC = () => {
             target="_blank"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {t('manual')}
+            {"User Manual"}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
         </nav>
 
         <div className="flex items-center gap-4">
-          <LanguageSwitcher />
           <Button
             type="text"
             shape="circle"
@@ -253,17 +252,17 @@ const Navbar: FC = () => {
               trigger={['hover']}
               menu={{
                 items: [
-                  { key: 'center', label: <Link href="/user/center">{t('center')}</Link> },
-                  { key: 'interviews', label: <Link href="/user/interviews">{t('interviews')}</Link> },
-                  { key: 'press', label: <Link href="/user/press">{t('press')}</Link> },
-                  { key: 'notes', label: <Link href="/user/notes">{t('notes')}</Link> },
-                  { key: 'models', label: <Link href="/user/models">{t('models')}</Link> },
+                  { key: 'center', label: <Link href="/user/center">{"User Center"}</Link> },
+                  { key: 'interviews', label: <Link href="/user/interviews">{"Interview Records"}</Link> },
+                  { key: 'press', label: <Link href="/user/press">{"Prediction Records"}</Link> },
+                  { key: 'notes', label: <Link href="/user/notes">{"Note List"}</Link> },
+                  { key: 'models', label: <Link href="/user/models">{"User Models"}</Link> },
                   { type: 'divider' },
                   {
                     key: 'logout',
                     label: (
                       <a onClick={logout} className="text-red-500">
-                        {t('logout')}
+                        {"Logout"}
                       </a>
                     ),
                   },
@@ -274,7 +273,7 @@ const Navbar: FC = () => {
               <Button className="border-slate-200 hover:border-blue-400 hover:text-blue-600 px-4 h-9 rounded-full flex items-center gap-2 transition-all">
                 <UserOutlined />
                 <span className="max-w-[100px] truncate">
-                  {user?.username || user?.email?.split('@')[0] || '用户'}
+                  {user?.username || user?.email?.split("@")[0] || "User"}
                 </span>
               </Button>
             </Dropdown>
@@ -287,7 +286,7 @@ const Navbar: FC = () => {
               }}
               className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 h-9 px-6 rounded-full shadow-lg shadow-blue-200 font-medium transition-all hover:scale-105"
             >
-              {t('loginRegister')}
+              {"Login / Register"}
             </Button>
           )}
         </div>
@@ -296,7 +295,7 @@ const Navbar: FC = () => {
         open={openAuth}
         onCancel={() => setOpenAuth(false)}
         footer={null}
-        title={tLogin('title')}
+        title={"Account Login / Register"}
         destroyOnClose
       >
         <Tabs
@@ -305,7 +304,7 @@ const Navbar: FC = () => {
           items={[
             {
               key: 'login',
-              label: tLogin('loginTab'),
+              label: "Login",
               children: (
                 <Form
                   form={loginForm}
@@ -314,21 +313,21 @@ const Navbar: FC = () => {
                   initialValues={{ email: '', password: '' }}
                 >
                   <Form.Item
-                    label={tLogin('emailLabel')}
+                    label={"Email"}
                     name="email"
                     rules={[
-                      { required: true, message: tLogin('emailPlaceholder') },
+                      { required: true, message: "Please enter your email" },
                       { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder={tLogin('emailPlaceholder')} />
+                    <Input placeholder={"Please enter your email"} />
                   </Form.Item>
                   <Form.Item
-                    label={tLogin('passwordLabel')}
+                    label={"Password"}
                     name="password"
-                    rules={[{ required: true, message: tLogin('passwordPlaceholder') }]}
+                    rules={[{ required: true, message: "Please enter your password" }]}
                   >
-                    <Input.Password placeholder={tLogin('passwordPlaceholder')} />
+                    <Input.Password placeholder={"Please enter your password"} />
                   </Form.Item>
                   <div className="flex justify-end mb-4">
                     <a
@@ -338,11 +337,11 @@ const Navbar: FC = () => {
                         setActiveKey('forgot');
                       }}
                     >
-                      {tLogin('forgotPasswordLink')}
+                      {"Forgot password?"}
                     </a>
                   </div>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    {tLogin('loginButton')}
+                    {"Login"}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
                     <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
@@ -367,7 +366,7 @@ const Navbar: FC = () => {
             },
             {
               key: 'register',
-              label: tLogin('registerTab'),
+              label: "Register",
               children: (
                 <Form
                   form={registerForm}
@@ -376,34 +375,34 @@ const Navbar: FC = () => {
                   initialValues={{ username: '', email: '', password: '' }}
                 >
                   <Form.Item
-                    label={tLogin('usernameLabel')}
+                    label={"Username"}
                     name="username"
-                    rules={[{ required: true, message: tLogin('usernamePlaceholder') }]}
+                    rules={[{ required: true, message: "Please enter your username" }]}
                   >
-                    <Input placeholder={tLogin('usernamePlaceholder')} />
+                    <Input placeholder={"Please enter your username"} />
                   </Form.Item>
                   <Form.Item
-                    label={tLogin('emailLabel')}
+                    label={"Email"}
                     name="email"
                     rules={[
-                      { required: true, message: tLogin('emailPlaceholder') },
+                      { required: true, message: "Please enter your email" },
                       { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder={tLogin('emailPlaceholder')} />
+                    <Input placeholder={"Please enter your email"} />
                   </Form.Item>
                   <Form.Item
-                    label={tLogin('passwordLabel')}
+                    label={"Password"}
                     name="password"
-                    rules={[{ required: true, message: tLogin('passwordPlaceholder') }]}
+                    rules={[{ required: true, message: "Please enter your password" }]}
                   >
-                    <Input.Password placeholder={tLogin('passwordPlaceholder')} />
+                    <Input.Password placeholder={"Please enter your password"} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    {tLogin('registerButton')}
+                    {"Register and Login"}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">{"Or use third-party login"}</div>
                     <Button
                       type="default"
                       className="w-full flex items-center justify-center gap-2"
@@ -417,7 +416,7 @@ const Navbar: FC = () => {
                           clipRule="evenodd"
                         />
                       </svg>
-                      GitHub 登录
+                      {"GitHub Login"}
                     </Button>
                   </div>
                 </Form>
@@ -425,7 +424,7 @@ const Navbar: FC = () => {
             },
             {
               key: 'forgot',
-              label: tLogin('forgotTab'),
+              label: "Forgot Password",
               children: (
                 <Form
                   form={forgotPasswordForm}
@@ -434,17 +433,17 @@ const Navbar: FC = () => {
                   initialValues={{ email: '' }}
                 >
                   <Form.Item
-                    label={tLogin('emailLabel')}
+                    label={"Email"}
                     name="email"
                     rules={[
-                      { required: true, message: tLogin('emailPlaceholder') },
+                      { required: true, message: "Please enter your email" },
                       { type: 'email', message: 'Invalid email' },
                     ]}
                   >
-                    <Input placeholder={tLogin('emailPlaceholder')} />
+                    <Input placeholder={"Please enter your email"} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" loading={forgotLoading} className="w-full mb-4">
-                    {tLogin('sendResetLink')}
+                    {"Send Reset Link"}
                   </Button>
                   <div className="text-center">
                     <a
@@ -454,7 +453,7 @@ const Navbar: FC = () => {
                         setActiveKey('login');
                       }}
                     >
-                      {tLogin('backToLogin')}
+                      {"Back to Login"}
                     </a>
                   </div>
                 </Form>
@@ -468,15 +467,15 @@ const Navbar: FC = () => {
         open={guideModalOpen}
         onCancel={() => setGuideModalOpen(false)}
         footer={null}
-        title={tLogin('welcomeTitle')}
+        title={"Welcome to Interview Master"}
         centered
         width={600}
       >
         <div className="py-6 px-4">
           <div className="mb-8 text-center">
-            <Title level={4}>{tLogin('welcomeSubtitle')}</Title>
+            <Title level={4}>{"Just two simple steps to let AI customize your interview plan"}</Title>
             <Typography.Text type="secondary">
-              {tLogin('welcomeSubtitle')}
+              {"Just two simple steps to let AI customize your interview plan"}
             </Typography.Text>
           </div>
 
@@ -485,12 +484,12 @@ const Navbar: FC = () => {
             current={0}
             items={[
               {
-                title: tLogin('step1Title'),
-                description: tLogin('step1Desc'),
+                title: "Step 1: Configure User Model",
+                description: "Configure your large model key (Volcano, Bailian have free models), AI will generate questions based on your model.",
               },
               {
-                title: tLogin('step2Title'),
-                description: tLogin('step2Desc'),
+                title: "Step 2: Upload Resume",
+                description: "Go to personal center to upload resume, AI will generate targeted questions based on your resume.",
               },
             ]}
           />
@@ -505,7 +504,7 @@ const Navbar: FC = () => {
               }}
               className="w-full md:w-auto px-8"
             >
-              {tLogin('configModelButton')}
+              {"Configure Model Now"}
             </Button>
           </div>
         </div>

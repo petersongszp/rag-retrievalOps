@@ -1,6 +1,4 @@
-const withNextIntl = require('next-intl/plugin')();
-
-module.exports = withNextIntl({
+module.exports = {
   async rewrites() {
     return [
       {
@@ -9,4 +7,4 @@ module.exports = withNextIntl({
       },
     ];
   },
-});
+};

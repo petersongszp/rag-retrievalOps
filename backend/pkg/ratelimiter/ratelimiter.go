@@ -3,6 +3,7 @@ package ratelimiter
 import (
 	"context"
 	"crypto/sha256"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -161,12 +162,20 @@ type ModelRateConfig struct {
 	TPM int `yaml:"tpm" json:"tpm"` // Tokens per minute
 }
 
+type FailureMode string
+
+const (
+	FailureModeOpen   FailureMode = "open"
+	FailureModeClosed FailureMode = "closed"
+)
+
 // Config holds the overall rate limiter configuration.
 type Config struct {
-	Enabled    bool                       `yaml:"enabled" json:"enabled"`
-	DefaultRPM int                        `yaml:"default_rpm" json:"default_rpm"`
-	DefaultTPM int                        `yaml:"default_tpm" json:"default_tpm"`
-	Models     map[string]ModelRateConfig `yaml:"models" json:"models"`
+	Enabled     bool                       `yaml:"enabled" json:"enabled"`
+	DefaultRPM  int                        `yaml:"default_rpm" json:"default_rpm"`
+	DefaultTPM  int                        `yaml:"default_tpm" json:"default_tpm"`
+	Models      map[string]ModelRateConfig `yaml:"models" json:"models"`
+	FailureMode FailureMode                `yaml:"failure_mode" json:"failure_mode"`
 }
 
 // ---- Error Types ----
@@ -185,6 +194,22 @@ type RateLimitError struct {
 func (e *RateLimitError) Error() string {
 	return fmt.Sprintf("rate limit exceeded (%s): %s (retry after %ds)",
 		e.LimitType, e.Message, e.RetryAfterSeconds)
+}
+
+type DependencyUnavailableError struct {
+	Message string `json:"message"`
+	Err     error  `json:"-"`
+}
+
+func (e *DependencyUnavailableError) Error() string {
+	if e.Err == nil {
+		return e.Message
+	}
+	return fmt.Sprintf("%s: %v", e.Message, e.Err)
+}
+
+func (e *DependencyUnavailableError) Unwrap() error {
+	return e.Err
 }
 
 // ---- Rate Limiter ----
@@ -236,6 +261,13 @@ func orDefault(val, def int) int {
 	return def
 }
 
+func (c Config) failureMode() FailureMode {
+	if c.FailureMode == FailureModeClosed {
+		return FailureModeClosed
+	}
+	return FailureModeOpen
+}
+
 // buildKey constructs the Redis key for a given apiKey, model, and metric type.
 func buildKey(apiKey, model, metricType string) string {
 	return fmt.Sprintf("ratelimit:%s:%s:%s", hashAPIKey(apiKey), model, metricType)
@@ -250,6 +282,21 @@ func (r *RedisRateLimiter) generateMember(prefix string) string {
 	return fmt.Sprintf("%s-%d-%d", prefix, time.Now().UnixNano(), c)
 }
 
+func (r *RedisRateLimiter) handleDependencyError(operation string, err error) error {
+	if err == nil {
+		return nil
+	}
+	if r.config.failureMode() == FailureModeClosed {
+		return &DependencyUnavailableError{
+			Message: fmt.Sprintf("rate limiter dependency unavailable during %s", operation),
+			Err:     err,
+		}
+	}
+
+	fmt.Printf("[RateLimiter] Redis error during %s (failing open): %v\n", operation, err)
+	return nil
+}
+
 // AllowRequest checks if a request is allowed under RPM limits.
 // Returns nil if allowed, *RateLimitError if rate limited.
 func (r *RedisRateLimiter) AllowRequest(ctx context.Context, apiKey, model string) error {
@@ -260,6 +307,9 @@ func (r *RedisRateLimiter) AllowRequest(ctx context.Context, apiKey, model strin
 	cfg := r.getModelConfig(model)
 	if cfg.RPM <= 0 {
 		return nil // No RPM limit configured
+	}
+	if r.client == nil {
+		return r.handleDependencyError("rpm check", errors.New("redis client is nil"))
 	}
 
 	key := buildKey(apiKey, model, "rpm")
@@ -272,9 +322,7 @@ func (r *RedisRateLimiter) AllowRequest(ctx context.Context, apiKey, model strin
 	).Int64Slice()
 
 	if err != nil {
-		// On Redis error, fail open (allow the request) to avoid blocking all traffic
-		fmt.Printf("[RateLimiter] Redis error on RPM check (failing open): %v\n", err)
-		return nil
+		return r.handleDependencyError("rpm check", err)
 	}
 
 	currentCount := result[0]
@@ -305,19 +353,28 @@ func (r *RedisRateLimiter) PreAllocateTokens(ctx context.Context, apiKey, model 
 		return "", nil // No TPM limit configured
 	}
 
-	key := buildKey(apiKey, model, "tpm")
-	now := time.Now().UnixMicro()
-	windowStart := now - 60*1e6
 	uid := r.generateMember("tok")
 	// Member format: "{tokens}:{uniqueId}" — token count encoded in the member name
 	member := fmt.Sprintf("%d:%s", estimatedTokens, uid)
+	if r.client == nil {
+		if err := r.handleDependencyError("tpm pre-allocate", errors.New("redis client is nil")); err != nil {
+			return "", err
+		}
+		return member, nil
+	}
+
+	key := buildKey(apiKey, model, "tpm")
+	now := time.Now().UnixMicro()
+	windowStart := now - 60*1e6
 
 	result, err := tpmCheckScript.Run(ctx, r.client, []string{key},
 		now, windowStart, cfg.TPM, member, estimatedTokens, 120,
 	).Int64Slice()
 
 	if err != nil {
-		fmt.Printf("[RateLimiter] Redis error on TPM pre-allocate (failing open): %v\n", err)
+		if depErr := r.handleDependencyError("tpm pre-allocate", err); depErr != nil {
+			return "", depErr
+		}
 		return member, nil
 	}
 
@@ -354,6 +411,9 @@ func (r *RedisRateLimiter) AdjustTokens(ctx context.Context, apiKey, model strin
 	if !r.config.Enabled || preAllocMember == "" {
 		return
 	}
+	if r.client == nil {
+		return
+	}
 
 	key := buildKey(apiKey, model, "tpm")
 	newMember := tpmMemberWithTokens(preAllocMember, actualTokens)
@@ -370,6 +430,13 @@ func (r *RedisRateLimiter) AdjustTokens(ctx context.Context, apiKey, model strin
 
 // GetUsage returns the current RPM and TPM usage for a given apiKey and model.
 func (r *RedisRateLimiter) GetUsage(ctx context.Context, apiKey, model string) (rpm int64, tpm int64, err error) {
+	if r.client == nil {
+		return 0, 0, &DependencyUnavailableError{
+			Message: "rate limiter dependency unavailable during usage lookup",
+			Err:     errors.New("redis client is nil"),
+		}
+	}
+
 	rpmKey := buildKey(apiKey, model, "rpm")
 	tpmKey := buildKey(apiKey, model, "tpm")
 	windowStart := time.Now().UnixMicro() - 60*1e6
