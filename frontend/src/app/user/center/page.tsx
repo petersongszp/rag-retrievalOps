@@ -26,7 +26,7 @@ import {
   Space,
 } from 'antd';
 import apiClient from '@/services/api/client';
-import { API_BASE_URL } from '@/config/api';
+import { API_BASE_URL, USER_API, RESUME_API, MODEL_API } from '@/config/api';
 
 const { Dragger } = Upload;
 const { Title } = Typography;
@@ -118,7 +118,7 @@ export default function UserCenterPage() {
   const fetchResumes = useCallback(async () => {
     setLoadingResumes(true);
     try {
-      const data: any = await apiClient.get("/resume/list");
+      const data: any = await apiClient.get(RESUME_API.LIST);
       setResumes(data?.resumes || []);
     } catch (err) {
       console.error('获取简历列表失败:', err);
@@ -144,7 +144,7 @@ export default function UserCenterPage() {
 
     setUploading(true);
     try {
-      const res: any = await apiClient.post('/resume/upload', formData, {
+      const res: any = await apiClient.post(RESUME_API.UPLOAD, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
         timeout: 30000, // 异步模式，30秒就足够了
       });
@@ -177,7 +177,7 @@ export default function UserCenterPage() {
     const poll = async () => {
       attempts++;
       try {
-        const data: any = await apiClient.get(`/resume/${resumeId}`);
+        const data: any = await apiClient.get(RESUME_API.DETAIL(resumeId));
         const resume = data?.resume;
 
         if (resume?.status === 'completed') {
@@ -207,10 +207,21 @@ export default function UserCenterPage() {
     setTimeout(poll, 3000);
   };
 
+  // 设置默认简历
+  const handleSetDefault = async (resumeId: number) => {
+    try {
+      await apiClient.post(RESUME_API.SET_DEFAULT, { resume_id: resumeId });
+      message.success("Default resume set");
+      fetchResumes();
+    } catch (err: any) {
+      message.error(err?.message || '设置失败');
+    }
+  };
+
   // 删除简历
   const handleDelete = async (resumeId: number) => {
     try {
-      await apiClient.delete(`/resume/${resumeId}`);
+      await apiClient.delete(RESUME_API.DELETE(resumeId));
       message.success("Resume deleted");
       fetchResumes();
     } catch (err: any) {
@@ -246,7 +257,7 @@ export default function UserCenterPage() {
   useEffect(() => {
     const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
     setCheckingConfig(true);
-    fetch(`${API_BASE_URL}/user/model/check`, {
+    fetch(MODEL_API.CHECK, {
       method: 'GET',
       headers: {
         Authorization: token ? `Bearer ${token}` : '',
@@ -269,7 +280,7 @@ export default function UserCenterPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data: any = await apiClient.get("/user/profile");
+        const data: any = await apiClient.get(USER_API.GET_PROFILE);
         setProfile(data || null);
       } catch { }
     })();
@@ -374,20 +385,35 @@ export default function UserCenterPage() {
                                 </div>
                               </div>
                             </div>
-                            <Popconfirm
-                              title={"Are you sure you want to delete this resume?"}
-                              onConfirm={() => handleDelete(resume.id)}
-                              okText="Yes"
-                              cancelText="No"
-                            >
-                              <Button
-                                type="text"
-                                size="small"
-                                danger
-                                icon={<DeleteOutlined />}
-                                className="opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm border border-red-100"
-                              />
-                            </Popconfirm>
+                            <Space>
+                              {!resume.is_default && (
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  onClick={() => handleSetDefault(resume.id)}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 bg-white shadow-sm border border-blue-100"
+                                >
+                                  {"Set Default"}
+                                </Button>
+                              )}
+                              {resume.is_default ? (
+                                <Tag color="blue" className="m-0 border-0 bg-blue-50 text-blue-600">默认</Tag>
+                              ) : null}
+                              <Popconfirm
+                                title={"Are you sure you want to delete this resume?"}
+                                onConfirm={() => handleDelete(resume.id)}
+                                okText="Yes"
+                                cancelText="No"
+                              >
+                                <Button
+                                  type="text"
+                                  size="small"
+                                  danger
+                                  icon={<DeleteOutlined />}
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity bg-white shadow-sm border border-red-100"
+                                />
+                              </Popconfirm>
+                            </Space>
                           </div>
                         ))}
                       </div>

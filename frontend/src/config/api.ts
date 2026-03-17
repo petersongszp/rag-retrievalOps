@@ -2,7 +2,17 @@
 // 使用 NEXT_PUBLIC_API_BASE_URL 环境变量，默认为相对路径 /api
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
-// 面试相关接口
+// 用户模块
+export const USER_API = {
+  LOGIN: `${API_BASE_URL}/user/login`,
+  REGISTER: `${API_BASE_URL}/user/register`,
+  GET_PROFILE: `${API_BASE_URL}/user/profile`,
+  GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
+  GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
+  SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
+};
+
+// 面试核心模块
 export const INTERVIEW_API = {
   // 启动面试流
   START_STREAM: `${API_BASE_URL}/interview/stream/start`,
@@ -10,24 +20,41 @@ export const INTERVIEW_API = {
   END_INTERVIEW: `${API_BASE_URL}/interview/interview/end`,
   // 提交答案
   SUBMIT_ANSWER: `${API_BASE_URL}/interview/answer/submit`,
+  // 获取历史记录
+  GET_RECORDS: `${API_BASE_URL}/interview/records`,
   // 获取答题记录
   GET_ANSWER_RECORD: `${API_BASE_URL}/interview/answer-record`,
   // 获取评估报告
   GET_EVALUATION: `${API_BASE_URL}/interview/evaluation`,
-  // 查询语音识别能力
+  // ASR 相关
   ASR_CAPABILITY: `${API_BASE_URL}/interview/asr/capability`,
-  // 批量音频转写
   ASR_TRANSCRIBE: `${API_BASE_URL}/interview/asr/transcribe`,
-  // axios client 路径
-  ASR_CAPABILITY_PATH: '/interview/asr/capability',
-  ASR_TRANSCRIBE_PATH: '/interview/asr/transcribe',
 };
 
-export const USER_API = {
-  LOGIN: `${API_BASE_URL}/user/login`,
-  REGISTER: `${API_BASE_URL}/user/register`,
-  GET_PROFILE: `${API_BASE_URL}/user/profile`,
-  SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
-  GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
-  GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
+// 简历管理模块
+export const RESUME_API = {
+  LIST: `${API_BASE_URL}/resume/list`,
+  UPLOAD: `${API_BASE_URL}/resume/upload`,
+  DETAIL: (id: string | number) => `${API_BASE_URL}/resume/${id}`,
+  DELETE: (id: string | number) => `${API_BASE_URL}/resume/${id}`,
+  SET_DEFAULT: `${API_BASE_URL}/resume/set-default`,
 };
+
+// AI 模型配置模块
+export const MODEL_API = {
+  CHECK: `${API_BASE_URL}/user/model/check`,
+  LIST: `${API_BASE_URL}/user/model/list`,
+  DETAILS: (id: string | number) => `${API_BASE_URL}/user/model/details/${id}`,
+  CREATE: `${API_BASE_URL}/user/create/model`,
+  UPDATE: (id: string | number) => `${API_BASE_URL}/user/model/update/${id}`,
+  DELETE: (id: string | number) => `${API_BASE_URL}/user/model/delete/${id}`,
+};
+
+// 其他功能 (预测/押题)
+export const PREDICTION_API = {
+  LIST: `${API_BASE_URL}/prediction/list`,
+  DETAIL: (id: string | number) => `${API_BASE_URL}/prediction/${id}`,
+  START: `${API_BASE_URL}/prediction/start`,
+  DELETE: `${API_BASE_URL}/prediction/delete`,
+};
+

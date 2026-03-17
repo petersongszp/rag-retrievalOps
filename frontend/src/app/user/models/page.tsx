@@ -28,6 +28,7 @@ import { useState, useEffect } from 'react';
 
 import Link from 'next/link';
 import apiClient from '@/services/api/client';
+import { MODEL_API } from '@/config/api';
 
 const { Title, Paragraph } = Typography;
 
@@ -55,7 +56,7 @@ export default function UserModelsPage() {
   const fetchModels = async () => {
     setLoading(true);
     try {
-      const res: any = await apiClient.get("/user/models");
+      const res: any = await apiClient.get(MODEL_API.LIST);
       setModels(res?.models || []);
     } catch (e: any) {
       if (e?.response?.status === 401) {
@@ -77,12 +78,12 @@ export default function UserModelsPage() {
     try {
       const values = await form.validateFields();
       if (editingModel) {
-        await apiClient.put(`/user/models/${editingModel.id}`, values);
+        await apiClient.put(MODEL_API.UPDATE(editingModel.id), values);
         message.success('更新成功'); // Missed this key? I'll use generic success or add key. Let's use 'Saved' logic.
         // Actually I have createSuccess/createFail. I can use createSuccess for update too or add updateSuccess.
         // I'll check my json. I have updateSuccess in messages.
       } else {
-        await apiClient.post('/user/models', values);
+        await apiClient.post(MODEL_API.CREATE, values);
         message.success("Created successfully");
       }
       setIsModalOpen(false);
@@ -97,7 +98,7 @@ export default function UserModelsPage() {
   // 删除模型
   const handleDelete = async (id: number) => {
     try {
-      await apiClient.delete(`/user/models/${id}`);
+      await apiClient.delete(MODEL_API.DELETE(id));
       message.success("Deleted successfully");
       fetchModels();
     } catch (e: any) {
@@ -108,7 +109,7 @@ export default function UserModelsPage() {
   // 切换启用状态
   const toggleEnabled = async (record: UserModel) => {
     try {
-      await apiClient.put(`/user/models/${record.id}`, {
+      await apiClient.put(MODEL_API.UPDATE(record.id), {
         ...record,
         is_enabled: !record.is_enabled,
       });

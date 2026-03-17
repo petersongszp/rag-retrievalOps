@@ -23,6 +23,7 @@ import {
   CheckCircleOutlined,
 } from '@ant-design/icons';
 import apiClient from '@/services/api/client';
+import { RESUME_API, PREDICTION_API } from '@/config/api';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -43,7 +44,7 @@ export default function ResumePressPage() {
   useEffect(() => {
     const fetchResumes = async () => {
       try {
-        const data: any = await apiClient.get("/resume/list");
+        const data: any = await apiClient.get(RESUME_API.LIST);
         if (data && data.resumes) {
           setResumes(data.resumes);
           if (data.resumes.length > 0) {
@@ -76,7 +77,7 @@ export default function ResumePressPage() {
         company_name: values.company_name,
       };
 
-      await apiClient.post('/prediction/start', payload, {
+      await apiClient.post(PREDICTION_API.START, payload, {
         timeout: 180000, // 3 分钟超时
       });
       message.success("Started generating...");

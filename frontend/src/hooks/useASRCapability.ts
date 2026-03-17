@@ -26,7 +26,7 @@ export function useASRCapability(): ASRCapabilityState {
 
     const loadCapability = async () => {
       try {
-        const data: any = await apiClient.get(INTERVIEW_API.ASR_CAPABILITY_PATH);
+        const data: any = await apiClient.get(INTERVIEW_API.ASR_CAPABILITY);
         if (cancelled) {
           return;
         }

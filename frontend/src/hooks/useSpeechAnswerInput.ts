@@ -128,7 +128,7 @@ export function useSpeechAnswerInput({
         formData.append('domain', domain);
       }
 
-      const data: any = await apiClient.post(INTERVIEW_API.ASR_TRANSCRIBE_PATH, formData, {
+      const data: any = await apiClient.post(INTERVIEW_API.ASR_TRANSCRIBE, formData, {
         timeout: 120000,
       });
 

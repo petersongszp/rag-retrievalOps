@@ -20,6 +20,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import apiClient from '@/services/api/client';
 import { useAuth } from '@/hooks/useAuth';
+import { USER_API } from '@/config/api';
 
 
 const { Header } = Layout;
@@ -42,7 +43,7 @@ const Navbar: FC = () => {
 
   const doLogin = async (values: { email: string; password: string }) => {
     try {
-      const res: any = await apiClient.post('/user/login', values);
+      const res: any = await apiClient.post(USER_API.LOGIN, values);
       const data = res?.data || res;
       const token = data?.token || data?.accessToken;
       if (!token) {
@@ -69,7 +70,7 @@ const Navbar: FC = () => {
 
   const doRegister = async (values: { username: string; email: string; password: string }) => {
     try {
-      const data: any = await apiClient.post('/user/register', values);
+      const data: any = await apiClient.post(USER_API.REGISTER, values);
       const token = data?.token;
       const userData = data?.user;
       if (!token || !userData) {
@@ -106,7 +107,7 @@ const Navbar: FC = () => {
   const doGitHubLogin = async () => {
     setGithubLoading(true);
     try {
-      const res: any = await apiClient.get("/user/github/login");
+      const res: any = await apiClient.get(USER_API.GITHUB_LOGIN);
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
         message.error("Failed to get GitHub login URL.");
