@@ -17,7 +17,7 @@ import {
 } from 'antd';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 import { TeamOutlined, CheckCircleOutlined, FileOutlined, StarOutlined } from '@ant-design/icons';
 import apiClient from '@/services/api/client';
@@ -32,8 +32,8 @@ interface ResumeInfo {
 }
 
 export default function MultiAgentInterviewPage() {
-    const t = useTranslations('Multi');
-    const tCommon = useTranslations('Common');
+    
+    
     const [form] = Form.useForm();
     const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
     const [resumes, setResumes] = useState<ResumeInfo[]>([]);
@@ -48,7 +48,7 @@ export default function MultiAgentInterviewPage() {
     const fetchResumes = useCallback(async () => {
         setLoadingResumes(true);
         try {
-            const data: any = await apiClient.get('/resume/list');
+            const data: any = await apiClient.get("/resume/list");
             const list = data?.resumes || [];
             setResumes(list);
             if (list.length === 0) {
@@ -86,10 +86,10 @@ export default function MultiAgentInterviewPage() {
     }, [fetchResumes]);
 
     const features = [
-        { title: t('features.hr.title'), desc: t('features.hr.desc') },
-        { title: t('features.tech.title'), desc: t('features.tech.desc') },
-        { title: t('features.project.title'), desc: t('features.project.desc') },
-        { title: t('features.feedback.title'), desc: t('features.feedback.desc') },
+        { title: "Main Interviewer (Lead/Manager)", desc: "Handle rhythm, values and behavior interview" },
+        { title: "Technical Expert (Architect)", desc: "Hardcore questions, explore skill boundaries" },
+        { title: "Project Lead (PO/Lead)", desc: "Project review, assessment of implementation" },
+        { title: "Dynamic Feedback", desc: "Roles work together to simulate real pressure" },
     ];
 
     return (
@@ -98,10 +98,10 @@ export default function MultiAgentInterviewPage() {
                 {/* Header */}
                 <div className="text-center mb-10">
                     <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-                        {t('title')} · <span className="text-orange-600">{t('subtitle')}</span>
+                        {"Collaborative Interview"} · <span className="text-orange-600">{"Multi-Agent Interview"}</span>
                     </Title>
                     <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-                        {t('description')}
+                        {"Face an interview panel (Main, Tech, Project) for the most realistic and high-pressure experience."}
                     </Paragraph>
                 </div>
 
@@ -123,10 +123,10 @@ export default function MultiAgentInterviewPage() {
                                     <div className="flex items-center gap-2 mb-2">
                                         <TeamOutlined className="text-orange-500 text-xl" />
                                         <Title level={4} className="!m-0 !font-bold text-slate-800">
-                                            {t('featuresTitle')}
+                                            {"Interview Panel"}
                                         </Title>
                                     </div>
-                                    <Text className="text-slate-400 text-sm">{t('featuresDesc')}</Text>
+                                    <Text className="text-slate-400 text-sm">{"Multi-role collab, all-round assessment"}</Text>
                                 </div>
 
                                 <div className="space-y-6 flex-1">
@@ -147,7 +147,7 @@ export default function MultiAgentInterviewPage() {
 
                                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                                     <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                                        {t('tip')}
+                                        {"💡 Strategy: Different roles focus on different aspects, listen carefully to who is asking."}
                                     </div>
                                 </div>
                             </div>
@@ -161,31 +161,31 @@ export default function MultiAgentInterviewPage() {
                                     className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                                 >
                                     <span className="w-1.5 h-6 bg-orange-500 rounded-full block"></span>
-                                    {t('configTitle')}
+                                    {"Panel Configuration"}
                                 </Title>
 
                                 <Form
                                     form={form}
                                     layout="vertical"
                                     size="large"
-                                    initialValues={{ job: t('form.jobDefault'), level: '中等' }}
+                                    initialValues={{ job: "Senior Frontend Engineer", level: '中等' }}
                                     className="flex flex-col gap-4"
                                 >
                                     <Form.Item
-                                        label={<span className="font-medium text-slate-700">{t('form.resumeLabel')}</span>}
+                                        label={<span className="font-medium text-slate-700">{"Load Resume"}</span>}
                                         name="resume_id"
-                                        rules={[{ required: true, message: t('form.resumePlaceholder') }]}
+                                        rules={[{ required: true, message: "Load resume for targeted interview" }]}
                                         className="!mb-2"
                                     >
                                         <Select
-                                            placeholder={t('form.resumePlaceholder')}
+                                            placeholder={"Load resume for targeted interview"}
                                             loading={loadingResumes}
                                             disabled={starting}
                                             className="!h-12"
                                             variant="filled"
                                             onChange={(value) => setSelectedResumeId(value)}
                                             notFoundContent={
-                                                loadingResumes ? <Spin size="small" /> : t('noResume')
+                                                loadingResumes ? <Spin size="small" /> : "No resume, please upload in personal center"
                                             }
                                             options={resumes.map((r) => ({
                                                 value: r.id,
@@ -201,42 +201,42 @@ export default function MultiAgentInterviewPage() {
 
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                                         <Form.Item
-                                            label={<span className="font-medium text-slate-700">{t('form.jobLabel')}</span>}
+                                            label={<span className="font-medium text-slate-700">{"Interview Position"}</span>}
                                             name="job"
-                                            rules={[{ required: true, message: t('form.jobPlaceholder') }]}
+                                            rules={[{ required: true, message: "e.g., Senior Frontend Engineer" }]}
                                             className="!mb-2"
                                         >
                                             <Input
-                                                placeholder={t('form.jobPlaceholder')}
+                                                placeholder={"e.g., Senior Frontend Engineer"}
                                                 className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                                             />
                                         </Form.Item>
 
                                         <Form.Item
-                                            label={<span className="font-medium text-slate-700">{t('form.levelLabel')}</span>}
+                                            label={<span className="font-medium text-slate-700">{"Difficulty Level"}</span>}
                                             name="level"
-                                            rules={[{ required: true, message: t('form.levelLabel') }]}
+                                            rules={[{ required: true, message: "Difficulty Level" }]}
                                             className="!mb-2"
                                         >
                                             <Select
                                                 className="!h-12"
                                                 variant="filled"
                                                 options={[
-                                                    { value: '简单', label: t('options.level.entry') },
-                                                    { value: '中等', label: t('options.level.medium') },
-                                                    { value: '复杂', label: t('options.level.hard') },
+                                                    { value: '简单', label: "Junior" },
+                                                    { value: '中等', label: "Senior" },
+                                                    { value: '复杂', label: "Expert" },
                                                 ]}
                                             />
                                         </Form.Item>
                                     </div>
 
                                     <Form.Item
-                                        label={<span className="font-medium text-slate-700">{t('form.companyLabel')}</span>}
+                                        label={<span className="font-medium text-slate-700">{"Target Company"}</span>}
                                         name="company_name"
                                         className="!mb-6"
                                     >
                                         <Input
-                                            placeholder={t('form.companyPlaceholder')}
+                                            placeholder={"e.g., ByteDance"}
                                             maxLength={100}
                                             className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                                         />
@@ -245,12 +245,12 @@ export default function MultiAgentInterviewPage() {
                                     <div className="mt-2">
                                         {!checkingConfig && modelConfigured === false && (
                                             <Alert
-                                                message={tCommon('modelNotConfigured')}
+                                                message={"Model not configured, cannot start interview"}
                                                 description={
                                                     <span>
-                                                        {tCommon('modelNotConfiguredTip')}{' '}
+                                                        {"Please go to User Models page to configure"}{' '}
                                                         <Link href="/user/models" className="text-blue-500 underline">
-                                                            {tCommon('userModelPage')}
+                                                            {"User Models Page"}
                                                         </Link>
                                                     </span>
                                                 }
@@ -262,7 +262,7 @@ export default function MultiAgentInterviewPage() {
                                         {checkingConfig && (
                                             <div className="mb-4 flex justify-center">
                                                 <Tag color="default" className="px-3 py-1 rounded-full">
-                                                    {tCommon('checkingConfig')}
+                                                    {"Checking model configuration..."}
                                                 </Tag>
                                             </div>
                                         )}
@@ -278,11 +278,11 @@ export default function MultiAgentInterviewPage() {
                                                 try {
                                                     await form.validateFields();
                                                 } catch (e) {
-                                                    message.error(tCommon('formIncomplete'));
+                                                    message.error("Please complete the form before starting interview");
                                                     return;
                                                 }
                                                 if (!modelConfigured) {
-                                                    message.error(tCommon('modelNotConfigured'));
+                                                    message.error("Model not configured, cannot start interview");
                                                     return;
                                                 }
                                                 const values = form.getFieldsValue();
@@ -302,10 +302,10 @@ export default function MultiAgentInterviewPage() {
                                                 router.push('/interview/multi/start');
                                             }}
                                         >
-                                            {t('startInterview')}
+                                            {"Enter Interview Room"}
                                         </Button>
                                         <div className="text-center text-slate-400 text-sm mt-4">
-                                            {t('footerText')}
+                                            {"Simulate real group interview process"}
                                         </div>
                                     </div>
                                 </Form>
@@ -316,15 +316,15 @@ export default function MultiAgentInterviewPage() {
             </div>
             <Modal
                 open={showNoResumeModal}
-                title={tCommon('noResumeTitle')}
+                title={"Friendly Reminder"}
                 footer={null}
                 onCancel={() => setShowNoResumeModal(false)}
                 centered
             >
                 <div className="text-center py-6">
-                    <div className="mb-4 text-slate-600 text-lg">{tCommon('noResumeDesc')}</div>
+                    <div className="mb-4 text-slate-600 text-lg">{"No resume detected, cannot start interview."}</div>
                     <div className="mb-8 text-slate-500">
-                        {tCommon('noResumeTip')}
+                        {"Please go to personal center to upload your resume, AI will generate questions based on it."}
                     </div>
                     <Button
                         type="primary"
@@ -332,7 +332,7 @@ export default function MultiAgentInterviewPage() {
                         onClick={() => router.push('/user/center')}
                         className="w-full bg-indigo-600 hover:bg-indigo-500"
                     >
-                        {tCommon('uploadResume')}
+                        {"Go to Upload Resume"}
                     </Button>
                 </div>
             </Modal>

@@ -21,12 +21,12 @@ import {
 } from '@ant-design/icons';
 import { predictionService } from '@/services/api/prediction';
 import { PredictionRecordItem } from '@/types/prediction';
-import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 
 export default function PressRecordsPage() {
-  const t = useTranslations('Press');
-  const tCommon = useTranslations('Common');
+  
+  
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<PredictionRecordItem[]>([]);
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
@@ -43,7 +43,7 @@ export default function PressRecordsPage() {
       }
     } catch (e) {
       console.error(e);
-      message.error(t('error'));
+      message.error("Failed to load records");
     } finally {
       setLoading(false);
     }
@@ -58,7 +58,7 @@ export default function PressRecordsPage() {
     if (selectedRowKeys.length === 0) return;
     try {
       await predictionService.deleteHistory(selectedRowKeys as number[]);
-      message.success(t('batch.delete') + '成功');
+      message.success("Batch Delete" + '成功');
       setSelectedRowKeys([]);
       fetchRecords();
     } catch (e) {
@@ -79,14 +79,14 @@ export default function PressRecordsPage() {
 
   const columns = [
     {
-      title: t('table.id'),
+      title: "ID",
       dataIndex: 'id',
       key: 'id',
       width: 80,
       render: (text: any) => <span className="text-slate-400">#{text}</span>,
     },
     {
-      title: t('table.type'),
+      title: "Type",
       dataIndex: 'prediction_type',
       key: 'prediction_type',
       render: (type: string) => (
@@ -96,7 +96,7 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: t('table.level'),
+      title: "Level",
       dataIndex: 'difficulty',
       key: 'difficulty',
       render: (level: string) => {
@@ -111,7 +111,7 @@ export default function PressRecordsPage() {
       },
     },
     {
-      title: t('table.company'),
+      title: "Company",
       dataIndex: 'company',
       key: 'company',
       render: (text: string) => (
@@ -119,18 +119,18 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: t('table.job'),
+      title: "Position",
       dataIndex: 'job_title',
       key: 'job_title',
       render: (text: string) => <span className="text-slate-600">{text}</span>,
     },
     {
-      title: t('table.language'),
+      title: "Language",
       dataIndex: 'language',
       key: 'language',
     },
     {
-      title: t('table.time'),
+      title: "Time",
       dataIndex: 'created_at',
       key: 'created_at',
       render: (time: number) => (
@@ -140,12 +140,12 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: t('table.action'),
+      title: "Action",
       key: 'action',
       render: (_: any, record: PredictionRecordItem) => (
         <Space size="small">
           <Link href={`/user/press/${record.id}`}>
-            <Tooltip title={t('table.view')}>
+            <Tooltip title={"View Details"}>
               <Button
                 type="text"
                 icon={<EyeOutlined />}
@@ -197,9 +197,9 @@ export default function PressRecordsPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <RocketOutlined className="text-indigo-600" />
-            {t('title')}
+            {"Prediction Records"}
           </h1>
-          <p className="text-slate-500 mt-2">{t('description')}</p>
+          <p className="text-slate-500 mt-2">{"Review your history and track prediction accuracy"}</p>
         </div>
 
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -210,13 +210,13 @@ export default function PressRecordsPage() {
                 style={{ width: 120 }}
                 onChange={setStatusFilter}
                 options={[
-                  { value: 'all', label: t('filter.status') },
+                  { value: 'all', label: "All Status" },
                 ]}
                 variant="filled"
                 size="large"
               />
               <Input
-                placeholder={t('filter.searchPlaceholder')}
+                placeholder={"Search company..."}
                 prefix={<SearchOutlined className="text-slate-400" />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -228,7 +228,7 @@ export default function PressRecordsPage() {
             <Space>
               {selectedRowKeys.length > 0 && (
                 <span className="text-slate-500 text-sm bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                  {t('batch.selected', { count: selectedRowKeys.length })}
+                  {selectedRowKeys.length} selected
                 </span>
               )}
               {selectedRowKeys.length > 0 && (
@@ -238,7 +238,7 @@ export default function PressRecordsPage() {
                   onClick={handleBatchDelete}
                   className="rounded-xl"
                 >
-                  {t('batch.delete')}
+                  {"Batch Delete"}
                 </Button>
               )}
               <Button
@@ -246,7 +246,7 @@ export default function PressRecordsPage() {
                 onClick={fetchRecords}
                 className="rounded-xl hover:text-indigo-600 hover:border-indigo-200"
               >
-                {t('filter.refresh')}
+                {"Refresh"}
               </Button>
             </Space>
           </div>
@@ -260,7 +260,7 @@ export default function PressRecordsPage() {
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
-              showTotal: (total) => <span className="text-slate-400">{tCommon('pagination.total', { total })}</span>,
+              showTotal: (total) => <span className="text-slate-400">Total {total} items</span>,
             }}
             className="modern-table"
           />

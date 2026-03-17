@@ -25,7 +25,7 @@ import {
   BookOutlined,
 } from '@ant-design/icons';
 import { useState, useEffect } from 'react';
-import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 import apiClient from '@/services/api/client';
 
@@ -44,7 +44,7 @@ interface UserModel {
 }
 
 export default function UserModelsPage() {
-  const t = useTranslations('Models');
+  
   const [loading, setLoading] = useState(false);
   const [models, setModels] = useState<UserModel[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -55,13 +55,13 @@ export default function UserModelsPage() {
   const fetchModels = async () => {
     setLoading(true);
     try {
-      const res: any = await apiClient.get('/user/models');
+      const res: any = await apiClient.get("/user/models");
       setModels(res?.models || []);
     } catch (e: any) {
       if (e?.response?.status === 401) {
-        message.error(t('messages.needLogin'));
+        message.error("Please login first");
       } else {
-        message.error(t('messages.loadFail'));
+        message.error("Failed to load");
       }
     } finally {
       setLoading(false);
@@ -83,14 +83,14 @@ export default function UserModelsPage() {
         // I'll check my json. I have updateSuccess in messages.
       } else {
         await apiClient.post('/user/models', values);
-        message.success(t('messages.createSuccess'));
+        message.success("Created successfully");
       }
       setIsModalOpen(false);
       form.resetFields();
       setEditingModel(null);
       fetchModels();
     } catch (e: any) {
-      message.error(e?.message || (editingModel ? '更新失败' : t('messages.createFail')));
+      message.error(e?.message || (editingModel ? '更新失败' : "Creation failed"));
     }
   };
 
@@ -98,10 +98,10 @@ export default function UserModelsPage() {
   const handleDelete = async (id: number) => {
     try {
       await apiClient.delete(`/user/models/${id}`);
-      message.success(t('messages.deleteSuccess'));
+      message.success("Deleted successfully");
       fetchModels();
     } catch (e: any) {
-      message.error(e?.message || t('messages.deleteFail'));
+      message.error(e?.message || "Deletion failed");
     }
   };
 
@@ -112,10 +112,10 @@ export default function UserModelsPage() {
         ...record,
         is_enabled: !record.is_enabled,
       });
-      message.success(t('messages.updateSuccess'));
+      message.success("Status updated");
       fetchModels();
     } catch (e) {
-      message.error(t('messages.updateFail'));
+      message.error("Failed to update status");
     }
   };
 
@@ -127,19 +127,19 @@ export default function UserModelsPage() {
 
   const columns = [
     {
-      title: t('table.name'),
+      title: "Model Name",
       dataIndex: 'name',
       key: 'name',
       render: (text: string) => <span className="font-bold text-slate-700">{text}</span>,
     },
     {
-      title: t('table.id'),
+      title: "Model ID",
       dataIndex: 'model_id',
       key: 'model_id',
       render: (text: string) => <Tag className="font-mono bg-slate-50 border-slate-200">{text}</Tag>,
     },
     {
-      title: t('table.protocol'),
+      title: "Protocol",
       dataIndex: 'protocol',
       key: 'protocol',
       render: (text: string) => (
@@ -147,13 +147,13 @@ export default function UserModelsPage() {
       ),
     },
     {
-      title: t('table.provider'),
+      title: "Provider",
       dataIndex: 'provider',
       key: 'provider',
       render: (text: string) => text || '-',
     },
     {
-      title: t('table.status'),
+      title: "Status",
       dataIndex: 'is_enabled',
       key: 'is_enabled',
       render: (enabled: boolean) => (
@@ -162,12 +162,12 @@ export default function UserModelsPage() {
           color={enabled ? 'success' : 'default'}
           className="border-0"
         >
-          {enabled ? t('table.enable') : t('table.disable')}
+          {enabled ? "Enable" : "Disable"}
         </Tag>
       ),
     },
     {
-      title: t('table.created'),
+      title: "Created",
       dataIndex: 'created_at',
       key: 'created_at',
       render: (time: number) => (
@@ -177,7 +177,7 @@ export default function UserModelsPage() {
       ),
     },
     {
-      title: t('table.action'),
+      title: "Action",
       key: 'action',
       render: (_: any, record: UserModel) => (
         <Space size="middle">
@@ -187,7 +187,7 @@ export default function UserModelsPage() {
             onClick={() => toggleEnabled(record)}
             className={record.is_enabled ? 'text-orange-500' : 'text-green-600'}
           >
-            {record.is_enabled ? t('table.disable') : t('table.enable')}
+            {record.is_enabled ? "Disable" : "Enable"}
           </Button>
           <Button
             type="text"
@@ -196,17 +196,17 @@ export default function UserModelsPage() {
             onClick={() => openEditModal(record)}
             className="text-blue-600"
           >
-            {t('table.edit')}
+            {"Edit"}
           </Button>
           <Popconfirm
-            title={t('confirm.deleteTitle')}
-            description={t('confirm.deleteContent', { name: record.name })}
+            title={"Confirm Delete"}
+            description={`Are you sure you want to delete model "${record.name}"?`}
             onConfirm={() => handleDelete(record.id)}
             okText="Yes"
             cancelText="No"
           >
             <Button type="text" size="small" danger icon={<DeleteOutlined />}>
-              {t('table.delete')}
+              {"Delete"}
             </Button>
           </Popconfirm>
         </Space>
@@ -224,9 +224,9 @@ export default function UserModelsPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <ApiOutlined className="text-cyan-600" />
-            {t('title')}
+            {"User Model Management"}
           </h1>
-          <p className="text-slate-500 mt-2">{t('description')}</p>
+          <p className="text-slate-500 mt-2">{"Configure and manage your AI model interfaces"}</p>
         </div>
 
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -237,11 +237,11 @@ export default function UserModelsPage() {
               <div className="flex items-center gap-2">
                 <QuestionCircleOutlined className="text-blue-500" />
                 <span className="text-slate-600">
-                  {t('manual.text')}{' '}
+                  {"If you don't know how to configure or get free models, please see the"}{' '}
                   <Link href="/manual" className="text-blue-600 font-bold hover:underline flex items-center gap-1 inline-flex">
-                    <BookOutlined /> {t('manual.link')}
+                    <BookOutlined /> {"User Manual"}
                   </Link>
-                  {t('manual.suffix')}
+                  {" in the navigation bar."}
                 </span>
               </div>
             }
@@ -267,7 +267,7 @@ export default function UserModelsPage() {
               size="large"
               className="bg-cyan-600 hover:bg-cyan-500 shadow-lg shadow-cyan-200 rounded-xl"
             >
-              {t('create')}
+              {"Create Model"}
             </Button>
           </div>
 
@@ -286,36 +286,36 @@ export default function UserModelsPage() {
         title={
           <div className="flex items-center gap-2 text-slate-800">
             {editingModel ? <EditOutlined /> : <PlusOutlined />}
-            {editingModel ? t('modal.editTitle') : t('modal.createTitle')}
+            {editingModel ? "Edit Model" : "Create New Model"}
           </div>
         }
         open={isModalOpen}
         onOk={handleOk}
         onCancel={() => setIsModalOpen(false)}
-        okText={t('modal.okText')}
+        okText={"Save"}
         cancelText="Cancel" // Keep Cancel in English or add key? Antd locale handles it usually if ConfigProvider is used, or hardcode.
         // If I want to be perfect, I should add 'cancel' key. But 'Cancel' is often acceptable or auto-translated by browser if not Antd locale.
         // Actually Antd components use context for locale.
-        // I will leave it as "Cancel" for now or use t('common.cancel') if I had it.
+        // I will leave it as "Cancel" for now or use "common.cancel" if I had it.
         // I'll stick to 'Cancel' for now.
         centered
         className="rounded-2xl overflow-hidden"
       >
         <Form form={form} layout="vertical" className="mt-4">
           <div className="bg-slate-50 p-4 rounded-xl mb-4 border border-slate-100">
-            <h3 className="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">{t('modal.baseConfig')}</h3>
+            <h3 className="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">{"Base Config"}</h3>
             <Form.Item
               name="name"
-              label={t('modal.nameLabel')}
+              label={"Model Name"}
               rules={[{ required: true, message: 'Please enter model name' }]} // Validation message i18n?
             >
-              <Input placeholder={t('modal.namePlaceholder')} className="rounded-lg" />
+              <Input placeholder={"e.g., My Model"} className="rounded-lg" />
             </Form.Item>
             
             <div className="grid grid-cols-2 gap-4">
               <Form.Item
                 name="protocol"
-                label={t('modal.protocolLabel')}
+                label={"Protocol"}
                 rules={[{ required: true }]}
               >
                 <Select
@@ -328,10 +328,10 @@ export default function UserModelsPage() {
               </Form.Item>
               <Form.Item
                 name="model_id"
-                label={t('modal.idLabel')}
+                label={"Model ID"}
                 rules={[{ required: true, message: 'Please enter Model ID' }]}
               >
-                <Input placeholder={t('modal.idPlaceholder')} className="rounded-lg" />
+                <Input placeholder={"e.g., gpt-4o"} className="rounded-lg" />
               </Form.Item>
             </div>
           </div>
@@ -340,18 +340,18 @@ export default function UserModelsPage() {
             <h3 className="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">API Connection</h3>
             <Form.Item
               name="base_url"
-              label={t('modal.urlLabel')}
+              label={"Base URI"}
               rules={[{ required: true, message: 'Please enter Base URI' }]}
             >
-              <Input placeholder={t('modal.urlPlaceholder')} className="rounded-lg" />
+              <Input placeholder={"e.g., https://api.openai.com"} className="rounded-lg" />
             </Form.Item>
 
             <Form.Item
               name="api_key"
-              label={t('modal.keyLabel')}
+              label={"API Key"}
               rules={[{ required: true, message: 'Please enter API Key' }]}
             >
-              <Input.Password placeholder={t('modal.keyPlaceholder')} className="rounded-lg" />
+              <Input.Password placeholder={"Enter API Key"} className="rounded-lg" />
             </Form.Item>
           </div>
         </Form>

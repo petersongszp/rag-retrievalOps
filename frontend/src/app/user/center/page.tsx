@@ -7,7 +7,7 @@ import {
   InboxOutlined,
 } from '@ant-design/icons';
 import { useEffect, useState, useCallback } from 'react';
-import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 import type { UploadProps } from 'antd';
 import {
@@ -46,43 +46,43 @@ interface ResumeInfo {
 }
 
 export default function UserCenterPage() {
-  const t = useTranslations('Center');
-  const tCommon = useTranslations('Common');
+  
+  
   const [profile, setProfile] = useState<{ id?: number; username?: string; email?: string } | null>(
     null
   );
   
   const columns = [
     {
-      title: t('consumption.orderId'),
+      title: "Order ID",
       dataIndex: 'id',
       key: 'id',
       render: (text: string) => <span className="text-slate-500 font-mono">{text}</span>,
     },
     {
-      title: t('consumption.type'),
+      title: "Type",
       dataIndex: 'type',
       key: 'type',
       render: (text: string) => <span className="font-medium text-slate-700">{text}</span>,
     },
     {
-      title: t('consumption.amount'),
+      title: "Amount",
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => <span className="text-slate-900 font-bold">¥{amount}</span>,
     },
     {
-      title: t('consumption.status'),
+      title: "Status",
       dataIndex: 'status',
       key: 'status',
       render: () => (
         <Tag color="success" className="border-0 bg-green-50 text-green-600 rounded-full px-3">
-          {t('consumption.success')}
+          {"Success"}
         </Tag>
       ),
     },
     {
-      title: t('consumption.time'),
+      title: "Time",
       dataIndex: 'time',
       key: 'time',
       render: (text: string) => <span className="text-slate-400 text-sm">{text}</span>,
@@ -118,7 +118,7 @@ export default function UserCenterPage() {
   const fetchResumes = useCallback(async () => {
     setLoadingResumes(true);
     try {
-      const data: any = await apiClient.get('/resume/list');
+      const data: any = await apiClient.get("/resume/list");
       setResumes(data?.resumes || []);
     } catch (err) {
       console.error('获取简历列表失败:', err);
@@ -130,12 +130,12 @@ export default function UserCenterPage() {
   // 上传简历（异步处理）
   const handleUpload = async (file: File) => {
     if (modelConfigured === false) {
-      message.error(tCommon('modelNotConfigured'));
+      message.error("Model not configured, cannot start interview");
       return false;
     }
 
     if (resumes.length >= 3) {
-      message.warning(t('resume.maxLimit'));
+      message.warning("Max 3 resumes allowed");
       return false;
     }
 
@@ -151,13 +151,13 @@ export default function UserCenterPage() {
 
       // 检查返回状态
       if (res?.status === 'pending' || res?.status === 'processing') {
-        message.info(t('resume.parsing'));
+        message.info("Uploaded, parsing...");
         // 开始轮询检查状态
         if (res?.resume_id) {
           pollResumeStatus(res.resume_id);
         }
       } else {
-        message.success(t('resume.uploadSuccess'));
+        message.success("Resume uploaded successfully");
       }
       fetchResumes();
     } catch (err: any) {
@@ -181,18 +181,18 @@ export default function UserCenterPage() {
         const resume = data?.resume;
 
         if (resume?.status === 'completed') {
-          message.success(t('resume.parseSuccess'));
+          message.success("Parsing completed");
           fetchResumes();
           return;
         } else if (resume?.status === 'failed') {
-          message.error(`${t('resume.parseFail')}: ${resume?.error_msg || '未知错误'}`);
+          message.error(`${"Parsing failed"}: ${resume?.error_msg || '未知错误'}`);
           fetchResumes();
           return;
         } else if (attempts < maxAttempts) {
           // 继续轮询
           setTimeout(poll, interval);
         } else {
-          message.warning(t('resume.parseTimeout'));
+          message.warning("Parsing timeout, please refresh later");
           fetchResumes();
         }
       } catch (err) {
@@ -211,7 +211,7 @@ export default function UserCenterPage() {
   const handleDelete = async (resumeId: number) => {
     try {
       await apiClient.delete(`/resume/${resumeId}`);
-      message.success(t('resume.deleteSuccess'));
+      message.success("Resume deleted");
       fetchResumes();
     } catch (err: any) {
       message.error(err?.message || '删除失败');
@@ -269,7 +269,7 @@ export default function UserCenterPage() {
   useEffect(() => {
     (async () => {
       try {
-        const data: any = await apiClient.get('/user/profile');
+        const data: any = await apiClient.get("/user/profile");
         setProfile(data || null);
       } catch { }
     })();
@@ -284,8 +284,8 @@ export default function UserCenterPage() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="mb-8 animate-fade-in-up">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{t('title')}</h1>
-          <p className="text-slate-500 mt-2">{t('description')}</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{"User Center"}</h1>
+          <p className="text-slate-500 mt-2">{"Manage your personal info, resumes, and records"}</p>
         </div>
 
         <Row gutter={[24, 24]}>
@@ -308,16 +308,16 @@ export default function UserCenterPage() {
                   color="blue"
                   className="border-0 bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium"
                 >
-                  {t('userInfo.student')}
+                  {"Member"}
                 </Tag>
 
                 <div className="w-full mt-8 space-y-3 text-left bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">{t('userInfo.username')}</span>
+                    <span className="text-slate-500">{"Username"}</span>
                     <span className="font-medium text-slate-700">{profile?.username ?? '-'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">{t('userInfo.email')}</span>
+                    <span className="text-slate-500">{"Bound Email"}</span>
                     <span className="font-medium text-slate-700">{profile?.email ?? '-'}</span>
                   </div>
                 </div>
@@ -335,7 +335,7 @@ export default function UserCenterPage() {
                         <FileOutlined />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">{t('resume.title')}</h3>
+                        <h3 className="text-lg font-bold text-slate-800">{"My Resumes"}</h3>
                         <p className="text-xs text-slate-400">已上传 {resumes.length}/3 份</p>
                       </div>
                     </div>
@@ -375,7 +375,7 @@ export default function UserCenterPage() {
                               </div>
                             </div>
                             <Popconfirm
-                              title={t('resume.deleteConfirm')}
+                              title={"Are you sure you want to delete this resume?"}
                               onConfirm={() => handleDelete(resume.id)}
                               okText="Yes"
                               cancelText="No"
@@ -398,15 +398,15 @@ export default function UserCenterPage() {
                       <>
                         {!checkingConfig && modelConfigured === false && (
                           <Alert
-                            message={tCommon('modelNotConfigured')}
+                            message={"Model not configured, cannot start interview"}
                             description={
                               <span>
-                                {tCommon('modelNotConfiguredTip')}{' '}
+                                {"Please go to User Models page to configure"}{' '}
                                 <Link
                                   href="/user/models"
                                   className="text-blue-600 font-medium underline hover:text-blue-700"
                                 >
-                                  {t('title')}
+                                  {"User Center"}
                                 </Link>
                               </span>
                             }
@@ -430,13 +430,13 @@ export default function UserCenterPage() {
                           </p>
                           <p className="text-base font-medium text-slate-700 mb-2">
                             {uploading
-                              ? t('resume.parsing')
+                              ? "Uploaded, parsing..."
                               : modelConfigured === false
-                                ? tCommon('modelNotConfigured')
-                                : t('resume.upload')}
+                                ? "Model not configured, cannot start interview"
+                                : "Upload Resume"}
                           </p>
                           <p className="text-sm text-slate-400">
-                            {t('resume.support')}
+                            {"PDF supported, max 10MB"}
                           </p>
                         </Dragger>
                       </>
@@ -444,7 +444,7 @@ export default function UserCenterPage() {
 
                     {resumes.length >= 3 && (
                       <div className="text-center text-slate-400 py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        {t('resume.maxLimit')}
+                        {"Max 3 resumes allowed"}
                       </div>
                     )}
                   </Spin>

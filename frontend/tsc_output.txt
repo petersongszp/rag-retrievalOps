@@ -1,0 +1,12 @@
+﻿src/app/interview/campus/page.tsx(50,43): error TS1005: ',' expected.
+src/app/interview/multi/page.tsx(51,49): error TS1005: ',' expected.
+src/app/interview/social/page.tsx(51,43): error TS1005: ',' expected.
+src/app/resume/page.tsx(46,45): error TS1005: ',' expected.
+src/app/user/center/page.tsx(121,43): error TS1005: ',' expected.
+src/app/user/center/page.tsx(272,45): error TS1005: ',' expected.
+src/app/user/interviews/page.tsx(309,50): error TS1005: '}' expected.
+src/app/user/interviews/page.tsx(309,56): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?
+src/app/user/models/page.tsx(58,42): error TS1005: ',' expected.
+src/components/layout/Navbar.tsx(110,42): error TS1005: ',' expected.
+src/components/layout/Navbar.tsx(277,55): error TS1005: '}' expected.
+src/components/layout/Navbar.tsx(277,71): error TS1381: Unexpected token. Did you mean `{'}'}` or `&rbrace;`?

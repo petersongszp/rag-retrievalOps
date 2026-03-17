@@ -22,50 +22,50 @@ import {
   RightOutlined,
   PlayCircleFilled,
 } from '@ant-design/icons';
-import { Link } from '@/navigation';
+import Link from 'next/link';
 import type { FC } from 'react';
-import { useTranslations } from 'next-intl';
+
 
 const { Title, Paragraph, Text } = Typography;
 
 export default function Home() {
-  const t = useTranslations('Home');
+  
 
   const testimonials = [
     {
-      text: t('testimonials.items.0.text'),
-      user: t('testimonials.items.0.user'),
-      title: t('testimonials.items.0.title'),
+      text: "Coming from a non-CS background, I felt my foundation was weak. The resume prediction is incredible; it precisely hit 90% of the questions I faced in real interviews. It helped me connect knowledge from Spring IHC to AOP logically.",
+      user: "35+ Restarting",
+      title: "Social Java Dev",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=a',
     },
     {
-      text: t('testimonials.items.1.text'),
-      user: t('testimonials.items.1.user'),
-      title: t('testimonials.items.1.title'),
+      text: "With a 996 schedule, I had no time for mock interviews. This platform is efficient and available 24/7. My interviewer asked about system design and logic, and the platform covered them all. I faced 70% similar questions in the final interview!",
+      user: "smartbob",
+      title: "Go Developer",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=b',
     },
     {
-      text: t('testimonials.items.2.text'),
-      user: t('testimonials.items.2.user'),
-      title: t('testimonials.items.2.title'),
+      text: "The follow-up questions drastically improved my ability to explain technical details. It dug into Redis AOF and optimization, exactly what I needed for senior roles.",
+      user: "Lex",
+      title: "Architect",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=c',
     },
     {
-      text: t('testimonials.items.3.text'),
-      user: t('testimonials.items.3.user'),
-      title: t('testimonials.items.3.title'),
+      text: "I wanted to join a top company but system design was my weak point. The detailed reports and suggestions helped me clear my thoughts. I can now explain solutions clearly and got a great salary bump.",
+      user: "Quiet Mind",
+      title: "Backend Developer",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=d',
     },
     {
-      text: t('testimonials.items.4.text'),
-      user: t('testimonials.items.4.user'),
-      title: t('testimonials.items.4.title'),
+      text: "Great! 1/10 price of manual services with 90% effectiveness. Best investment!",
+      user: "jackey",
+      title: "Backend Developer",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=e',
     },
     {
-      text: t('testimonials.items.5.text'),
-      user: t('testimonials.items.5.user'),
-      title: t('testimonials.items.5.title'),
+      text: "Covered everything from Django ORM optimization to export views. Very comprehensive preparation.",
+      user: "Mo Ran",
+      title: "Python Developer",
       avatar: 'https://api.dicebear.com/7.x/avataaars/svg?seed=f',
     },
   ];
@@ -83,7 +83,7 @@ export default function Home() {
           <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-white border border-slate-200 shadow-sm mb-8 animate-fade-in-up">
             <Badge status="processing" color="blue" />
             <span className="text-sm font-medium text-slate-600">
-              {t('badge')}
+              {"AI-Driven Interview Preparation Platform 2.0 Launched"}
             </span>
           </div>
 
@@ -91,9 +91,9 @@ export default function Home() {
             className="text-5xl md:text-7xl font-extrabold tracking-tight text-slate-900 mb-8 leading-tight animate-fade-in-up"
             style={{ animationDelay: '0.1s' }}
           >
-            {t('titlePrefix')} <br className="hidden md:block" />
+            {"Interview Never Been So"} <br className="hidden md:block" />
             <span className="bg-clip-text text-transparent bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600">
-              {t('titleSuffix')}
+              {"Simple and Confident"}
             </span>
           </h1>
 
@@ -101,9 +101,8 @@ export default function Home() {
             className="mt-4 max-w-2xl mx-auto text-xl text-slate-500 mb-10 animate-fade-in-up"
             style={{ animationDelay: '0.2s' }}
           >
-            {t.rich('description', {
-              br: () => <br />
-            })}
+            Based on real big factory question banks, simulate real interview scenarios via AI.<br />
+            From resume analysis to specialized breakthroughs, improve your interview pass rate in all directions.
           </p>
 
           <div
@@ -118,7 +117,7 @@ export default function Home() {
                   className="h-14 px-8 text-lg rounded-full bg-gradient-to-r from-blue-600 to-indigo-600 hover:scale-105 hover:shadow-xl transition-all border-0"
                   icon={<RocketOutlined />}
                 >
-                  {t('startFreeTrial')}
+                  {"Start Free Trial Now"}
                 </Button>
               </Link>
               <Link
@@ -130,7 +129,7 @@ export default function Home() {
                   className="h-14 px-8 text-lg rounded-full bg-white hover:bg-slate-50 border-slate-200 hover:border-blue-300 text-slate-700 hover:text-blue-600 hover:scale-105 transition-all shadow-sm hover:shadow-md"
                   icon={<PlayCircleFilled />}
                 >
-                  {t('watchDemo')}
+                  {"Watch Demo Video"}
                 </Button>
               </Link>
             </div>
@@ -142,7 +141,7 @@ export default function Home() {
                   className="h-14 px-8 text-lg rounded-full bg-blue-50 hover:bg-blue-100 border-blue-100 hover:border-blue-200 text-blue-600 hover:text-blue-700 hover:scale-105 transition-all shadow-sm hover:shadow-md"
                   icon={<PlayCircleFilled />}
                 >
-                  {t('videoTutorial')}
+                  {"Video Tutorial"}
                 </Button>
               </Link>
               <Link href="https://mp.weixin.qq.com/s/DlKoCQ7zUitCoiSoZzdVCQ" target="_blank">
@@ -151,7 +150,7 @@ export default function Home() {
                   className="h-14 px-8 text-lg rounded-full bg-green-50 hover:bg-green-100 border-green-100 hover:border-green-200 text-green-600 hover:text-green-700 hover:scale-105 transition-all shadow-sm hover:shadow-md"
                   icon={<FileTextOutlined />}
                 >
-                  {t('courseIntro')}
+                  {"Course Introduction"}
                 </Button>
               </Link>
             </div>
@@ -165,25 +164,25 @@ export default function Home() {
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {[
                 {
-                  label: t('stats.registeredUsers'),
+                  label: "Users",
                   value: '12,000+',
                   color: 'text-blue-600',
                   icon: <UserOutlined />,
                 },
                 {
-                  label: t('stats.mockInterviews'),
+                  label: "Mock Interviews",
                   value: '50,000+',
                   color: 'text-indigo-600',
                   icon: <ExperimentOutlined />,
                 },
                 {
-                  label: t('stats.questionBank'),
+                  label: "Questions",
                   value: '100,000+',
                   color: 'text-purple-600',
                   icon: <FileTextOutlined />,
                 },
                 {
-                  label: t('stats.offers'),
+                  label: "Offers Won",
                   value: '2,000+',
                   color: 'text-green-600',
                   icon: <TrophyOutlined />,
@@ -205,10 +204,10 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              {t('features.title')}
+              {"All-round Interview Preparation"}
             </h2>
             <p className="text-lg text-slate-500">
-              {t('features.subtitle')}
+              {"Whether you are a campus novice or a social veteran, we have the right mode for you"}
             </p>
           </div>
 
@@ -220,12 +219,12 @@ export default function Home() {
                 <div className="w-14 h-14 bg-blue-100 rounded-2xl flex items-center justify-center text-blue-600 text-2xl mb-6">
                   <BulbOutlined />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-4">{t('features.card1.title')}</h3>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">{"Comprehensive Mock Interview"}</h3>
                 <p className="text-slate-500 mb-6 leading-relaxed h-20 overflow-hidden">
-                  {t('features.card1.desc')}
+                  {"Highly restore real interview scenarios, including self-intro, project digging, and technical tests."}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {(t.raw('features.card1.points') as string[]).map((item, i) => (
+                  {["Full process simulation", "Intelligent follow-up", "Multi-dim evaluation"].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-blue-500" /> {item}
                     </li>
@@ -237,7 +236,7 @@ export default function Home() {
                     size="large"
                     className="w-full bg-blue-600 hover:bg-blue-700 border-0 shadow-blue-200"
                   >
-                    {t('features.card1.button')}
+                    {"Start Comprehensive"}
                   </Button>
                 </Link>
               </div>
@@ -255,12 +254,12 @@ export default function Home() {
                     NEW
                   </Tag>
                 </div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-4">{t('features.card2.title')}</h3>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">{"Multi-Agent Mock Interview"}</h3>
                 <p className="text-slate-500 mb-6 leading-relaxed h-20 overflow-hidden">
-                  {t('features.card2.desc')}
+                  {"An interview panel of 3 AI experts (Main, Tech, Project) to challenge big factory group interviews."}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {(t.raw('features.card2.points') as string[]).map((item, i) => (
+                  {["Eino Agent collab", "Panel mode", "Cross-domain questions"].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-orange-500" /> {item}
                     </li>
@@ -272,7 +271,7 @@ export default function Home() {
                     size="large"
                     className="w-full bg-orange-600 hover:bg-orange-700 border-0 shadow-orange-200"
                   >
-                    {t('features.card2.button')}
+                    {"Start Expert Panel"}
                   </Button>
                 </Link>
               </div>
@@ -290,12 +289,12 @@ export default function Home() {
                     HOT
                   </Tag>
                 </div>
-                <h3 className="text-2xl font-bold text-white mb-4">{t('features.card3.title')}</h3>
+                <h3 className="text-2xl font-bold text-white mb-4">{"Resume Prediction"}</h3>
                 <p className="text-slate-300 mb-6 leading-relaxed h-20 overflow-hidden">
-                  {t('features.card3.desc')}
+                  {"Upload your resume, AI will analyze your experience and skills to precisely predict high-frequency points."}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {(t.raw('features.card3.points') as string[]).map((item, i) => (
+                  {["Deep resume analysis", "Project details", "Customized bank"].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-indigo-400" /> {item}
                     </li>
@@ -306,7 +305,7 @@ export default function Home() {
                     size="large"
                     className="w-full bg-white text-slate-900 hover:bg-slate-100 border-0 font-bold"
                   >
-                    {t('features.card3.button')}
+                    {"Upload Resume Now"}
                   </Button>
                 </Link>
               </div>
@@ -319,12 +318,12 @@ export default function Home() {
                 <div className="w-14 h-14 bg-purple-100 rounded-2xl flex items-center justify-center text-purple-600 text-2xl mb-6">
                   <CodeOutlined />
                 </div>
-                <h3 className="text-2xl font-bold text-slate-800 mb-4">{t('features.card4.title')}</h3>
+                <h3 className="text-2xl font-bold text-slate-800 mb-4">{"Specialized Breakthrough"}</h3>
                 <p className="text-slate-500 mb-6 leading-relaxed h-20 overflow-hidden">
-                  {t('features.card4.desc')}
+                  {"Concentrated training for specific stacks (High concurrency, JVM, MySQL tuning, etc.) to quickly fix weaknesses."}
                 </p>
                 <ul className="space-y-3 mb-8">
-                  {(t.raw('features.card4.points') as string[]).map((item, i) => (
+                  {["Stack training", "Architecture design", "Algo & Data structure"].map((item, i) => (
                     <li key={i} className="flex items-center gap-2 text-slate-600 text-sm">
                       <CheckCircleFilled className="text-purple-500" /> {item}
                     </li>
@@ -336,7 +335,7 @@ export default function Home() {
                     size="large"
                     className="w-full bg-purple-600 hover:bg-purple-700 border-0 shadow-purple-200"
                   >
-                    {t('features.card4.button')}
+                    {"Choose Specialized"}
                   </Button>
                 </Link>
               </div>
@@ -350,7 +349,7 @@ export default function Home() {
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">
-              {t('whyChooseUs.title')}
+              {"Why Choose Interview Master?"}
             </h2>
           </div>
 
@@ -358,57 +357,57 @@ export default function Home() {
             {[
               {
                 icon: <CompassOutlined />,
-                title: t('whyChooseUs.items.0.title'),
-                desc: t('whyChooseUs.items.0.desc'),
+                title: "Big Factory Bank",
+                desc: "Trained on real questions from top companies, refuse outdated materials",
                 color: 'text-blue-500',
                 bg: 'bg-blue-50',
               },
               {
                 icon: <FlagOutlined />,
-                title: t('whyChooseUs.items.1.title'),
-                desc: t('whyChooseUs.items.1.desc'),
+                title: "Personalized",
+                desc: "Dynamically adjust difficulty based on your resume and ability",
                 color: 'text-indigo-500',
                 bg: 'bg-indigo-50',
               },
               {
                 icon: <EyeOutlined />,
-                title: t('whyChooseUs.items.2.title'),
-                desc: t('whyChooseUs.items.2.desc'),
+                title: "Deep Review",
+                desc: "Detailed evaluation report and improvement suggestions for each interview",
                 color: 'text-purple-500',
                 bg: 'bg-purple-50',
               },
               {
                 icon: <ThunderboltOutlined />,
-                title: t('whyChooseUs.items.3.title'),
-                desc: t('whyChooseUs.items.3.desc'),
+                title: "Instant Feedback",
+                desc: "No waiting, start interview anytime anywhere with real-time feedback",
                 color: 'text-yellow-500',
                 bg: 'bg-yellow-50',
               },
               {
                 icon: <SmileOutlined />,
-                title: t('whyChooseUs.items.4.title'),
-                desc: t('whyChooseUs.items.4.desc'),
+                title: "High Cost-Performance",
+                desc: "Only 1/10 price of traditional tutors for 24h service",
                 color: 'text-green-500',
                 bg: 'bg-green-50',
               },
               {
                 icon: <SwitcherOutlined />,
-                title: t('whyChooseUs.items.5.title'),
-                desc: t('whyChooseUs.items.5.desc'),
+                title: "Controllable Difficulty",
+                desc: "From entry to expert level, switch as you wish",
                 color: 'text-pink-500',
                 bg: 'bg-pink-50',
               },
               {
                 icon: <SendOutlined />,
-                title: t('whyChooseUs.items.6.title'),
-                desc: t('whyChooseUs.items.6.desc'),
+                title: "Real Combat",
+                desc: "High-pressure environment simulation to overcome nervousness",
                 color: 'text-cyan-500',
                 bg: 'bg-cyan-50',
               },
               {
                 icon: <TeamOutlined />,
-                title: t('whyChooseUs.items.7.title'),
-                desc: t('whyChooseUs.items.7.desc'),
+                title: "Role Play",
+                desc: "Simulate various interview styles to handle any situation",
                 color: 'text-orange-500',
                 bg: 'bg-orange-50',
               },
@@ -434,8 +433,8 @@ export default function Home() {
       <section className="relative py-24 px-4 sm:px-6 lg:px-8 z-10 bg-gradient-to-b from-slate-50 to-white">
         <div className="max-w-7xl mx-auto">
           <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{t('testimonials.title')}</h2>
-            <p className="text-lg text-slate-500">{t('testimonials.subtitle')}</p>
+            <h2 className="text-3xl md:text-4xl font-bold text-slate-900 mb-4">{"User Feedback"}</h2>
+            <p className="text-lg text-slate-500">{"See how they got their dream offers through us"}</p>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
@@ -469,7 +468,7 @@ export default function Home() {
       <section className="relative py-24 px-4 sm:px-6 lg:px-8 z-10">
         <div className="max-w-3xl mx-auto">
           <div className="text-center mb-12">
-            <h2 className="text-3xl font-bold text-slate-900">{t('faq.title')}</h2>
+            <h2 className="text-3xl font-bold text-slate-900">{"FAQ"}</h2>
           </div>
           <Collapse
             ghost
@@ -477,28 +476,28 @@ export default function Home() {
             items={[
               {
                 key: '1',
-                label: t('faq.items.0.question'),
+                label: "Why use Interview Master instead of general AI like ChatGPT?",
                 children: (
                   <p className="text-slate-500 pb-4">
-                    {t('faq.items.0.answer')}
+                    {"We are deeply customized for interview scenarios. Our standard, follow-up logic, and evaluation system are much closer to real employer requirements."}
                   </p>
                 ),
               },
               {
                 key: '2',
-                label: t('faq.items.1.question'),
+                label: "What problem does it solve?",
                 children: (
                   <p className="text-slate-500 pb-4">
-                    {t('faq.items.1.answer')}
+                    {"It helps you find weaknesses before real interviews and provides structured evaluation and suggestions."}
                   </p>
                 ),
               },
               {
                 key: '3',
-                label: t('faq.items.2.question'),
+                label: "Who is it for?",
                 children: (
                   <p className="text-slate-500 pb-4">
-                    {t('faq.items.2.answer')}
+                    {"From campus recruitment to experienced professionals, for anyone seeking technical roles or career changes."}
                   </p>
                 ),
               },

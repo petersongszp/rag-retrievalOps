@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { useTranslations } from 'next-intl';
+
 import { Typography, Input, Select, Space, Button, Table, Tag, Empty, message, Card } from 'antd';
 import {
   BookOutlined,
@@ -55,8 +55,8 @@ const ANSWERS: Record<number, string> = {
 };
 
 export default function NotesPage() {
-  const t = useTranslations('Notes');
-  const tCommon = useTranslations('Common');
+  
+  
   const [active, setActive] = useState<'press' | 'interview'>('press');
   const [keyword, setKeyword] = useState('');
   const [tag, setTag] = useState<string | undefined>();
@@ -78,15 +78,15 @@ export default function NotesPage() {
 
   const handleDelete = (key: number) => {
     setNotes((prev) => prev.filter((n) => n.key !== key));
-    message.success(t('content.deleteSuccess'));
+    message.success("Note deleted");
   };
 
   const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text || '');
-      message.success(t('content.copySuccess'));
+      message.success("Copied to clipboard");
     } catch {
-      message.error(t('content.copyFail'));
+      message.error("Copy failed");
     }
   };
 
@@ -100,9 +100,9 @@ export default function NotesPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <BookOutlined className="text-emerald-500" />
-            {t('title')}
+            {"Note List"}
           </h1>
-          <p className="text-slate-500 mt-2 ml-11">{t('description')}</p>
+          <p className="text-slate-500 mt-2 ml-11">{"Organize your knowledge base"}</p>
         </div>
 
         <div
@@ -113,8 +113,8 @@ export default function NotesPage() {
           <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
             <div className="bg-slate-100/80 p-1 rounded-xl inline-flex">
               {([
-                { key: 'press', label: t('tabs.press') },
-                { key: 'interview', label: t('tabs.interview') },
+                { key: 'press', label: "Prediction Notes" },
+                { key: 'interview', label: "Interview Notes" },
               ] as const).map((tab) => (
                 <button
                   key={tab.key}
@@ -132,7 +132,7 @@ export default function NotesPage() {
 
             <div className="flex flex-wrap items-center gap-3">
               <Input
-                placeholder={t('filter.searchPlaceholder')}
+                placeholder={"Search keywords..."}
                 prefix={<SearchOutlined className="text-slate-400" />}
                 value={keyword}
                 onChange={(e) => setKeyword(e.target.value)}
@@ -140,7 +140,7 @@ export default function NotesPage() {
                 variant="filled"
               />
               <Select
-                placeholder={t('filter.tagPlaceholder')}
+                placeholder={"Select tags"}
                 allowClear
                 value={tag}
                 onChange={setTag}
@@ -163,7 +163,7 @@ export default function NotesPage() {
                 }}
                 className="h-10 px-4 rounded-lg border-slate-200 text-slate-500 hover:text-emerald-600 hover:border-emerald-200"
               >
-                {t('filter.reset')}
+                {"Reset"}
               </Button>
             </div>
           </div>
@@ -175,8 +175,8 @@ export default function NotesPage() {
                 image={Empty.PRESENTED_IMAGE_SIMPLE}
                 description={
                   <div className="text-slate-400">
-                    <p className="mb-2">{t('empty.text', { type: active === 'press' ? t('tabs.press') : t('tabs.interview') })}</p>
-                    <p className="text-xs">{t('empty.subtext')}</p>
+                    <p className="mb-2">No {active === 'press' ? "Prediction Notes" : "Interview Notes"} found</p>
+                    <p className="text-xs">{"Try changing filters or add a new note"}</p>
                   </div>
                 }
               />
@@ -195,12 +195,12 @@ export default function NotesPage() {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-center gap-2 mb-3">
-                              <h4 className="font-bold text-slate-800 m-0">{t('content.answer')}</h4>
+                              <h4 className="font-bold text-slate-800 m-0">{"Reference & Logic"}</h4>
                               <Tag
                                 color="success"
                                 className="rounded-full px-2 border-0 bg-emerald-50 text-emerald-600"
                               >
-                                {t('content.aiGenerated')}
+                                {"AI Generated"}
                               </Tag>
                             </div>
                             <div className="text-slate-600 leading-relaxed text-base">
@@ -217,7 +217,7 @@ export default function NotesPage() {
                                 }}
                                 className="text-slate-500 hover:text-emerald-600 hover:border-emerald-300"
                               >
-                                {t('content.copy')}
+                                {"Copy Answer"}
                               </Button>
                             </div>
                           </div>
@@ -236,12 +236,12 @@ export default function NotesPage() {
                 pagination={{
                   pageSize: 10,
                   className: 'px-6 py-4',
-                  showTotal: (total) => <span className="text-slate-400">{tCommon('pagination.total', { total })}</span>,
+                  showTotal: (total) => <span className="text-slate-400">Total {total} items</span>,
                 }}
                 dataSource={filtered}
                 columns={[
                   {
-                    title: t('table.title'),
+                    title: "Title",
                     dataIndex: 'title',
                     className: 'pl-6',
                     render: (text) => (
@@ -251,7 +251,7 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: t('table.source'),
+                    title: "Source",
                     dataIndex: 'source',
                     render: (text) => (
                       <span className="text-slate-500 text-sm bg-slate-100 px-2 py-1 rounded-md">
@@ -260,7 +260,7 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: t('table.tags'),
+                    title: "Tags",
                     dataIndex: 'tags',
                     render: (tags: string[]) => (
                       <div className="flex gap-1">
@@ -277,14 +277,14 @@ export default function NotesPage() {
                     ),
                   },
                   {
-                    title: t('table.time'),
+                    title: "Time",
                     dataIndex: 'time',
                     render: (text) => (
                       <span className="text-slate-400 text-xs font-mono">{text}</span>
                     ),
                   },
                   {
-                    title: t('table.action'),
+                    title: "Action",
                     width: 120,
                     render: (_: any, row: Note) => (
                       <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>

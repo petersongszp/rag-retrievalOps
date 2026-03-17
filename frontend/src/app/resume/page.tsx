@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+
 import {
   Typography,
   Row,
@@ -32,8 +32,8 @@ interface Resume {
 }
 
 export default function ResumePressPage() {
-  const t = useTranslations('Resume');
-  const tCommon = useTranslations('Common');
+  
+  
   const [form] = Form.useForm();
   const [loading, setLoading] = useState(false);
   const [resumes, setResumes] = useState<Resume[]>([]);
@@ -43,7 +43,7 @@ export default function ResumePressPage() {
   useEffect(() => {
     const fetchResumes = async () => {
       try {
-        const data: any = await apiClient.get('/resume/list');
+        const data: any = await apiClient.get("/resume/list");
         if (data && data.resumes) {
           setResumes(data.resumes);
           if (data.resumes.length > 0) {
@@ -79,10 +79,10 @@ export default function ResumePressPage() {
       await apiClient.post('/prediction/start', payload, {
         timeout: 180000, // 3 分钟超时
       });
-      message.success(t('submitSuccess'));
+      message.success("Started generating...");
       router.push('/user/press');
     } catch (e: any) {
-      message.error(e?.message || t('submitError'));
+      message.error(e?.message || "Submission failed, please try again");
     } finally {
       setLoading(false);
     }
@@ -98,10 +98,10 @@ export default function ResumePressPage() {
         <div className="mb-10 animate-fade-in-up pt-8">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <RocketOutlined className="text-indigo-600" />
-            {t('title')}
+            {"Resume Prediction"}
           </h1>
           <p className="text-slate-500 mt-2 ml-11 max-w-2xl">
-            {t('description')}
+            {"Predict interview questions based on your resume and job intention, helping you prepare with precision."}
           </p>
         </div>
 
@@ -114,10 +114,10 @@ export default function ResumePressPage() {
               <div className="bg-indigo-50/50 rounded-2xl p-5 mb-8 border border-indigo-100 flex items-start gap-3">
                 <CheckCircleOutlined className="text-indigo-600 mt-1" />
                 <div className="text-sm text-indigo-900">
-                  <div className="font-bold mb-1">{t('warningTitle')}</div>
+                  <div className="font-bold mb-1">{"Friendly Reminder"}</div>
                   <ul className="list-disc pl-4 space-y-1 text-indigo-800/80">
-                    <li>{t('warningItems.0')}</li>
-                    <li>{t('warningItems.1')}</li>
+                    <li>{"Predictions will be generated based on your resume, providing at least 20 questions."}</li>
+                    <li>{"Changing resume content will affect predictions, history will be kept."}</li>
                   </ul>
                 </div>
               </div>
@@ -128,48 +128,48 @@ export default function ResumePressPage() {
                 onFinish={onFinish}
                 initialValues={{
                   language: 'Java',
-                  job: t('form.jobDefault'),
+                  job: "Java Backend Developer",
                   level: '进阶',
                   prediction_type: '校招',
                 }}
                 className="flex flex-col gap-4"
               >
                 <Form.Item
-                  label={<span className="font-bold text-slate-700">{t('form.resumeLabel')}</span>}
+                  label={<span className="font-bold text-slate-700">{"Select Resume"}</span>}
                   name="resume_id"
-                  rules={[{ required: true, message: t('form.resumePlaceholder') }]}
+                  rules={[{ required: true, message: "Please select a resume" }]}
                 >
                   <Select
                     size="large"
                     variant="filled"
                     className="!h-12"
                     options={resumes.map((r) => ({ value: r.id, label: r.file_name }))}
-                    placeholder={resumes.length === 0 ? t('loading') : t('form.resumePlaceholder')}
+                    placeholder={resumes.length === 0 ? "Loading..." : "Please select a resume"}
                     popupMatchSelectWidth={false}
                   />
                 </Form.Item>
 
                 <Form.Item
-                  label={<span className="font-bold text-slate-700">{t('form.typeLabel')}</span>}
+                  label={<span className="font-bold text-slate-700">{"Interview Type"}</span>}
                   name="prediction_type"
-                  rules={[{ required: true, message: t('form.typePlaceholder') }]}
+                  rules={[{ required: true, message: "Select interview type" }]}
                 >
                   <Select
                     size="large"
                     variant="filled"
                     className="!h-12"
                     options={[
-                      { value: '校招', label: t('options.campus') },
-                      { value: '社招', label: t('options.social') },
+                      { value: '校招', label: "Campus" },
+                      { value: '社招', label: "Experienced" },
                     ]}
                   />
                 </Form.Item>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{t('form.languageLabel')}</span>}
+                    label={<span className="font-bold text-slate-700">{"Programming Language"}</span>}
                     name="language"
-                    rules={[{ required: true, message: t('form.languagePlaceholder') }]}
+                    rules={[{ required: true, message: "Select language" }]}
                   >
                     <Select
                       size="large"
@@ -180,52 +180,52 @@ export default function ResumePressPage() {
                         { value: 'Golang', label: 'Golang' },
                         { value: 'Python', label: 'Python' },
                         { value: 'C++', label: 'C++' },
-                        { value: 'Frontend', label: t('options.frontend') },
+                        { value: 'Frontend', label: "Frontend (JS/TS)" },
                       ]}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{t('form.jobLabel')}</span>}
+                    label={<span className="font-bold text-slate-700">{"Job Intention"}</span>}
                     name="job"
-                    rules={[{ required: true, message: t('form.jobPlaceholder') }]}
+                    rules={[{ required: true, message: "e.g., Java Backend Developer" }]}
                   >
                     <Input
                       size="large"
                       variant="filled"
                       className="!h-12 !bg-slate-50 hover:!bg-slate-100 focus:!bg-white border-transparent hover:border-indigo-300 focus:border-indigo-500"
-                      placeholder={t('form.jobPlaceholder')}
+                      placeholder={"e.g., Java Backend Developer"}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{t('form.levelLabel')}</span>}
+                    label={<span className="font-bold text-slate-700">{"Difficulty Level"}</span>}
                     name="level"
-                    rules={[{ required: true, message: t('form.levelPlaceholder') }]}
+                    rules={[{ required: true, message: "Select difficulty" }]}
                   >
                     <Select
                       size="large"
                       variant="filled"
                       className="!h-12"
                       options={[
-                        { value: '入门', label: t('options.level.junior') },
-                        { value: '中级', label: t('options.level.intermediate') },
-                        { value: '进阶', label: t('options.level.advanced') },
-                        { value: '专家', label: t('options.level.expert') },
+                        { value: '入门', label: "Junior" },
+                        { value: '中级', label: "Intermediate" },
+                        { value: '进阶', label: "Advanced" },
+                        { value: '专家', label: "Expert" },
                       ]}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{t('form.companyLabel')}</span>}
+                    label={<span className="font-bold text-slate-700">{"Target Company"}</span>}
                     name="company_name"
-                    rules={[{ required: true, message: t('form.companyPlaceholder') }]}
+                    rules={[{ required: true, message: "e.g., ByteDance" }]}
                   >
                     <Input
                       size="large"
                       variant="filled"
                       className="!h-12 !bg-slate-50 hover:!bg-slate-100 focus:!bg-white border-transparent hover:border-indigo-300 focus:border-indigo-500"
-                      placeholder={t('form.companyPlaceholder')}
+                      placeholder={"e.g., ByteDance"}
                     />
                   </Form.Item>
                 </div>
@@ -239,10 +239,10 @@ export default function ResumePressPage() {
                     icon={<ThunderboltOutlined />}
                     className="w-full h-14 text-lg font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-200"
                   >
-                    {t('startPrediction')}
+                    {"Start Prediction"}
                   </Button>
                   <div className="text-center text-slate-400 text-sm mt-4">
-                    {t('footerText')}
+                    {"First free prediction with 20 questions · Takes about 30 seconds"}
                   </div>
                 </div>
               </Form>
@@ -253,22 +253,22 @@ export default function ResumePressPage() {
             <div className="flex flex-col gap-6 sticky top-8">
               {[
                 {
-                  title: t('sideCards.card1.title'),
-                  desc: t('sideCards.card1.desc'),
+                  title: "Quick Positioning",
+                  desc: "Deeply analyze resume items, generate corresponding Q&A list.",
                   icon: <FileTextOutlined className="text-2xl text-blue-500" />,
                   bg: 'bg-blue-50',
                   border: 'border-blue-100',
                 },
                 {
-                  title: t('sideCards.card2.title'),
-                  desc: t('sideCards.card2.desc'),
+                  title: "Quick Analysis",
+                  desc: "Combine job requirements and project experience for follow-up paths.",
                   icon: <ThunderboltOutlined className="text-2xl text-amber-500" />,
                   bg: 'bg-amber-50',
                   border: 'border-amber-100',
                 },
                 {
-                  title: t('sideCards.card3.title'),
-                  desc: t('sideCards.card3.desc'),
+                  title: "Direct Learning",
+                  desc: "Paired with reference answers and extended reading.",
                   icon: <ReadOutlined className="text-2xl text-emerald-500" />,
                   bg: 'bg-emerald-50',
                   border: 'border-emerald-100',
@@ -293,15 +293,15 @@ export default function ResumePressPage() {
       </div>
       <Modal
         open={showNoResumeModal}
-        title={tCommon('noResumeTitle')}
+        title={"Friendly Reminder"}
         footer={null}
         onCancel={() => setShowNoResumeModal(false)}
         centered
       >
         <div className="text-center py-6">
-          <div className="mb-4 text-slate-600 text-lg">{tCommon('noResumeDesc')}</div>
+          <div className="mb-4 text-slate-600 text-lg">{"No resume detected, cannot start interview."}</div>
           <div className="mb-8 text-slate-500">
-            {tCommon('noResumeTip')}
+            {"Please go to personal center to upload your resume, AI will generate questions based on it."}
           </div>
           <Button
             type="primary"
@@ -309,7 +309,7 @@ export default function ResumePressPage() {
             onClick={() => router.push('/user/center')}
             className="w-full bg-indigo-600 hover:bg-indigo-500"
           >
-            {tCommon('uploadResume')}
+            {"Go to Upload Resume"}
           </Button>
         </div>
       </Modal>

@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useTranslations } from 'next-intl';
+
 import Link from 'next/link';
 import {
   Typography,
@@ -23,8 +23,8 @@ import { API_BASE_URL } from '@/config/api';
 const { Title, Paragraph, Text } = Typography;
 
 export default function SpecialInterviewPage() {
-  const t = useTranslations('Special');
-  const tCommon = useTranslations('Common');
+  
+  
   const [stack, setStack] = useState<string>('Go');
   const [starting, setStarting] = useState(false);
   const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
@@ -57,7 +57,7 @@ export default function SpecialInterviewPage() {
 
   const handleStart = async () => {
     if (!modelConfigured) {
-      message.error(tCommon('modelNotConfigured'));
+      message.error("Model not configured, cannot start interview");
       return;
     }
     try {
@@ -77,7 +77,7 @@ export default function SpecialInterviewPage() {
 
       router.push('/interview/special/start');
     } catch (e) {
-      message.error(tCommon('formIncomplete')); // Use common form incomplete message
+      message.error("Please complete the form before starting interview"); // Use common form incomplete message
     } finally {
       setStarting(false);
     }
@@ -85,7 +85,7 @@ export default function SpecialInterviewPage() {
 
   const GROUPED_OPTIONS = [
     {
-      label: t('groups.language'),
+      label: "Languages",
       options: [
         { value: 'Java', label: 'Java' },
         { value: 'Go', label: 'Go' },
@@ -96,7 +96,7 @@ export default function SpecialInterviewPage() {
       ],
     },
     {
-      label: t('groups.backend'),
+      label: "Backend Components",
       options: [
         { value: 'Redis', label: 'Redis' },
         { value: 'MySQL', label: 'MySQL' },
@@ -105,7 +105,7 @@ export default function SpecialInterviewPage() {
       ],
     },
     {
-      label: t('groups.cloud'),
+      label: "Cloud Native & Ops",
       options: [
         { value: 'Docker', label: 'Docker' },
         { value: 'Kubernetes', label: 'Kubernetes' },
@@ -113,20 +113,20 @@ export default function SpecialInterviewPage() {
       ],
     },
     {
-      label: t('groups.cs'),
+      label: "CS Fundamentals",
       options: [
-        { value: '操作系统', label: t('options.os') },
-        { value: '计算机网络', label: t('options.network') },
-        { value: '数据结构与算法', label: t('options.algo') },
+        { value: '操作系统', label: "Operating Systems" },
+        { value: '计算机网络', label: "Computer Network" },
+        { value: '数据结构与算法', label: "Data Structures & Algos" },
       ],
     },
   ];
 
   const features = [
-    { title: t('features.precision.title'), desc: t('features.precision.desc') },
-    { title: t('features.link.title'), desc: t('features.link.desc') },
-    { title: t('features.density.title'), desc: t('features.density.desc') },
-    { title: t('features.simulation.title'), desc: t('features.simulation.desc') },
+    { title: "Precision", desc: "Directly hit core high-frequency points" },
+    { title: "Chain Analysis", desc: "Systematic knowledge map" },
+    { title: "High Density", desc: "Quickly locate capability boundaries" },
+    { title: "Simulation", desc: "Restore real high-pressure environment" },
   ];
 
   return (
@@ -135,10 +135,10 @@ export default function SpecialInterviewPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-            {t('title')} · <span className="text-purple-600">{stack}</span>
+            {"Specialized Interview"} · <span className="text-purple-600">{stack}</span>
           </Title>
           <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-            {t('description')}
+            {"Focus on high-frequency questions and deep digging for specific tech stacks."}
           </Paragraph>
         </div>
 
@@ -158,9 +158,9 @@ export default function SpecialInterviewPage() {
               <div className="h-full flex flex-col">
                 <div className="mb-6">
                   <Title level={4} className="!mb-2 !font-bold text-slate-800">
-                    {t('featuresTitle')}
+                    {"Specialized Advantages"}
                   </Title>
-                  <Text className="text-slate-400 text-sm">{t('featuresDesc')}</Text>
+                  <Text className="text-slate-400 text-sm">{"Deep reinforcement for specific stacks"}</Text>
                 </div>
 
                 <div className="space-y-6 flex-1">
@@ -181,7 +181,7 @@ export default function SpecialInterviewPage() {
 
                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                   <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                    {t('tip')}
+                    {"💡 Tip: Great for point breakthroughs or final reviews."}
                   </div>
                 </div>
               </div>
@@ -195,7 +195,7 @@ export default function SpecialInterviewPage() {
                   className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                 >
                   <span className="w-1.5 h-6 bg-purple-500 rounded-full block"></span>
-                  {t('configTitle')}
+                  {"Interview Configuration"}
                 </Title>
 
                 <Form
@@ -206,7 +206,7 @@ export default function SpecialInterviewPage() {
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">{t('form.stackLabel')}</span>}
+                    label={<span className="font-medium text-slate-700">{"Specialization"}</span>}
                     name="stack"
                     className="!mb-2"
                   >
@@ -217,12 +217,12 @@ export default function SpecialInterviewPage() {
                       options={GROUPED_OPTIONS}
                       value={stack}
                       onChange={(v) => setStack(v)}
-                      placeholder={t('form.stackPlaceholder')}
+                      placeholder={"Select tech stack"}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">{t('form.levelLabel')}</span>}
+                    label={<span className="font-medium text-slate-700">{"Difficulty Level"}</span>}
                     name="level"
                     className="!mb-6"
                   >
@@ -230,9 +230,9 @@ export default function SpecialInterviewPage() {
                       className="!h-12"
                       variant="filled"
                       options={[
-                        { value: '简单', label: t('options.level.simple') },
-                        { value: '中等', label: t('options.level.normal') },
-                        { value: '复杂', label: t('options.level.hard') },
+                        { value: '简单', label: "Simple" },
+                        { value: '中等', label: "Normal" },
+                        { value: '复杂', label: "Hard" },
                       ]}
                     />
                   </Form.Item>
@@ -240,12 +240,12 @@ export default function SpecialInterviewPage() {
                   <div className="mt-2">
                     {!checkingConfig && modelConfigured === false && (
                       <Alert
-                        message={tCommon('modelNotConfigured')}
+                        message={"Model not configured, cannot start interview"}
                         description={
                           <span>
-                            {tCommon('modelNotConfiguredTip')}{' '}
+                            {"Please go to User Models page to configure"}{' '}
                             <Link href="/user/models" className="text-blue-500 underline">
-                              {tCommon('userModelPage')}
+                              {"User Models Page"}
                             </Link>
                           </span>
                         }
@@ -257,7 +257,7 @@ export default function SpecialInterviewPage() {
                     {checkingConfig && (
                       <div className="mb-4 flex justify-center">
                         <Tag color="default" className="px-3 py-1 rounded-full">
-                          {tCommon('checkingConfig')}
+                          {"Checking model configuration..."}
                         </Tag>
                       </div>
                     )}
@@ -271,10 +271,10 @@ export default function SpecialInterviewPage() {
                       loading={starting}
                       disabled={starting || checkingConfig || modelConfigured === false}
                     >
-                      {t('startTraining')}
+                      {"Start Specialized Training"}
                     </Button>
                     <div className="text-center text-slate-400 text-sm mt-4">
-                      {t('footerText')}
+                      {"Approx 30-60 mins per session"}
                     </div>
                   </div>
                 </Form>
