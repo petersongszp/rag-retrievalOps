@@ -25,15 +25,23 @@ type Config struct {
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
-	Wechat           WechatConfig       `yaml:"wechat"`     // 微信配置
-	GitHub           GitHubConfig       `yaml:"github"`     // GitHub OAuth 配置
-	Feishu           FeishuConfig       `yaml:"feishu"`     // 飞书配置
-	Email            EmailConfig        `yaml:"email"`      // 邮件配置
-	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"` // LLM API 限流配置
+	Wechat           WechatConfig       `yaml:"wechat"`       // 微信配置
+	GitHub           GitHubConfig       `yaml:"github"`       // GitHub OAuth 配置
+	GoogleOAuth      GoogleOAuthConfig  `yaml:"google_oauth"` // Google OAuth 配置（邮箱登录）
+	Feishu           FeishuConfig       `yaml:"feishu"`       // 飞书配置
+	Email            EmailConfig        `yaml:"email"`        // 邮件配置
+	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 限流配置
 }
 
 // GitHubConfig GitHub OAuth 配置
 type GitHubConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	RedirectURL  string `yaml:"redirect_url"`
+}
+
+// GoogleOAuthConfig Google OAuth 配置（邮箱登录）
+type GoogleOAuthConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
@@ -292,6 +300,11 @@ func (c *Config) ExpandEnv() {
 	c.GitHub.ClientID = expandEnvVar(c.GitHub.ClientID)
 	c.GitHub.ClientSecret = expandEnvVar(c.GitHub.ClientSecret)
 	c.GitHub.RedirectURL = expandEnvVar(c.GitHub.RedirectURL)
+
+	// 展开 Google OAuth 配置
+	c.GoogleOAuth.ClientID = expandEnvVar(c.GoogleOAuth.ClientID)
+	c.GoogleOAuth.ClientSecret = expandEnvVar(c.GoogleOAuth.ClientSecret)
+	c.GoogleOAuth.RedirectURL = expandEnvVar(c.GoogleOAuth.RedirectURL)
 }
 
 // expandEnvVar 展开字符串中的环境变量引用

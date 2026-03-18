@@ -123,7 +123,7 @@ func buildFirstQuestionPrompt(state *InterviewState, isGroupInterview bool) stri
 
 要求：
 1. 请先向候选人问好并介绍面试团队（主面试官、技术面试官等）
-2. 然后提出第一个技术问题
+2. 然后提出第一个技术问题（面向候选人的提问正文必须使用英文 English）
 3. 必须包含身份前缀（如"我是主面试官张伟："）
 `, state.Session.ResumeId, state.Session.Difficulty)
 	}
@@ -135,7 +135,7 @@ func buildFirstQuestionPrompt(state *InterviewState, isGroupInterview bool) stri
 难度等级: %s
 
 要求：
-1. 简单问候后直接提出第一个技术问题
+1. 简单问候后直接提出第一个技术问题（面向候选人的提问必须使用英文 English）
 `, state.Session.ResumeId, state.Session.Difficulty)
 }
 
@@ -158,7 +158,7 @@ func buildFollowUpPrompt(state *InterviewState, isGroupInterview bool) string {
 %s
 
 要求：
-1. 根据上述提示进行提问
+1. 根据上述提示进行提问（面向候选人的提问与追问必须使用英文 English）
 2. 避免重复之前问过的问题
 3. 必须包含身份前缀（如"我是主面试官张伟："或"我是技术面试官李明："）
 `, state.Session.ResumeId, state.Session.Difficulty, state.TopicTracker.CurrentTopic, actionHint, len(state.RecentHistory), historyText)
@@ -176,7 +176,7 @@ func buildFollowUpPrompt(state *InterviewState, isGroupInterview bool) string {
 %s
 
 其他注意事项：
-1. 根据上述提示进行提问
+1. 根据上述提示进行提问（面向候选人的提问与追问必须使用英文 English）
 2. 避免重复之前问过的问题
 `, state.Session.ResumeId, state.Session.Difficulty, state.TopicTracker.CurrentTopic, actionHint, len(state.RecentHistory), historyText)
 }
@@ -344,7 +344,8 @@ func deepenNode(ctx context.Context, state *InterviewState) (*InterviewState, er
 追问方向（任选其一）：
 - 刚才回答中提到的某个概念的底层实现
 - 该方案在边界情况下的表现
-- 相关的性能优化或最佳实践`
+- 相关的性能优化或最佳实践
+【语言】面向候选人提出的实际问题必须使用英文（English）。`
 
 	state.QuestionIndex++
 	return state, nil
@@ -363,7 +364,8 @@ func continueNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 考察方向：
 - 当前话题下尚未覆盖的子知识点
 - 从不同应用场景考察同一技术
-- 相关的工程实践问题`
+- 相关的工程实践问题
+【语言】面向候选人提出的实际问题必须使用英文（English）。`
 
 	state.QuestionIndex++
 	return state, nil
@@ -382,7 +384,8 @@ func lowerNode(ctx context.Context, state *InterviewState) (*InterviewState, err
 问题选择：
 - 该话题下更基础的概念性问题
 - 候选人日常工作中一定会用到的知识
-- 可以从具体使用场景入手，而非抽象原理`
+- 可以从具体使用场景入手，而非抽象原理
+【语言】面向候选人提出的实际问题必须使用英文（English）。`
 
 	state.QuestionIndex++
 	return state, nil
@@ -408,7 +411,8 @@ func switchNode(ctx context.Context, state *InterviewState) (*InterviewState, er
 问题选择：
 - 新话题下的入门级问题
 - 与候选人简历/经历相关的切入点（如有）
-- 偏实际应用的问题，便于候选人发挥`, newTopic, newTopic)
+- 偏实际应用的问题，便于候选人发挥
+【语言】面向候选人提出的实际问题必须使用英文（English）。`, newTopic, newTopic)
 
 	state.QuestionIndex++
 	return state, nil

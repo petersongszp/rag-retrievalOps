@@ -1,9 +1,9 @@
 package prediction
 
 import (
-	"interview-agents/internal/agents/llm"
 	"context"
 	"fmt"
+
 
 	"github.com/cloudwego/eino/adk"
 )
@@ -40,6 +40,7 @@ func NewPredictionAgent(userId uint) (adk.Agent, error) {
 1. 必须严格生成 5 道题目，少于 5 道是不允许的。
 2. 必须返回标准的 JSON 格式，不要包含 markdown 标记（如 '''json），也不要包含任何解释性文字。
 3. 题目内容必须结合简历中的项目经历和技能点。
+4. 所有题目与字段（question、content、focus、thinking_path、reference_answer、follow_up）均须使用英文（English）撰写。
 
 【JSON 格式模板】
 {

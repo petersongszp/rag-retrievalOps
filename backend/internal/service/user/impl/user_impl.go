@@ -582,3 +582,235 @@ func (s *UserServer) githubLoginOrRegister(_ context.Context, userInfo *githubUs
 	}
 	return model.UserDao.FindByID(existingUser.ID)
 }
+
+// ---------- Google OAuth ----------
+
+func (s *UserServer) GoogleLogin(_ context.Context) (*userapi.WechatLoginQRResponse, error) {
+	cid := config.Global.GoogleOAuth.ClientID
+	redirect := config.Global.GoogleOAuth.RedirectURL
+	if cid == "" || strings.Contains(cid, "${") {
+		if v := os.Getenv("GOOGLE_CLIENT_ID"); v != "" {
+			cid = v
+		}
+	}
+	if redirect == "" || strings.Contains(redirect, "${") {
+		if v := os.Getenv("GOOGLE_REDIRECT_URL"); v != "" {
+			redirect = v
+		}
+	}
+	if cid == "" || redirect == "" {
+		return nil, errors.New("Google OAuth 未配置：请在 .env 中设置 GOOGLE_CLIENT_ID、GOOGLE_REDIRECT_URL 并重启后端")
+	}
+	if strings.Contains(cid, "${") || strings.Contains(redirect, "${") {
+		return nil, errors.New("Google OAuth 环境变量未生效：请检查 .env 格式后重启后端")
+	}
+	state := fmt.Sprintf("google_%d", time.Now().UnixNano())
+	loginURL := fmt.Sprintf(
+		"https://accounts.google.com/o/oauth2/v2/auth?client_id=%s&redirect_uri=%s&response_type=code&scope=openid%%20email%%20profile&state=%s",
+		url.QueryEscape(cid),
+		url.QueryEscape(redirect),
+		url.QueryEscape(state),
+	)
+	resp := userapi.NewWechatLoginQRResponse()
+	resp.LoginURL = loginURL
+	return resp, nil
+}
+
+func (s *UserServer) GoogleCallback(ctx context.Context, code string) (*userapi.LoginResponse, error) {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return nil, errors.New("缺少授权码 code")
+	}
+	cid := config.Global.GoogleOAuth.ClientID
+	secret := config.Global.GoogleOAuth.ClientSecret
+	redirect := config.Global.GoogleOAuth.RedirectURL
+	if cid == "" || strings.Contains(cid, "${") {
+		cid = os.Getenv("GOOGLE_CLIENT_ID")
+	}
+	if secret == "" || strings.Contains(secret, "${") {
+		secret = os.Getenv("GOOGLE_CLIENT_SECRET")
+	}
+	if redirect == "" || strings.Contains(redirect, "${") {
+		redirect = os.Getenv("GOOGLE_REDIRECT_URL")
+	}
+	if cid == "" || secret == "" || redirect == "" {
+		return nil, errors.New("Google OAuth 未配置完整（请检查 .env 中的 GOOGLE_CLIENT_ID、GOOGLE_CLIENT_SECRET、GOOGLE_REDIRECT_URL）")
+	}
+
+	token, err := s.getGoogleAccessToken(ctx, code, cid, secret, redirect)
+	if err != nil {
+		return nil, err
+	}
+
+	userInfo, err := s.getGoogleUserInfo(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+
+	userRecord, err := s.googleLoginOrRegister(ctx, userInfo)
+	if err != nil {
+		return nil, err
+	}
+
+	jwtToken, err := middleware.GenerateToken(userRecord.ID, userRecord.Username, userRecord.Role)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.buildLoginResponse(jwtToken, userRecord), nil
+}
+
+type googleTokenResponse struct {
+	AccessToken  string `json:"access_token"`
+	ExpiresIn    int    `json:"expires_in"`
+	RefreshToken string `json:"refresh_token,omitempty"`
+	Scope        string `json:"scope,omitempty"`
+	TokenType    string `json:"token_type,omitempty"`
+	Error        string `json:"error,omitempty"`
+	ErrorDesc    string `json:"error_description,omitempty"`
+}
+
+func (s *UserServer) getGoogleAccessToken(ctx context.Context, code, clientID, clientSecret, redirectURL string) (string, error) {
+	body := url.Values{}
+	body.Set("client_id", clientID)
+	body.Set("client_secret", clientSecret)
+	body.Set("code", code)
+	body.Set("redirect_uri", redirectURL)
+	body.Set("grant_type", "authorization_code")
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://oauth2.googleapis.com/token", strings.NewReader(body.Encode()))
+	if err != nil {
+		return "", fmt.Errorf("创建 Google token 请求失败: %w", err)
+	}
+	httpReq.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return "", fmt.Errorf("请求 Google token 失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return "", fmt.Errorf("读取 Google token 响应失败: %w", err)
+	}
+
+	var tokenResp googleTokenResponse
+	if err := json.Unmarshal(data, &tokenResp); err != nil {
+		return "", fmt.Errorf("解析 Google token 响应失败: %w", err)
+	}
+
+	if tokenResp.Error != "" {
+		return "", fmt.Errorf("Google 授权失败: %s - %s", tokenResp.Error, tokenResp.ErrorDesc)
+	}
+
+	if tokenResp.AccessToken == "" {
+		return "", fmt.Errorf("Google 未返回 access_token: %s", string(data))
+	}
+
+	return tokenResp.AccessToken, nil
+}
+
+type googleUserInfo struct {
+	ID            string `json:"id"`
+	Email         string `json:"email"`
+	VerifiedEmail bool   `json:"verified_email"`
+	Name          string `json:"name"`
+	Picture       string `json:"picture"`
+	GivenName     string `json:"given_name"`
+	FamilyName    string `json:"family_name"`
+}
+
+func (s *UserServer) getGoogleUserInfo(ctx context.Context, accessToken string) (*googleUserInfo, error) {
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
+	if err != nil {
+		return nil, fmt.Errorf("创建 Google 用户信息请求失败: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+accessToken)
+
+	resp, err := s.httpClient.Do(httpReq)
+	if err != nil {
+		return nil, fmt.Errorf("请求 Google 用户信息失败: %w", err)
+	}
+	defer resp.Body.Close()
+
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, fmt.Errorf("读取 Google 用户信息失败: %w", err)
+	}
+
+	var userInfo googleUserInfo
+	if err := json.Unmarshal(data, &userInfo); err != nil {
+		return nil, fmt.Errorf("解析 Google 用户信息失败: %w", err)
+	}
+
+	if userInfo.ID == "" {
+		return nil, fmt.Errorf("Google 用户信息不完整: %s", string(data))
+	}
+
+	return &userInfo, nil
+}
+
+// googleLoginOrRegister 与已有用户适配：先按 google_id 查，再按 email 查；同邮箱视为同一用户并绑定 google_id
+func (s *UserServer) googleLoginOrRegister(_ context.Context, userInfo *googleUserInfo) (*model.User, error) {
+	existingByGoogle, err := model.UserDao.FindByGoogleID(userInfo.ID)
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, fmt.Errorf("查询 Google 用户失败: %w", err)
+	}
+
+	if err == nil {
+		updates := map[string]interface{}{
+			"nickname": firstNonEmpty(userInfo.Name, existingByGoogle.Nickname),
+			"avatar":   firstNonEmpty(userInfo.Picture, existingByGoogle.Avatar),
+		}
+		if userInfo.Email != "" && existingByGoogle.Email == "" {
+			updates["email"] = userInfo.Email
+		}
+		if err := model.UserDao.UpdateByID(existingByGoogle.ID, updates); err != nil {
+			return nil, fmt.Errorf("更新 Google 用户信息失败: %w", err)
+		}
+		return model.UserDao.FindByID(existingByGoogle.ID)
+	}
+
+	// 未找到 google_id：按 email 查找，同一人（如已用 GitHub 登录过）则绑定 google_id
+	email := strings.TrimSpace(userInfo.Email)
+	if email != "" {
+		existingByEmail, err := model.UserDao.FindByEmail(email)
+		if err == nil {
+			updates := map[string]interface{}{
+				"google_id": userInfo.ID,
+				"nickname":  firstNonEmpty(userInfo.Name, existingByEmail.Nickname),
+				"avatar":    firstNonEmpty(userInfo.Picture, existingByEmail.Avatar),
+			}
+			if err := model.UserDao.UpdateByID(existingByEmail.ID, updates); err != nil {
+				return nil, fmt.Errorf("绑定 Google 账号失败: %w", err)
+			}
+			return model.UserDao.FindByID(existingByEmail.ID)
+		}
+		if !errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, fmt.Errorf("按邮箱查询用户失败: %w", err)
+		}
+	}
+
+	// 新用户：创建并写入 google_id
+	username := firstNonEmpty(userInfo.Email, "google_"+userInfo.ID)
+	if username == "" {
+		username = fmt.Sprintf("google_%d", time.Now().UnixNano())
+	}
+	if email == "" {
+		email = fmt.Sprintf("google_%s@placeholder.local", userInfo.ID)
+	}
+	newUser := &model.User{
+		Username:     username,
+		Email:        email,
+		PasswordHash: "",
+		Role:         "user",
+		GoogleID:     &userInfo.ID,
+		Nickname:     firstNonEmpty(userInfo.Name, userInfo.Email),
+		Avatar:       userInfo.Picture,
+	}
+	if err := model.UserDao.Create(newUser); err != nil {
+		return nil, fmt.Errorf("创建 Google 用户失败: %w", err)
+	}
+	return newUser, nil
+}

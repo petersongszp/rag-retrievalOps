@@ -23,4 +23,6 @@ export const USER_API = {
   SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
   GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
   GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
+  GOOGLE_LOGIN: `${API_BASE_URL}/user/google/login`,
+  GOOGLE_CALLBACK: `${API_BASE_URL}/user/google/callback`,
 };
