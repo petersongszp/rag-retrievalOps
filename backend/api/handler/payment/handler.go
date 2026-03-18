@@ -12,6 +12,7 @@ import (
 	paymentService "interview-agents/internal/service/payment"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/google/uuid"
 )
 
 // CreateCheckout 创建一次性支付
@@ -31,19 +32,19 @@ func CreateCheckout(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	log.Printf("[Payment] CreateCheckout start: user_id=%d provider=%s product=%s idempotency_key=%s", userID, req.Provider, req.ProductCode, req.IdempotencyKey)
+	log.Printf("[Payment] CreateCheckout start: user_id=%d provider=%s product=%s idempotency_key=%s", userID, req.Provider, req.ProductCode)
 
 	svc := paymentService.NewManager()
 	result, err := svc.CreateCheckout(ctx, userID, &paymentService.CreateCheckoutRequest{
-		ProductCode:    req.ProductCode,
-		PriceCode:      req.PriceCode,
-		Provider:       req.Provider,
-		Amount:         req.Amount,
-		Currency:       req.Currency,
-		ProductName:    req.ProductName,
-		SuccessURL:     req.SuccessURL,
-		CancelURL:      req.CancelURL,
-		IdempotencyKey: req.IdempotencyKey,
+		ProductCode: req.ProductCode,
+		PriceCode:   req.PriceCode,
+		Provider:    req.Provider,
+		Amount:      req.Amount,
+		Currency:    req.Currency,
+		ProductName: req.ProductName,
+		//SuccessURL:     req.SuccessURL,
+		//CancelURL:      req.CancelURL,
+		IdempotencyKey: uuid.New().String(),
 	})
 	if err != nil {
 		log.Printf("[Payment] CreateCheckout failed: user_id=%d err=%v", userID, err)
@@ -131,4 +132,3 @@ func WebhookHandler(ctx context.Context, c *app.RequestContext) {
 	// Webhook 必须返回 200，否则渠道会重试
 	c.String(200, "ok")
 }
-

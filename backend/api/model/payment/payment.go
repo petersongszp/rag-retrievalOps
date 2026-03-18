@@ -2,15 +2,15 @@ package payment
 
 // CreateCheckoutRequest 创建一次性支付请求 DTO
 type CreateCheckoutRequest struct {
-	ProductCode    string `json:"product_code" vd:"len($)>0"`
-	PriceCode      string `json:"price_code" vd:"len($)>0"`
-	Provider       string `json:"provider" vd:"len($)>0"`       // stripe / paypal
-	Amount         int64  `json:"amount" vd:"$>0"`              // 最小货币单位
-	Currency       string `json:"currency" vd:"len($)>0"`       // usd
-	ProductName    string `json:"product_name" vd:"len($)>0"`
-	SuccessURL     string `json:"success_url" vd:"len($)>0"`
-	CancelURL      string `json:"cancel_url" vd:"len($)>0"`
-	IdempotencyKey string `json:"idempotency_key" vd:"len($)>0"`
+	ProductCode string `json:"product_code" vd:"len($)>0"`
+	PriceCode   string `json:"price_code" vd:"len($)>0"`
+	Provider    string `json:"provider" vd:"len($)>0"` // stripe / paypal
+	Amount      int64  `json:"amount" vd:"$>0"`        // 最小货币单位
+	Currency    string `json:"currency" vd:"len($)>0"` // usd
+	ProductName string `json:"product_name" vd:"len($)>0"`
+	//SuccessURL     string `json:"success_url" vd:"len($)>0"`
+	//CancelURL      string `json:"cancel_url" vd:"len($)>0"`
+	//IdempotencyKey string `json:"idempotency_key" vd:"len($)>0"`
 }
 
 // CreateSubscriptionRequest 创建订阅请求 DTO
@@ -40,4 +40,3 @@ type OrderListRequest struct {
 	Page     int `json:"page"`
 	PageSize int `json:"page_size"`
 }
-
