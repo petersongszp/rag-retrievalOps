@@ -36,7 +36,7 @@ interface UserModel {
   id: number;
   name: string;
   model_key: string;
-  protocol: string; // 'openai' | 'ollama'
+  protocol: string; // 'openai' | 'ollama' | 'ark'
   base_url: string;
   api_key: string;
   status: number;
@@ -341,6 +341,7 @@ export default function UserModelsPage() {
                   options={[
                     { value: 'openai', label: 'OpenAI (Standard)' },
                     { value: 'ollama', label: 'Ollama (Local)' },
+                    { value: 'ark', label: 'Ark' },
                   ]}
                   className="rounded-lg"
                 />

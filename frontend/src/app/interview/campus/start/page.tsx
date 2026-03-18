@@ -58,16 +58,16 @@ export default function CampusInterviewStartPage() {
     speechInput.isStopping;
   const speechHint =
     !asrCapability.loading && !asrCapability.enabled
-      ? '语音识别暂不可用'
+      ? 'Speech recognition unavailable'
       : speechInput.status === 'recording'
-        ? '正在录音，点击停止录音按钮结束'
+        ? 'Recording, click stop button to end'
         : speechInput.status === 'stopping'
-          ? '正在结束录音，请稍候...'
+          ? 'Stopping recording, please wait...'
           : speechInput.status === 'transcribing'
-            ? '语音识别中，请稍候...'
+            ? 'Transcribing, please wait...'
             : speechInput.status === 'error'
-              ? '语音识别失败，可重新尝试'
-              : '支持语音输入，识别结果会回填到输入框';
+              ? 'Speech recognition failed, try again'
+              : 'Voice input supported, results will fill the input box';
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
@@ -84,7 +84,7 @@ export default function CampusInterviewStartPage() {
       }
     }
     if (!params || !params.resume_id) {
-      message.error('缺少面试参数或简历，请从表单页重新进入');
+      message.error('Missing interview parameters or resume, please re-enter from the form page');
       return;
     }
     setStarting(true);
@@ -105,7 +105,7 @@ export default function CampusInterviewStartPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          message.error('请先登录后再开始面试');
+          message.error('Please login first to start the interview');
           setStarting(false);
           return;
         }
@@ -120,7 +120,7 @@ export default function CampusInterviewStartPage() {
           console.log('[检测] 后端服务连接正常');
         } catch (e) {
           const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
-          message.error(`无法连接到后端服务，请确认后端服务是否运行在 ${apiUrl}`);
+          message.error(`Cannot connect to backend service. Please confirm it is running on ${apiUrl}`);
           setStarting(false);
           console.error('[检测] 后端服务连接失败:', e);
           return;
@@ -162,23 +162,23 @@ export default function CampusInterviewStartPage() {
 
         if (!response.ok) {
           if (response.status === 401) {
-            message.error('登录已过期，请重新登录');
+            message.error('Login expired, please login again');
           } else if (response.status === 404) {
             console.error('[面试启动] 404错误 - 接口不存在');
             message.error({
               content:
-                '接口返回404，请在后端 middleware.go 中将 /api/mianshi/stream/start 添加到 jwtPublicRoutes',
+                'API returned 404, please check routes',
               duration: 10,
             });
           } else {
-            message.error(`面试启动失败：${response.status} ${response.statusText}`);
+            message.error(`Interview start failed: ${response.status} ${response.statusText}`);
           }
           setStarting(false);
           return;
         }
 
         if (!response.body) {
-          message.error('无法读取响应流');
+          message.error('Unable to read response stream');
           setStarting(false);
           return;
         }
@@ -285,7 +285,7 @@ export default function CampusInterviewStartPage() {
                   });
                 } else if (payload?.type === 'end' || payload?.type === 'complete') {
                   console.log('[面试结束]', payload);
-                  message.success('面试已完成，正在跳转到面试记录...');
+                  message.success('Interview completed, redirecting to records...');
                   setStarting(false);
                   setWaitingNextQuestion(false);
                   // 延迟跳转，让用户看到提示消息
@@ -301,7 +301,7 @@ export default function CampusInterviewStartPage() {
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          message.error('面试启动失败：网络错误');
+          message.error('Interview start failed: Network error');
           console.error('启动面试错误:', error);
         }
         setStarting(false);
@@ -330,19 +330,19 @@ export default function CampusInterviewStartPage() {
 
   const onSubmit = async (act?: 'next' | 'quit') => {
     if (!sessionId) {
-      message.warning('会话已失效，请重新开始面试');
+      message.warning('Session expired, please restart interview');
       return;
     }
 
     const action = act || 'next';
 
-    // 如果是结束面试
+    // 如果是End Interview
     if (action === 'quit') {
       try {
         const token = localStorage.getItem('token');
         if (token) {
-          // 调用后端接口结束面试
-          // 更新为新的结束面试接口
+          // 调用后端接口End Interview
+          // 更新为新的End Interview接口
           await fetch(`${INTERVIEW_API.END_INTERVIEW}`, {
             method: 'POST',
             headers: {
@@ -351,25 +351,25 @@ export default function CampusInterviewStartPage() {
             },
             body: JSON.stringify({
               session_id: sessionId,
-              // 结束面试可能不需要answer字段，仅传session_id即可
+              // End Interview可能不需要answer字段，仅传session_id即可
             }),
             mode: 'cors',
           });
         }
       } catch (e) {
-        console.error('[结束面试] 请求失败:', e);
+        console.error('[End Interview] 请求失败:', e);
       }
       try {
         abortControllerRef.current?.abort();
       } catch {}
-      message.success('面试已结束，正在跳转...');
+      message.success('Interview ended, redirecting...');
       router.push('/user/interviews');
       return;
     }
 
     // 验证答案不为空
     if (!answer.trim()) {
-      message.warning('请输入答案后再提交');
+      message.warning('Please enter an answer before submitting');
       return;
     }
 
@@ -393,7 +393,7 @@ export default function CampusInterviewStartPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        message.error('登录已过期，请重新登录');
+        message.error('Login expired, please login again');
         setSubmitting(false);
         setWaitingNextQuestion(false);
         return;
@@ -426,17 +426,17 @@ export default function CampusInterviewStartPage() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[提交答案] 错误响应:', errorText);
-        message.error('答案提交失败，请重试');
+        message.error('Answer submission failed, please try again');
         setWaitingNextQuestion(false);
         return;
       }
 
       // 提交成功，等待SSE流推送下一题
       console.log('[提交答案] 提交成功，等待SSE推送下一题');
-      message.success('答案已提交，正在生成下一题...');
+      message.success('Answer submitted, generating next question...');
     } catch (error: any) {
       console.error('[提交答案] 异常:', error);
-      message.error('答案提交失败：网络错误');
+      message.error('Answer submission failed: Network error');
       setWaitingNextQuestion(false);
     } finally {
       setSubmitting(false);
@@ -457,8 +457,8 @@ export default function CampusInterviewStartPage() {
               <CustomerServiceOutlined />
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">综合面试</h1>
-              <p className="text-xs text-slate-500 m-0">校招简历面试</p>
+              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">General Interview</h1>
+              <p className="text-xs text-slate-500 m-0">Campus Recruitment Resume Interview</p>
             </div>
           </div>
 
@@ -472,7 +472,7 @@ export default function CampusInterviewStartPage() {
               </div>
               <div className="w-px h-3 bg-slate-200" />
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">进度 {percent}%</span>
+                <span className="text-xs text-slate-500">Progress {percent}%</span>
                 <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-green-500 transition-all duration-500"
@@ -489,7 +489,7 @@ export default function CampusInterviewStartPage() {
               className="!rounded-full !px-4 hover:!bg-red-50 border-red-200"
               onClick={() => onSubmit('quit')}
             >
-              结束面试
+              End Interview
             </Button>
           </div>
         </div>
@@ -503,7 +503,7 @@ export default function CampusInterviewStartPage() {
               <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 text-2xl mb-4 animate-bounce-subtle">
                 <CustomerServiceOutlined />
               </div>
-              <p className="text-slate-400 text-sm">正在分析简历并生成面试题...</p>
+              <p className="text-slate-400 text-sm">Analyzing resume and generating questions...</p>
             </div>
           )}
 
@@ -529,7 +529,7 @@ export default function CampusInterviewStartPage() {
                 >
                   {isQuestion && (
                     <span className="text-xs text-slate-400 mb-1.5 ml-1">
-                      面试官 · 第 {questionNumber} 题
+                      Interviewer · Q{questionNumber}
                     </span>
                   )}
 
@@ -548,7 +548,7 @@ export default function CampusInterviewStartPage() {
 
                   {!isQuestion && (
                     <span className="text-xs text-slate-400 mt-1.5 mr-1">
-                      我 ·{' '}
+                      Me ·{' '}
                       {new Date(item.timestamp).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -583,7 +583,7 @@ export default function CampusInterviewStartPage() {
                   />
                 </div>
                 <span className="text-sm text-slate-400 ml-2">
-                  {starting ? '正在生成首题...' : '正在思考下一题...'}
+                  {starting ? 'Generating first question...' : 'Thinking of the next question...'}
                 </span>
               </div>
             </div>
@@ -600,14 +600,14 @@ export default function CampusInterviewStartPage() {
               onChange={(e) => setAnswer(e.target.value)}
               placeholder={
                 speechInput.status === 'recording'
-                  ? '正在录音，点击停止录音按钮结束...'
+                  ? 'Recording, click stop button to end...'
                   : speechInput.status === 'stopping'
-                    ? '正在结束录音，请稍候...'
+                    ? 'Stopping recording, please wait...'
                     : speechInput.status === 'transcribing'
-                      ? '语音识别中，请稍候...'
+                      ? 'Transcribing, please wait...'
                       : waitingNextQuestion
-                        ? '面试官正在提问...'
-                        : '请输入你的回答...'
+                        ? 'Interviewer is asking...'
+                        : 'Please enter your answer...'
               }
               disabled={waitingNextQuestion || starting}
               readOnly={speechInput.isRecording || speechInput.isStopping}
@@ -633,7 +633,7 @@ export default function CampusInterviewStartPage() {
                     onClick={speechInput.handleMicClick}
                     className="!h-9 !px-4 !font-medium"
                   >
-                    {speechInput.isStopping ? '结束中...' : '停止录音'}
+                    {speechInput.isStopping ? 'Stopping...' : 'Stop Rec.'}
                   </Button>
                 ) : (
                   <Button
@@ -653,7 +653,7 @@ export default function CampusInterviewStartPage() {
                 />
               </div>
               <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-300 hidden sm:inline-block">Enter 发送</span>
+                <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
                 <Button
                   type="primary"
                   shape="round"
@@ -671,7 +671,7 @@ export default function CampusInterviewStartPage() {
                   onClick={() => onSubmit()}
                   className="!bg-green-500 hover:!bg-green-600 !shadow-green-200 !border-0"
                 >
-                  发送
+                  Send
                 </Button>
               </div>
             </div>
@@ -680,7 +680,7 @@ export default function CampusInterviewStartPage() {
             <p className="text-xs text-slate-400">{speechHint}</p>
           </div>
           <div className="text-center mt-2">
-            <p className="text-xs text-slate-300">面试吧</p>
+            <p className="text-xs text-slate-300">Mianshiba</p>
           </div>
         </div>
       </footer>
