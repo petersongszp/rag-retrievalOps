@@ -35,12 +35,13 @@ const { Title, Paragraph } = Typography;
 interface UserModel {
   id: number;
   name: string;
-  model_id: string;
+  model_key: string;
   protocol: string; // 'openai' | 'ollama'
   base_url: string;
   api_key: string;
-  is_enabled: boolean;
-  provider: string;
+  status: number;
+  is_default: number;
+  provider_name: string;
   created_at: number;
 }
 
@@ -56,8 +57,10 @@ export default function UserModelsPage() {
   const fetchModels = async () => {
     setLoading(true);
     try {
-      const res: any = await apiClient.get(MODEL_API.LIST);
-      setModels(res?.models || []);
+      const res: any = await apiClient.get(MODEL_API.LIST, {
+        params: { page: 1, size: 100 }
+      });
+      setModels(res?.list || []);
     } catch (e: any) {
       if (e?.response?.status === 401) {
         message.error("Please login first");
@@ -78,12 +81,22 @@ export default function UserModelsPage() {
     try {
       const values = await form.validateFields();
       if (editingModel) {
-        await apiClient.put(MODEL_API.UPDATE(editingModel.id), values);
-        message.success('更新成功'); // Missed this key? I'll use generic success or add key. Let's use 'Saved' logic.
-        // Actually I have createSuccess/createFail. I can use createSuccess for update too or add updateSuccess.
-        // I'll check my json. I have updateSuccess in messages.
+        const updateData = {
+          ...editingModel,
+          ...values,
+        };
+        if (!updateData.api_key) {
+          delete updateData.api_key;
+        }
+        await apiClient.put(MODEL_API.UPDATE(editingModel.id), updateData);
+        message.success('更新成功');
       } else {
-        await apiClient.post(MODEL_API.CREATE, values);
+        await apiClient.post(MODEL_API.CREATE, {
+          is_default: 1,
+          status: 1,
+          scope: 7,
+          ...values,
+        });
         message.success("Created successfully");
       }
       setIsModalOpen(false);
@@ -111,7 +124,8 @@ export default function UserModelsPage() {
     try {
       await apiClient.put(MODEL_API.UPDATE(record.id), {
         ...record,
-        is_enabled: !record.is_enabled,
+        is_default: record.is_default === 1 ? 0 : 1,
+        status: 1, // Ensure status is 1
       });
       message.success("Status updated");
       fetchModels();
@@ -122,7 +136,10 @@ export default function UserModelsPage() {
 
   const openEditModal = (record: UserModel) => {
     setEditingModel(record);
-    form.setFieldsValue(record);
+    form.setFieldsValue({
+      ...record,
+      api_key: undefined, // ensure it's empty in UI
+    });
     setIsModalOpen(true);
   };
 
@@ -135,8 +152,8 @@ export default function UserModelsPage() {
     },
     {
       title: "Model ID",
-      dataIndex: 'model_id',
-      key: 'model_id',
+      dataIndex: 'model_key',
+      key: 'model_key',
       render: (text: string) => <Tag className="font-mono bg-slate-50 border-slate-200">{text}</Tag>,
     },
     {
@@ -149,21 +166,21 @@ export default function UserModelsPage() {
     },
     {
       title: "Provider",
-      dataIndex: 'provider',
-      key: 'provider',
+      dataIndex: 'provider_name',
+      key: 'provider_name',
       render: (text: string) => text || '-',
     },
     {
       title: "Status",
-      dataIndex: 'is_enabled',
-      key: 'is_enabled',
-      render: (enabled: boolean) => (
+      dataIndex: 'is_default',
+      key: 'is_default',
+      render: (is_default: number) => (
         <Tag
-          icon={enabled ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
-          color={enabled ? 'success' : 'default'}
+          icon={is_default === 1 ? <CheckCircleOutlined /> : <CloseCircleOutlined />}
+          color={is_default === 1 ? 'success' : 'default'}
           className="border-0"
         >
-          {enabled ? "Enable" : "Disable"}
+          {is_default === 1 ? "Enable" : "Disable"}
         </Tag>
       ),
     },
@@ -186,9 +203,9 @@ export default function UserModelsPage() {
             type="text"
             size="small"
             onClick={() => toggleEnabled(record)}
-            className={record.is_enabled ? 'text-orange-500' : 'text-green-600'}
+            className={record.is_default === 1 ? 'text-orange-500' : 'text-green-600'}
           >
-            {record.is_enabled ? "Disable" : "Enable"}
+            {record.is_default === 1 ? "Disable" : "Enable"}
           </Button>
           <Button
             type="text"
@@ -260,7 +277,8 @@ export default function UserModelsPage() {
                 // 设置默认值
                 form.setFieldsValue({
                   protocol: 'openai',
-                  is_enabled: true,
+                  is_default: 1,
+                  status: 1,
                   base_url: 'https://api.openai.com/v1',
                 });
                 setIsModalOpen(true);
@@ -328,13 +346,24 @@ export default function UserModelsPage() {
                 />
               </Form.Item>
               <Form.Item
-                name="model_id"
+                name="model_key"
                 label={"Model ID"}
                 rules={[{ required: true, message: 'Please enter Model ID' }]}
               >
                 <Input placeholder={"e.g., gpt-4o"} className="rounded-lg" />
               </Form.Item>
             </div>
+          </div>
+
+          <div className="bg-slate-50 p-4 rounded-xl border border-slate-100 mb-4">
+            <h3 className="text-sm font-bold text-slate-500 mb-3 uppercase tracking-wider">Provider Info</h3>
+            <Form.Item
+              name="provider_name"
+              label={"Provider Name"}
+              rules={[{ required: true, message: 'Please enter Provider Name' }]}
+            >
+              <Input placeholder={"e.g., OpenAI"} className="rounded-lg" />
+            </Form.Item>
           </div>
 
           <div className="bg-slate-50 p-4 rounded-xl border border-slate-100">
@@ -344,15 +373,15 @@ export default function UserModelsPage() {
               label={"Base URI"}
               rules={[{ required: true, message: 'Please enter Base URI' }]}
             >
-              <Input placeholder={"e.g., https://api.openai.com"} className="rounded-lg" />
+              <Input placeholder={"e.g., https://api.openai.com/v1"} className="rounded-lg" />
             </Form.Item>
 
             <Form.Item
               name="api_key"
               label={"API Key"}
-              rules={[{ required: true, message: 'Please enter API Key' }]}
+              rules={[{ required: editingModel ? false : true, message: 'Please enter API Key' }]}
             >
-              <Input.Password placeholder={"Enter API Key"} className="rounded-lg" />
+              <Input.Password placeholder={editingModel ? "Leave empty to keep current key" : "Enter API Key"} className="rounded-lg" />
             </Form.Item>
           </div>
         </Form>
