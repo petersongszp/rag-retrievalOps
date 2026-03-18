@@ -64,6 +64,7 @@ func (s *UserModelServer) CreateUserModel(ctx context.Context,
 		_ = model.UserModelDao.CancelDefaultUserModel(userID, 0) // 0 表示取消所有
 	}
 
+	currentTime := time.Now().UnixMilli()
 	newModel := &model.UserModel{
 		UserID:          userID,
 		Name:            req.GetName(),
@@ -78,6 +79,8 @@ func (s *UserModelServer) CreateUserModel(ctx context.Context,
 		Status:          status,
 		IsDefault:       isDefault,
 		ProviderName:    req.GetProviderName(),
+		CreatedAt:       currentTime,
+		UpdatedAt:       currentTime,
 	}
 	err = model.UserModelDao.CreateUserModel(newModel)
 	if err != nil {
