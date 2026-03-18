@@ -57,6 +57,7 @@ export default function SocialInterviewStartPage() {
     enabled: asrCapability.enabled,
     sessionId,
     interviewType: '综合面试',
+    questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
     },
