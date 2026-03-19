@@ -13,6 +13,14 @@ const apiClient: AxiosInstance = axios.create({
 // 请求拦截器
 apiClient.interceptors.request.use(
   (config: InternalAxiosRequestConfig) => {
+    // Some callers pass '/api/...' while baseURL already ends with '/api'.
+    // Normalize here to avoid requests like '/api/api/user/register'.
+    const baseURL = config.baseURL || '';
+    const requestUrl = config.url || '';
+    if (baseURL.endsWith('/api') && requestUrl.startsWith('/api/')) {
+      config.url = requestUrl.replace(/^\/api/, '');
+    }
+
     const url = config.url || '';
     const isAuthFree =
       url.includes('/user/register') ||
