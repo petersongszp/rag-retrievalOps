@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	interviewsapi "interview-agents/api/model/resume"
 	evaluator "interview-agents/internal/agents/evaluation"
 	"interview-agents/internal/agents/evaluation/topic"
 	"interview-agents/internal/agents/usecase/interview"
@@ -476,8 +477,8 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 
 	const answerTimeout = 30 * time.Minute
 	const heartbeatInterval = 15 * time.Second
-	const maxQuestions = 20      // 最多生成30道问题
-	const historyContextSize = 5 // 保留前5道题作为历史上下文
+	const maxQuestions = 10      // 最多生成10道问题
+	const historyContextSize = 2 // 保留前2道题作为历史上下文
 
 	// 创建智能体服务
 	agentSvc := interview.NewInterviewAgentService(session.UserID)
@@ -627,6 +628,19 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 		SendCompleteEvent(e.writer)
 		return
 	}
+	endTime := time.Now()
+	session.LastActivity = endTime
+	session.Status = "completed"
+	duration := int64(endTime.Sub(session.StartTime).Seconds())
+	updateDTO := &interviewsapi.InterviewRecordDTO{
+		ID:       int64(session.RecordID),
+		UserID:   int32(session.UserID),
+		Status:   "completed",
+		Duration: &duration,
+	}
+	if err := e.interviewSvc.UpdateInterviewRecord(ctx, updateDTO); err != nil {
+		log.Printf("[Graph] Failed to update interview record status: %v", err)
+	}
 
 	// 发送完成事件
 	_ = SendSSEEvent(e.writer, map[string]interface{}{
@@ -640,7 +654,7 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 	// 发布后续消息
 	// mq.PublishEvaluationReport(ctx, session.UserID, session.RecordID)
 	// mq.PublishTopicEvaluation(ctx, session.UserID, session.RecordID)
-
+	e.sessionManager.DeleteSession(session.SessionID)
 	log.Printf("[Graph] Interview completed, sessionID: %s", session.SessionID)
 }
 

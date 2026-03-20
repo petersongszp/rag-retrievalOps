@@ -33,13 +33,13 @@ func (s *UserModelServer) CreateUserModel(ctx context.Context,
 		metaID = uint64(*req.MetaID)
 	}
 
-	var configJSON string
-	if req.IsSetConfigJSON() {
+	var configJSON string = "{}"
+	if req.IsSetConfigJSON() && *req.ConfigJSON != "" {
 		configJSON = *req.ConfigJSON
 	}
 
-	var defaultParams string
-	if req.IsSetDefaultParams() {
+	var defaultParams string = "{}"
+	if req.IsSetDefaultParams() && *req.DefaultParams != "" {
 		defaultParams = *req.DefaultParams
 	}
 
@@ -64,6 +64,7 @@ func (s *UserModelServer) CreateUserModel(ctx context.Context,
 		_ = model.UserModelDao.CancelDefaultUserModel(userID, 0) // 0 表示取消所有
 	}
 
+	currentTime := time.Now().UnixMilli()
 	newModel := &model.UserModel{
 		UserID:          userID,
 		Name:            req.GetName(),
@@ -78,6 +79,8 @@ func (s *UserModelServer) CreateUserModel(ctx context.Context,
 		Status:          status,
 		IsDefault:       isDefault,
 		ProviderName:    req.GetProviderName(),
+		CreatedAt:       currentTime,
+		UpdatedAt:       currentTime,
 	}
 	err = model.UserModelDao.CreateUserModel(newModel)
 	if err != nil {
@@ -149,11 +152,17 @@ func (s *UserModelServer) UpdateUserModel(ctx context.Context,
 	// 处理可选字段 - DefaultParams
 	if req.IsSetDefaultParams() {
 		existingModel.DefaultParams = req.GetDefaultParams()
+		if existingModel.DefaultParams == "" {
+			existingModel.DefaultParams = "{}"
+		}
 	}
 
 	// 处理可选字段 - ConfigJSON
 	if req.IsSetConfigJSON() {
 		existingModel.ConfigJSON = req.GetConfigJSON()
+		if existingModel.ConfigJSON == "" {
+			existingModel.ConfigJSON = "{}"
+		}
 	}
 
 	// 处理可选字段 - Scope

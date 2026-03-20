@@ -94,7 +94,8 @@ func (d *_Prediction) GetPredictionRecordsByUserID(userID uint, page, pageSize i
 	db := getDB().Model(&PredictionRecord{}).Where("user_id = ?", userID)
 	db.Count(&total)
 
-	err := db.Order("created_at asc").
+	err := db.Order("created_at desc").
+		Order("id desc").
 		Offset((page-1)*pageSize).
 		Limit(pageSize).
 		Preload("Questions", func(db *gorm.DB) *gorm.DB {

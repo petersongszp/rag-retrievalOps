@@ -2,17 +2,15 @@ package impl
 
 import (
 	"context"
+	"interview-agents/internal/middleware"
+	"interview-agents/internal/model"
+	"interview-agents/internal/service/common"
+
 	"encoding/json"
 	"errors"
 	"fmt"
 	userapi "interview-agents/api/model/user"
 	"interview-agents/internal/config"
-	"interview-agents/internal/m
-	userapi "interview-agents/api/model/user"
-	"interview-agents/internal/config"
-	"encoding/json"
-	"errors"
-	"fmt"
 	"io"
 	"net/http"
 	"net/url"
