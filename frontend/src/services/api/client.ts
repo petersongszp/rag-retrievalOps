@@ -27,7 +27,9 @@ apiClient.interceptors.request.use(
       url.includes('/user/login') ||
       url.includes('/user/logout') ||
       url.includes('/user/github/login') ||
-      url.includes('/user/github/callback');
+      url.includes('/user/github/callback') ||
+      url.includes('/user/google/login') ||
+      url.includes('/user/google/callback');
     const token = localStorage.getItem('token');
     if (token && !isAuthFree) {
       config.headers = (config.headers || {}) as any;

@@ -25,39 +25,23 @@ type Config struct {
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
-	Wechat           WechatConfig       `yaml:"wechat"`     // 微信配置
-	GitHub           GitHubConfig       `yaml:"github"`     // GitHub OAuth 配置
-	Feishu           FeishuConfig       `yaml:"feishu"`     // 飞书配置
-	Email            EmailConfig        `yaml:"email"`      // 邮件配置
-	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"` // LLM API 限流配置
-	Payment          PaymentConfig      `yaml:"payment"`    // 支付配置
-}
-
-// PaymentConfig 支付配置
-type PaymentConfig struct {
-	Stripe          StripeConfig  `yaml:"stripe"`
-	PayPal          PayPalConfig  `yaml:"paypal"`
-	WebhookTimeout  string        `yaml:"webhook_timeout"`   // webhook 事件时间窗口，如 "5m"
-	AllowedReturnURLs []string    `yaml:"allowed_return_urls"` // success/cancel URL 白名单
-}
-
-// StripeConfig Stripe 配置
-type StripeConfig struct {
-	SecretKey      string `yaml:"secret_key"`
-	WebhookSecret  string `yaml:"webhook_secret"`
-	PublishableKey string `yaml:"publishable_key"`
-}
-
-// PayPalConfig PayPal 配置
-type PayPalConfig struct {
-	ClientID      string `yaml:"client_id"`
-	ClientSecret  string `yaml:"client_secret"`
-	WebhookID     string `yaml:"webhook_id"`
-	Sandbox       bool   `yaml:"sandbox"`
+	Wechat           WechatConfig       `yaml:"wechat"`       // 微信配置
+	GitHub           GitHubConfig       `yaml:"github"`       // GitHub OAuth 配置
+	GoogleOAuth      GoogleOAuthConfig  `yaml:"google_oauth"` // Google OAuth 配置（邮箱登录）
+	Feishu           FeishuConfig       `yaml:"feishu"`       // 飞书配置
+	Email            EmailConfig        `yaml:"email"`        // 邮件配置
+	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 限流配置
 }
 
 // GitHubConfig GitHub OAuth 配置
 type GitHubConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	RedirectURL  string `yaml:"redirect_url"`
+}
+
+// GoogleOAuthConfig Google OAuth 配置（邮箱登录）
+type GoogleOAuthConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
@@ -324,6 +308,10 @@ func (c *Config) ExpandEnv() {
 	c.Payment.PayPal.ClientID = expandEnvVar(c.Payment.PayPal.ClientID)
 	c.Payment.PayPal.ClientSecret = expandEnvVar(c.Payment.PayPal.ClientSecret)
 	c.Payment.PayPal.WebhookID = expandEnvVar(c.Payment.PayPal.WebhookID)
+	// 展开 Google OAuth 配置
+	c.GoogleOAuth.ClientID = expandEnvVar(c.GoogleOAuth.ClientID)
+	c.GoogleOAuth.ClientSecret = expandEnvVar(c.GoogleOAuth.ClientSecret)
+	c.GoogleOAuth.RedirectURL = expandEnvVar(c.GoogleOAuth.RedirectURL)
 }
 
 // expandEnvVar 展开字符串中的环境变量引用

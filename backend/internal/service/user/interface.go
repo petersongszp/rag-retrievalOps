@@ -67,6 +67,8 @@ type UserManager interface {
 	WechatCallback(ctx context.Context, req userapi.WechatCallbackRequest) (*userapi.LoginResponse, error)
 	GitHubLogin(ctx context.Context) (*userapi.WechatLoginQRResponse, error)
 	GitHubCallback(ctx context.Context, code string) (*userapi.LoginResponse, error)
+	GoogleLogin(ctx context.Context) (*userapi.WechatLoginQRResponse, error)
+	GoogleCallback(ctx context.Context, code string) (*userapi.LoginResponse, error)
 	ForgotPassword(ctx context.Context, email string) error
 	ResetPassword(ctx context.Context, token, newPassword string) error
 }
