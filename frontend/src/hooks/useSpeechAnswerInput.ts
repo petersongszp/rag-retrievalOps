@@ -14,6 +14,7 @@ interface UseSpeechAnswerInputOptions {
   sessionId: string | null;
   interviewType?: string;
   domain?: string;
+  questionText?: string;
   onTranscript: (text: string) => void;
 }
 
@@ -40,6 +41,7 @@ export function useSpeechAnswerInput({
   sessionId,
   interviewType,
   domain,
+  questionText,
   onTranscript,
 }: UseSpeechAnswerInputOptions) {
   const [status, setStatus] = useState<SpeechStatus>('idle');
@@ -126,6 +128,9 @@ export function useSpeechAnswerInput({
       }
       if (domain) {
         formData.append('domain', domain);
+      }
+      if (questionText?.trim()) {
+        formData.append('question_text', questionText.trim());
       }
 
       const data: any = await apiClient.post(INTERVIEW_API.ASR_TRANSCRIBE, formData, {

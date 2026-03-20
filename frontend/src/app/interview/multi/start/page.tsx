@@ -33,6 +33,7 @@ const { Title } = Typography;
 export default function MultiAgentInterviewStartPage() {
   const [elapsed, setElapsed] = useState(0);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [questionText, setQuestionText] = useState('');
   const [questionIndex, setQuestionIndex] = useState<number>(0);
   const [answer, setAnswer] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -48,6 +49,7 @@ export default function MultiAgentInterviewStartPage() {
     enabled: asrCapability.enabled,
     sessionId,
     interviewType: '多对一面试',
+    questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
     },
@@ -188,11 +190,13 @@ export default function MultiAgentInterviewStartPage() {
                     content:
                       payload.status === 'streaming' ? updated[lastIdx].content + content : content,
                   };
+                  setQuestionText(updated[lastIdx].content);
                   return updated;
                 }
 
                 // 新消息
                 if (content) {
+                  setQuestionText(content);
                   return [
                     ...prev,
                     {
@@ -252,6 +256,7 @@ export default function MultiAgentInterviewStartPage() {
                     role,
                     roleConfig,
                   };
+                  setQuestionText(updated[lastQuestionIdx].content);
                   return updated;
                 }
 
@@ -268,11 +273,13 @@ export default function MultiAgentInterviewStartPage() {
                     role,
                     roleConfig,
                   };
+                  setQuestionText(q);
                   return updated;
                 }
 
                 // 新题
                 if (q) {
+                  setQuestionText(q);
                   return [
                     ...prev,
                     {

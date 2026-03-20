@@ -8,16 +8,18 @@ import (
 )
 
 type ASRConfig struct {
-	BaseURL   string
-	APIKey    string
-	ModelName string
+	BaseURL        string
+	APIKey         string
+	ModelName      string
+	ModifyLLMModel string
 }
 
 func LoadConfigFromEnv() ASRConfig {
 	return ASRConfig{
-		BaseURL:   strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_ASR_BASE_URL")), "/"),
-		APIKey:    strings.TrimSpace(os.Getenv("OPENAI_ASR_API_KEY")),
-		ModelName: strings.TrimSpace(os.Getenv("OPENAI_ASR_MODEL_NAME")),
+		BaseURL:        strings.TrimRight(strings.TrimSpace(os.Getenv("OPENAI_ASR_BASE_URL")), "/"),
+		APIKey:         strings.TrimSpace(os.Getenv("OPENAI_ASR_API_KEY")),
+		ModelName:      strings.TrimSpace(os.Getenv("OPENAI_ASR_MODEL_NAME")),
+		ModifyLLMModel: strings.TrimSpace(os.Getenv("OPENAI_ASR_MODIFY_LLM_MODEL")),
 	}
 }
 
@@ -50,4 +52,8 @@ func (c ASRConfig) Capability() *Capability {
 		Provider: ProviderSiliconFlow,
 		Model:    c.ModelName,
 	}
+}
+
+func (c ASRConfig) ModifierEnabled() bool {
+	return c.BaseURL != "" && c.APIKey != "" && c.ModifyLLMModel != ""
 }
