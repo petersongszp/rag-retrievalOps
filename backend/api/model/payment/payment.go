@@ -8,8 +8,8 @@ type CreateCheckoutRequest struct {
 	Amount      int64  `json:"amount" vd:"$>0"`        // 最小货币单位
 	Currency    string `json:"currency" vd:"len($)>0"` // usd
 	ProductName string `json:"product_name" vd:"len($)>0"`
-	//SuccessURL     string `json:"success_url" vd:"len($)>0"`
-	//CancelURL      string `json:"cancel_url" vd:"len($)>0"`
+	SuccessURL  string `json:"success_url" vd:"len($)>0"`
+	CancelURL   string `json:"cancel_url" vd:"len($)>0"`
 	//IdempotencyKey string `json:"idempotency_key" vd:"len($)>0"`
 }
 

@@ -76,6 +76,7 @@ func migrateDatabase() error {
 		&model.PaymentAttempt{},
 		&model.Subscription{},
 		&model.PaymentEvent{},
+		&model.PaymentCallback{},
 	)
 }
 

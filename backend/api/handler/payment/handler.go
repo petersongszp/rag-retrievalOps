@@ -2,7 +2,6 @@ package payment
 
 import (
 	"context"
-	"io"
 	"log"
 
 	paymentDTO "interview-agents/api/model/payment"
@@ -36,14 +35,14 @@ func CreateCheckout(ctx context.Context, c *app.RequestContext) {
 
 	svc := paymentService.NewManager()
 	result, err := svc.CreateCheckout(ctx, userID, &paymentService.CreateCheckoutRequest{
-		ProductCode: req.ProductCode,
-		PriceCode:   req.PriceCode,
-		Provider:    req.Provider,
-		Amount:      req.Amount,
-		Currency:    req.Currency,
-		ProductName: req.ProductName,
-		//SuccessURL:     req.SuccessURL,
-		//CancelURL:      req.CancelURL,
+		ProductCode:    req.ProductCode,
+		PriceCode:      req.PriceCode,
+		Provider:       req.Provider,
+		Amount:         req.Amount,
+		Currency:       req.Currency,
+		ProductName:    req.ProductName,
+		SuccessURL:     req.SuccessURL,
+		CancelURL:      req.CancelURL,
 		IdempotencyKey: uuid.New().String(),
 	})
 	if err != nil {
@@ -105,11 +104,7 @@ func WebhookHandler(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	body, err := io.ReadAll(c.GetRequest().BodyStream())
-	if err != nil {
-		// 如果 BodyStream 为空，尝试直接获取 body
-		body = c.GetRequest().Body()
-	}
+	body := c.GetRequest().Body()
 
 	log.Printf("[Payment] Webhook received: provider=%s body_size=%d", provider, len(body))
 

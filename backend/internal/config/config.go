@@ -31,6 +31,30 @@ type Config struct {
 	Feishu           FeishuConfig       `yaml:"feishu"`       // 飞书配置
 	Email            EmailConfig        `yaml:"email"`        // 邮件配置
 	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 限流配置
+	Payment          PaymentConfig      `yaml:"payment"`      // 支付配置
+}
+
+// PaymentConfig 支付配置
+type PaymentConfig struct {
+	Stripe            StripeConfig `yaml:"stripe"`
+	PayPal            PayPalConfig `yaml:"paypal"`
+	WebhookTimeout    string       `yaml:"webhook_timeout"`     // webhook 事件时间窗口，如 "5m"
+	AllowedReturnURLs []string     `yaml:"allowed_return_urls"` // success/cancel URL 白名单
+}
+
+// StripeConfig Stripe 配置
+type StripeConfig struct {
+	SecretKey      string `yaml:"secret_key"`
+	WebhookSecret  string `yaml:"webhook_secret"`
+	PublishableKey string `yaml:"publishable_key"`
+}
+
+// PayPalConfig PayPal 配置
+type PayPalConfig struct {
+	ClientID     string `yaml:"client_id"`
+	ClientSecret string `yaml:"client_secret"`
+	WebhookID    string `yaml:"webhook_id"`
+	Sandbox      bool   `yaml:"sandbox"`
 }
 
 // GitHubConfig GitHub OAuth 配置

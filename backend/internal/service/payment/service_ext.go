@@ -2,12 +2,15 @@ package payment
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log"
+	"time"
 
 	"interview-agents/internal/model"
 	paymentpkg "interview-agents/internal/payment"
+	"interview-agents/internal/repository"
 
 	"gorm.io/gorm"
 )
@@ -129,28 +132,67 @@ func (s *paymentService) CreateSubscriptionCheckout(ctx context.Context, userID 
 
 // HandleWebhook 处理 webhook 回调
 func (s *paymentService) HandleWebhook(ctx context.Context, providerStr string, payload *paymentpkg.WebhookPayload) error {
+	startTime := time.Now()
+	db := repository.GetDB()
+
+	// 1. 先将原始回调记录落库（无论后续验签是否成功）
+	headersJSON, _ := json.Marshal(payload.Headers)
+	callbackRecord := &model.PaymentCallback{
+		Provider:   providerStr,
+		RawHeaders: string(headersJSON),
+		RawBody:    string(payload.Body),
+		Status:     model.CallbackStatusReceived,
+	}
+	if err := model.PaymentCallbackDao.Create(db, callbackRecord); err != nil {
+		log.Printf("[Payment] Webhook callback record save failed: provider=%s err=%v", providerStr, err)
+		// 记录失败不阻塞主流程，仅打日志
+	}
+
+	// 2. 获取支付渠道
 	provider, err := paymentpkg.GetProviderByString(providerStr)
 	if err != nil {
 		log.Printf("[Payment] Webhook unknown provider: %s", providerStr)
+		if callbackRecord.ID > 0 {
+			elapsed := time.Since(startTime).Milliseconds()
+			_ = model.PaymentCallbackDao.UpdateStatus(db, callbackRecord.ID, model.CallbackStatusFailed, fmt.Sprintf("unknown provider: %s", providerStr), elapsed)
+		}
 		return fmt.Errorf("unknown provider: %s", providerStr)
 	}
 
-	// 验签 + 解析
+	// 3. 验签 + 解析
 	event, err := provider.VerifyWebhook(ctx, payload)
 	if err != nil {
 		log.Printf("[Payment] Webhook verification failed: provider=%s err=%v", providerStr, err)
+		if callbackRecord.ID > 0 {
+			elapsed := time.Since(startTime).Milliseconds()
+			_ = model.PaymentCallbackDao.UpdateStatus(db, callbackRecord.ID, model.CallbackStatusFailed, fmt.Sprintf("verification failed: %v", err), elapsed)
+		}
 		return fmt.Errorf("webhook verification failed: %w", err)
 	}
 
+	// 4. 验签成功，更新回调记录的事件信息
 	log.Printf("[Payment] Webhook verified: provider=%s event_type=%s event_id=%s raw_type=%s", providerStr, event.EventType, event.EventID, event.RawType)
+	if callbackRecord.ID > 0 {
+		_ = model.PaymentCallbackDao.UpdateEventInfo(db, callbackRecord.ID, event.EventID, event.EventType)
+		_ = model.PaymentCallbackDao.UpdateStatus(db, callbackRecord.ID, model.CallbackStatusVerified, "", 0)
+	}
 
-	// 去重 + 落库 + 业务处理
+	// 5. 去重 + 落库 + 业务处理
 	if err := s.webhookProcessor.Process(ctx, paymentpkg.ProviderName(providerStr), event); err != nil {
 		log.Printf("[Payment] Webhook processing error: provider=%s event_id=%s err=%v", providerStr, event.EventID, err)
+		if callbackRecord.ID > 0 {
+			elapsed := time.Since(startTime).Milliseconds()
+			_ = model.PaymentCallbackDao.UpdateStatus(db, callbackRecord.ID, model.CallbackStatusFailed, fmt.Sprintf("process error: %v", err), elapsed)
+		}
 		return err
 	}
 
+	// 6. 处理完成，更新回调记录状态
 	log.Printf("[Payment] Webhook processed: provider=%s event_id=%s event_type=%s", providerStr, event.EventID, event.EventType)
+	if callbackRecord.ID > 0 {
+		elapsed := time.Since(startTime).Milliseconds()
+		_ = model.PaymentCallbackDao.UpdateStatus(db, callbackRecord.ID, model.CallbackStatusProcessed, "ok", elapsed)
+	}
 	return nil
 }
 
