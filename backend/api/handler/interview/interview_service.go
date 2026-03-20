@@ -43,7 +43,7 @@ func StartInterviewStream(ctx context.Context, c *app.RequestContext) {
 		Domain:       req.Domain,
 		PositionName: req.PositionName,
 		CompanyName:  req.CompanyName,
-		Status:       "pending",
+		Status:       "in_progress",
 	}
 	recordID, err := interviewSvc.CreateInterviewRecord(ctx, recordDTO)
 	if err != nil {

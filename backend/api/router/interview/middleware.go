@@ -25,6 +25,9 @@ var jwtPublicRoutes = map[string]struct{}{
 	"/api/user/password/forgot": {},
 	"/api/user/password/reset":  {},
 	//"/api/interview/stream/start": {},
+	// 支付 webhook 回调（无需 JWT）
+	"/api/payment/webhook/stripe": {},
+	"/api/payment/webhook/paypal": {},
 }
 
 func AuthSkipper() serviceMiddleware.JWTSkipper {

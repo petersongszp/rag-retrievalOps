@@ -301,6 +301,13 @@ func (c *Config) ExpandEnv() {
 	c.GitHub.ClientSecret = expandEnvVar(c.GitHub.ClientSecret)
 	c.GitHub.RedirectURL = expandEnvVar(c.GitHub.RedirectURL)
 
+	// 展开 Payment 配置
+	c.Payment.Stripe.SecretKey = expandEnvVar(c.Payment.Stripe.SecretKey)
+	c.Payment.Stripe.WebhookSecret = expandEnvVar(c.Payment.Stripe.WebhookSecret)
+	c.Payment.Stripe.PublishableKey = expandEnvVar(c.Payment.Stripe.PublishableKey)
+	c.Payment.PayPal.ClientID = expandEnvVar(c.Payment.PayPal.ClientID)
+	c.Payment.PayPal.ClientSecret = expandEnvVar(c.Payment.PayPal.ClientSecret)
+	c.Payment.PayPal.WebhookID = expandEnvVar(c.Payment.PayPal.WebhookID)
 	// 展开 Google OAuth 配置
 	c.GoogleOAuth.ClientID = expandEnvVar(c.GoogleOAuth.ClientID)
 	c.GoogleOAuth.ClientSecret = expandEnvVar(c.GoogleOAuth.ClientSecret)

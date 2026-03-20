@@ -2,6 +2,7 @@ package ratelimiter
 
 import (
 	"context"
+	"errors"
 	"testing"
 
 	"github.com/alicebob/miniredis/v2"
@@ -320,4 +321,48 @@ func TestHashAPIKey(t *testing.T) {
 	}
 
 	t.Logf("Hash of 'sk-abc123': %s", h1)
+}
+
+func TestAllowRequest_RedisFailureModeOpen(t *testing.T) {
+	client, mr := setupTestRedis(t)
+	defer client.Close()
+	defer mr.Close()
+
+	rl := NewRedisRateLimiter(client, Config{
+		Enabled:     true,
+		DefaultRPM:  1,
+		DefaultTPM:  1000,
+		FailureMode: FailureModeOpen,
+	})
+
+	mr.Close()
+
+	if err := rl.AllowRequest(context.Background(), "key", "model"); err != nil {
+		t.Fatalf("expected fail-open behavior, got error: %v", err)
+	}
+}
+
+func TestAllowRequest_RedisFailureModeClosed(t *testing.T) {
+	client, mr := setupTestRedis(t)
+	defer client.Close()
+	defer mr.Close()
+
+	rl := NewRedisRateLimiter(client, Config{
+		Enabled:     true,
+		DefaultRPM:  1,
+		DefaultTPM:  1000,
+		FailureMode: FailureModeClosed,
+	})
+
+	mr.Close()
+
+	err := rl.AllowRequest(context.Background(), "key", "model")
+	if err == nil {
+		t.Fatal("expected dependency unavailable error, got nil")
+	}
+
+	var depErr *DependencyUnavailableError
+	if !errors.As(err, &depErr) {
+		t.Fatalf("expected DependencyUnavailableError, got %T", err)
+	}
 }

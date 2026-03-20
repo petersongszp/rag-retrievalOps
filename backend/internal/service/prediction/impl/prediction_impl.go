@@ -196,6 +196,7 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 		responseQuestions = append(responseQuestions, &predictionIDL.PredictionQuestion{
 			ID:              int64(q.ID),
 			Question:        q.Question,
+			Content:         q.Content,
 			Focus:           q.Focus,
 			ThinkingPath:    q.ThinkingPath,
 			ReferenceAnswer: q.ReferenceAnswer,
@@ -277,6 +278,7 @@ func (s *PredictionServiceImpl) GetPredictionDetail(ctx context.Context, req *pr
 		questions = append(questions, &predictionIDL.PredictionQuestion{
 			ID:              int64(q.ID),
 			Question:        q.Question,
+			Content:         q.Content,
 			Focus:           q.Focus,
 			ThinkingPath:    q.ThinkingPath,
 			ReferenceAnswer: q.ReferenceAnswer,

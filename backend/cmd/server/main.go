@@ -11,6 +11,9 @@ import (
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
 	"interview-agents/internal/mq"
+	paymentpkg "interview-agents/internal/payment"
+	stripeAdapter "interview-agents/internal/payment/providers/stripe"
+	paypalAdapter "interview-agents/internal/payment/providers/paypal"
 	"interview-agents/internal/repository"
 	"interview-agents/pkg/eino/callbacks"
 	"log"
@@ -29,21 +32,16 @@ import (
 )
 
 func main() {
-	// 1. 按相对路径加载 .env（当前目录、上一级、上两级、上三级，便于从项目根 / backend / backend/cmd/server 任一目录启动）
-	// 建议：从项目根执行 go run ./backend/cmd/server/main.go 或 cd backend && go run ./cmd/server/main.go，.env 放在项目根目录
-	envLoaded := false
-	for _, p := range []string{".env", "../.env", "../../.env", "../../../.env"} {
-		if err := godotenv.Load(p); err == nil {
-			log.Printf("Successfully loaded .env file: %s", p)
-			envLoaded = true
-			break
-		}
-	}
-	if !envLoaded {
-		log.Println("No .env file found; using system environment variables or config.yaml defaults")
+	// 1. 加载 .env 文件（如果存在）
+	if err := godotenv.Load(); err != nil {
+		log.Printf("Warning: Could not load .env file: %v", err)
+		log.Println("Application will use system environment variables or config.yaml defaults")
+	} else {
+		log.Println("Successfully loaded .env file")
 	}
 
 	// 2. 加载配置文件
+	// 获取配置文件路径（相对于 main.go 所在目录）
 	configPath := findConfigFile()
 	cfg, err := config.LoadConfig(configPath)
 	if err != nil {
@@ -62,6 +60,20 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	log.Println("Database initialized successfully")
+
+	// 注册支付渠道
+	if cfg.Payment.Stripe.SecretKey != "" {
+		paymentpkg.RegisterProvider(stripeAdapter.NewAdapter(cfg.Payment.Stripe))
+		log.Println("Stripe payment provider registered")
+	}
+	if cfg.Payment.PayPal.ClientID != "" {
+		ppAdapter, err := paypalAdapter.NewAdapter(cfg.Payment.PayPal)
+		if err != nil {
+			log.Fatalf("Failed to initialize PayPal adapter: %v", err)
+		}
+		paymentpkg.RegisterProvider(ppAdapter)
+		log.Println("PayPal payment provider registered")
+	}
 
 	//5. 初始化Redis
 	log.Println("Initializing Redis connection...")
@@ -194,6 +206,7 @@ func main() {
 	s.Use(appMiddleware.JWTMiddlewareWithSkipper(interviewRouter.AuthSkipper()))
 
 	router.GeneratedRegister(s)
+	router.RegisterCustomRoutes(s)
 
 	s.GET("/health", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "healthy"})

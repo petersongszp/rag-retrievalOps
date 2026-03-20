@@ -1,0 +1,14 @@
+general_settings:
+  store_model_in_db: true
+  store_prompts_in_spend_logs: true
+model_list:
+  - model_name: qwen3-max
+    litellm_params:
+      model: openai/qwen3-max  # add openai/ prefix to route as OpenAI provider
+      api_base: https://dashscope.aliyuncs.com/compatible-mode/v1       # add api base for OpenAI compatible provider
+      api_key:                # api key to send your model
+    model_info:
+      input_cost_per_token: 0.000006
+      output_cost_per_token: 0.00003
+      cache_creation_input_token_cost: 0.0000075
+      cache_read_input_token_cost: 0.0000006
