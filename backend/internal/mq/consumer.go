@@ -95,37 +95,34 @@ func (h *ConsumerHandler) handleTopicEvaluation(ctx context.Context, message *Me
 func (h *ConsumerHandler) handleResumeParse(ctx context.Context, message *Message) error {
 	log.Printf("[Consumer] Processing resume parse message")
 
-	// 提取负载
-	userID, ok := message.Payload["user_id"].(float64)
-	if !ok {
-		return fmt.Errorf("invalid user_id in payload")
+	payloadBytes, err := json.Marshal(message.Payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal payload: %w", err)
 	}
 
-	resumeID, ok := message.Payload["resume_id"].(float64)
-	if !ok {
-		return fmt.Errorf("invalid resume_id in payload")
+	var payload ResumeParsePayload
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return fmt.Errorf("invalid resume_parse payload: %w", err)
+	}
+	if payload.UserID == 0 || payload.ResumeID == 0 || payload.FilePath == "" {
+		return fmt.Errorf("invalid resume_parse payload values: user_id=%d resume_id=%d file_path=%q", payload.UserID, payload.ResumeID, payload.FilePath)
 	}
 
-	filePath, ok := message.Payload["file_path"].(string)
-	if !ok {
-		return fmt.Errorf("invalid file_path in payload")
-	}
-
-	log.Printf("[Consumer] Parsing resume: userID=%d, resumeID=%d, filePath=%s", uint(userID), uint64(resumeID), filePath)
+	log.Printf("[Consumer] Parsing resume: userID=%d, resumeID=%d, filePath=%s", payload.UserID, payload.ResumeID, payload.FilePath)
 
 	// 更新状态为 processing
-	err := model.ResumeDao.UpdateResumeStatus(uint64(resumeID), "processing", "")
+	err = model.ResumeDao.UpdateResumeStatus(payload.ResumeID, "processing", "")
 	if err != nil {
 		log.Printf("[Consumer] Failed to update resume status to processing: %v", err)
 		// 继续处理，不因状态更新失败而中断
 	}
 
 	// 调用简历解析服务
-	parseResult, err := resume.ParseResume(ctx, uint(userID), filePath)
+	parseResult, err := resume.ParseResume(ctx, payload.UserID, payload.FilePath)
 	if err != nil {
 		log.Printf("[Consumer] Failed to parse resume: %v", err)
 		// 更新状态为 failed
-		updateErr := model.ResumeDao.UpdateResumeStatus(uint64(resumeID), "failed", err.Error())
+		updateErr := model.ResumeDao.UpdateResumeStatus(payload.ResumeID, "failed", err.Error())
 		if updateErr != nil {
 			log.Printf("[Consumer] Failed to update resume status to failed: %v", updateErr)
 		}
@@ -136,7 +133,7 @@ func (h *ConsumerHandler) handleResumeParse(ctx context.Context, message *Messag
 	contentJSON, err := json.Marshal(parseResult)
 	if err != nil {
 		log.Printf("[Consumer] Failed to marshal parse result: %v", err)
-		updateErr := model.ResumeDao.UpdateResumeStatus(uint64(resumeID), "failed", "JSON序列化失败")
+		updateErr := model.ResumeDao.UpdateResumeStatus(payload.ResumeID, "failed", "JSON序列化失败")
 		if updateErr != nil {
 			log.Printf("[Consumer] Failed to update resume status: %v", updateErr)
 		}
@@ -144,13 +141,13 @@ func (h *ConsumerHandler) handleResumeParse(ctx context.Context, message *Messag
 	}
 
 	// 更新简历内容（状态会自动变为 completed）
-	err = model.ResumeDao.UpdateResumeContent(uint64(resumeID), string(contentJSON))
+	err = model.ResumeDao.UpdateResumeContent(payload.ResumeID, string(contentJSON))
 	if err != nil {
 		log.Printf("[Consumer] Failed to update resume content: %v", err)
 		return err
 	}
 
-	log.Printf("[Consumer] Resume parsed successfully: userID=%d, resumeID=%d", uint(userID), uint64(resumeID))
+	log.Printf("[Consumer] Resume parsed successfully: userID=%d, resumeID=%d, content_size=%d", payload.UserID, payload.ResumeID, len(contentJSON))
 	return nil
 }
 
