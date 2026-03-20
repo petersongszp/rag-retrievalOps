@@ -1,10 +1,11 @@
 module interview-agents
 
-go 1.24.0
+go 1.24.1
 
 toolchain go1.24.10
 
 require (
+	github.com/alicebob/miniredis/v2 v2.37.0
 	github.com/apache/thrift v0.21.0
 	github.com/bytedance/sonic v1.14.2
 	github.com/cloudwego/eino v0.7.28
@@ -19,6 +20,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/larksuite/oapi-sdk-go/v3 v3.4.26
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/panjf2000/ants/v2 v2.11.4
 	github.com/redis/go-redis/v9 v9.16.0
@@ -34,7 +36,6 @@ require (
 
 require (
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/alicebob/miniredis/v2 v2.37.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/buger/jsonparser v1.1.1 // indirect
 	github.com/bytedance/gopkg v0.1.3 // indirect
