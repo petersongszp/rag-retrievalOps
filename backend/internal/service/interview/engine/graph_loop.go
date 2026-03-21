@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,6 +15,7 @@ import (
 	"interview-agents/internal/agents/usecase/interview"
 	"interview-agents/internal/errors"
 	"interview-agents/internal/model"
+	"interview-agents/internal/observability/looptrace"
 	interviewservice "interview-agents/internal/service/resume"
 	mycallbacks "interview-agents/pkg/eino/callbacks"
 
@@ -520,6 +522,14 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 	// 创建智能体服务
 	agentSvc := interview.NewInterviewAgentService(session.UserID)
 	agentType := e.selectAgentType(session)
+	if nextCtx, span, ok := looptrace.StartSpan(ctx, "interview.loop", "custom"); ok && span != nil {
+		ctx = nextCtx
+		looptrace.ApplyCommonFields(ctx, span, strconv.FormatUint(uint64(session.UserID), 10), session.SessionID, map[string]interface{}{
+			"scene":      "interview",
+			"agent_type": agentType,
+		})
+		defer span.Finish(ctx)
+	}
 
 	// 创建评分器
 	evaluatorInstance, err := evaluator.NewEvaluator(ctx, session.UserID, nil)

@@ -1,6 +1,6 @@
 # 服务配置
 host: "0.0.0.0"
-port: 8888
+port: 8000
 
 # 数据库配置
 database:
@@ -130,7 +130,7 @@ DocumentSplitter:
 wechat:
   app_id: appid
   app_secret: appsecret
-  redirect_url: "http://localhost:8888/api/v1/user/wechat/callback"
+  redirect_url: "http://localhost:8000/api/v1/user/wechat/callback"
 
 # GitHub OAuth（redirect_url 需与 GitHub 应用里填写的 Authorization callback URL 一致，如前端回调页）
 github:

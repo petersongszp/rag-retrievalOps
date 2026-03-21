@@ -10,6 +10,7 @@ import (
 	"interview-agents/internal/agents/llm"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
+	"interview-agents/internal/observability/looptrace"
 	"interview-agents/internal/mq"
 	paymentpkg "interview-agents/internal/payment"
 	paypalAdapter "interview-agents/internal/payment/providers/paypal"
@@ -82,6 +83,10 @@ func main() {
 		log.Fatalf("Failed to initialize Redis: %v", err)
 	}
 	log.Println("Redis initialized successfully")
+
+	if err := looptrace.InitFromEnv(); err != nil {
+		log.Printf("[CozeLoop] initialization skipped: %v", err)
+	}
 
 	// 11.2.3 推理成本控制：Token 消耗监控与配额（Reasoning Model R1/o3 等），0 表示不限制
 	if cfg.Eino.TokenQuotaPerUserPerDay > 0 {
@@ -237,6 +242,8 @@ func main() {
 		log.Printf("Warning: Failed to close message queue: %v", err)
 	}
 	log.Println("Message queue closed")
+
+	looptrace.Close(context.Background())
 
 	// 关闭 Milvus Manager
 	//if milvusManager != nil {

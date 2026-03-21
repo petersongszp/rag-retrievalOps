@@ -15,6 +15,7 @@ import (
 
 	"interview-agents/internal/errors"
 	usermodel "interview-agents/internal/model"
+	"interview-agents/internal/observability/looptrace"
 	"interview-agents/internal/service/common"
 	"interview-agents/pkg/circuitbreaker"
 )
@@ -167,7 +168,14 @@ func CreatOpenAiChatModel(ctx context.Context, userId uint) (model.ToolCallingCh
 		}
 	}
 
-	return chatModel, nil
+	return &tracedChatModel{
+		inner:        chatModel,
+		userID:       userId,
+		modelName:    modelName,
+		protocol:     result.Protocol,
+		providerName: result.ProviderName,
+		baseURL:      url,
+	}, nil
 }
 
 // loggingTransport logs the actual request URL for debugging
@@ -178,6 +186,12 @@ type loggingTransport struct {
 
 func (t *loggingTransport) RoundTrip(req *http.Request) (*http.Response, error) {
 	fmt.Printf("[OpenAI Debug] Requesting: %s %s\n", req.Method, req.URL.String())
+
+	if traceHeaders, err := looptrace.TraceHeaders(req.Context()); err == nil {
+		for key, value := range traceHeaders {
+			req.Header.Set(key, value)
+		}
+	}
 
 	// Peek at body if present
 	if req.Body != nil {

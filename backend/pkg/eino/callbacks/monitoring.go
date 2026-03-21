@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"reflect"
+	"strconv"
 	"sync"
 	"time"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	"interview-agents/internal/alert"
+	"interview-agents/internal/observability/looptrace"
 )
 
 // Context keys for tracing
@@ -22,7 +24,22 @@ const (
 	ctxKeyTraceID   contextKey = "traceID"
 	ctxKeyStartTime contextKey = "componentStartTime"
 	ctxKeyUserID    contextKey = "userID" // 11.2.3 用于 Token 监控与配额（可选注入）
+	ctxKeyLoopState contextKey = "cozeloopState"
 )
+
+type loopSpanState struct {
+	span cozeloopSpan
+	err  error
+	once sync.Once
+}
+
+type cozeloopSpan interface {
+	SetError(ctx context.Context, err error)
+	SetInputTokens(ctx context.Context, inputTokens int)
+	SetOutputTokens(ctx context.Context, outputTokens int)
+	SetOutput(ctx context.Context, output interface{})
+	Finish(ctx context.Context)
+}
 
 // 11.2.2 实例池：sync.Pool 在 Agent 监控路径中复用 bytes.Buffer，减少分配
 var bufferPool = sync.Pool{
@@ -37,9 +54,19 @@ func WithTraceID(ctx context.Context, traceID string) context.Context {
 	return context.WithValue(ctx, ctxKeyTraceID, traceID)
 }
 
+func TraceIDFromContext(ctx context.Context) string {
+	traceID, _ := ctx.Value(ctxKeyTraceID).(string)
+	return traceID
+}
+
 // WithUserID 11.2.3 注入 UserID 到 context，供 Token 监控/配额使用（如面试引擎在 RunInterviewLoopWithGraph 前调用）
 func WithUserID(ctx context.Context, userID uint) context.Context {
 	return context.WithValue(ctx, ctxKeyUserID, userID)
+}
+
+func UserIDFromContext(ctx context.Context) uint {
+	userID, _ := ctx.Value(ctxKeyUserID).(uint)
+	return userID
 }
 
 // TokenRecorder 11.2.3 推理成本控制：Token 消耗记录与配额检查（可由 internal/agents/llm/tokenquota 实现）
@@ -71,6 +98,21 @@ func (h *MonitoringHandler) OnStart(ctx context.Context, info *callbacks.RunInfo
 
 	log.Printf("[Eino Monitor] [TraceID: %s] Start Component: %s (%s)", traceID, info.Name, info.Component)
 	ctx = context.WithValue(ctx, ctxKeyStartTime, time.Now())
+
+	spanName := info.Name
+	if info.Component != "" {
+		spanName = fmt.Sprintf("%s.%s", info.Name, info.Component)
+	}
+	if nextCtx, span, ok := looptrace.StartSpan(ctx, spanName, "custom"); ok && span != nil {
+		ctx = nextCtx
+		looptrace.ApplyCommonFields(ctx, span, strconv.FormatUint(uint64(UserIDFromContext(ctx)), 10), traceID, map[string]interface{}{
+			"component_name": info.Name,
+			"component_type": info.Component,
+			"source":         "eino_callback",
+		})
+		ctx = context.WithValue(ctx, ctxKeyLoopState, &loopSpanState{span: span})
+	}
+
 	return ctx
 }
 
@@ -98,6 +140,22 @@ func (h *MonitoringHandler) OnEnd(ctx context.Context, info *callbacks.RunInfo, 
 	log.Printf("[Eino Monitor] [TraceID: %s] End Component: %s (%s), Latency: %dms%s",
 		traceID, info.Name, info.Component, latencyMs, tokenInfo)
 
+	if state, _ := ctx.Value(ctxKeyLoopState).(*loopSpanState); state != nil && state.span != nil {
+		state.once.Do(func() {
+			if p, c, _, ok := extractTokenUsageValues(output); ok {
+				state.span.SetInputTokens(ctx, int(p))
+				state.span.SetOutputTokens(ctx, int(c))
+			}
+			state.span.SetOutput(ctx, map[string]interface{}{
+				"component_name": info.Name,
+				"component_type": info.Component,
+				"latency_ms":     latencyMs,
+				"has_error":      state.err != nil,
+			})
+			state.span.Finish(ctx)
+		})
+	}
+
 	return ctx
 }
 
@@ -124,6 +182,10 @@ func (h *MonitoringHandler) OnError(ctx context.Context, info *callbacks.RunInfo
 	log.Printf("[Eino Monitor] [TraceID: %s] Error Component: %s, Error: %v", traceID, component, err)
 	if err != nil {
 		alert.SystemException(traceID, component, err.Error())
+	}
+	if state, _ := ctx.Value(ctxKeyLoopState).(*loopSpanState); state != nil && state.span != nil && err != nil {
+		state.err = err
+		state.span.SetError(ctx, err)
 	}
 	return ctx
 }
