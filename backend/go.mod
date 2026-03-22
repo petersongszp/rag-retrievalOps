@@ -18,6 +18,7 @@ require (
 	github.com/google/uuid v1.6.0
 	github.com/joho/godotenv v1.5.1
 	github.com/larksuite/oapi-sdk-go/v3 v3.4.26
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/milvus-io/milvus-sdk-go/v2 v2.4.2
 	github.com/panjf2000/ants/v2 v2.11.4
 	github.com/plutov/paypal/v4 v4.17.0
