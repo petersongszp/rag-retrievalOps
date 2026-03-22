@@ -11,6 +11,9 @@ import (
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
 	"interview-agents/internal/mq"
+	paymentpkg "interview-agents/internal/payment"
+	paypalAdapter "interview-agents/internal/payment/providers/paypal"
+	stripeAdapter "interview-agents/internal/payment/providers/stripe"
 	"interview-agents/internal/repository"
 	"interview-agents/pkg/eino/callbacks"
 	"log"
@@ -57,6 +60,20 @@ func main() {
 		log.Fatalf("Failed to initialize database: %v", err)
 	}
 	log.Println("Database initialized successfully")
+
+	// 注册支付渠道
+	if cfg.Payment.Stripe.SecretKey != "" {
+		paymentpkg.RegisterProvider(stripeAdapter.NewAdapter(cfg.Payment.Stripe))
+		log.Println("Stripe payment provider registered")
+	}
+	if cfg.Payment.PayPal.ClientID != "" {
+		ppAdapter, err := paypalAdapter.NewAdapter(cfg.Payment.PayPal)
+		if err != nil {
+			log.Fatalf("Failed to initialize PayPal adapter: %v", err)
+		}
+		paymentpkg.RegisterProvider(ppAdapter)
+		log.Println("PayPal payment provider registered")
+	}
 
 	//5. 初始化Redis
 	log.Println("Initializing Redis connection...")

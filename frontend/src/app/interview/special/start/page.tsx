@@ -44,6 +44,7 @@ export default function SpecialInterviewStartPage() {
     sessionId,
     interviewType: '专项面试',
     domain: currentDomain,
+    questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
     },

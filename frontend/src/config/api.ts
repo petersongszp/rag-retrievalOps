@@ -38,6 +38,15 @@ export const RESUME_API = {
   DETAIL: (id: string | number) => `${API_BASE_URL}/resume/${id}`,
   DELETE: (id: string | number) => `${API_BASE_URL}/resume/${id}`,
   SET_DEFAULT: `${API_BASE_URL}/resume/set-default`,
+export const USER_API = {
+  LOGIN: `${API_BASE_URL}/user/login`,
+  REGISTER: `${API_BASE_URL}/user/register`,
+  GET_PROFILE: `${API_BASE_URL}/user/profile`,
+  SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
+  GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
+  GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
+  GOOGLE_LOGIN: `${API_BASE_URL}/user/google/login`,
+  GOOGLE_CALLBACK: `${API_BASE_URL}/user/google/callback`,
 };
 
 // AI 模型配置模块

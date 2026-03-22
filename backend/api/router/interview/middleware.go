@@ -19,10 +19,15 @@ var jwtPublicRoutes = map[string]struct{}{
 	"/api/user/wechat/callback": {},
 	"/api/user/github/login":    {},
 	"/api/user/github/callback": {},
+	"/api/user/google/login":    {},
+	"/api/user/google/callback": {},
 	"/api/demo/create/model":    {},
 	"/api/user/password/forgot": {},
 	"/api/user/password/reset":  {},
 	//"/api/interview/stream/start": {},
+	// 支付 webhook 回调（无需 JWT）
+	"/api/payment/webhook/stripe": {},
+	"/api/payment/webhook/paypal": {},
 }
 
 func AuthSkipper() serviceMiddleware.JWTSkipper {
@@ -136,6 +141,18 @@ func _githubloginMw() []app.HandlerFunc {
 }
 
 func _githubcallbackMw() []app.HandlerFunc {
+	return nil
+}
+
+func _googleMw() []app.HandlerFunc {
+	return nil
+}
+
+func _googleloginMw() []app.HandlerFunc {
+	return nil
+}
+
+func _googlecallbackMw() []app.HandlerFunc {
 	return nil
 }
 

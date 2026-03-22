@@ -4,6 +4,7 @@ package router
 
 import (
 	interview "interview-agents/api/router/interview"
+	paymentRouter "interview-agents/api/router/payment"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 )
@@ -12,4 +13,5 @@ import (
 func GeneratedRegister(r *server.Hertz) {
 	//INSERT_POINT: DO NOT DELETE THIS LINE!
 	interview.Register(r)
+	paymentRouter.Register(r)
 }

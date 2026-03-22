@@ -21,7 +21,8 @@ type (
 		WechatOpenID  *string        `json:"wechat_open_id" gorm:"uniqueIndex;size:100"`             // 微信OpenID
 		WechatUnionID *string        `json:"wechat_union_id" gorm:"uniqueIndex;size:100"`            // 微信UnionID
 		GitHubID      *string        `json:"github_id" gorm:"column:git_hub_id;uniqueIndex;size:64"` // GitHub 用户 ID（表列为 git_hub_id）
-		Nickname      string         `json:"nickname" gorm:"size:100"`                               // 昵称（微信/GitHub）
+		GoogleID      *string        `json:"google_id" gorm:"column:google_id;uniqueIndex;size:64"`  // Google 用户 ID（sub）
+		Nickname      string         `json:"nickname" gorm:"size:100"`                               // 昵称（微信/GitHub/Google）
 		Avatar        string         `json:"avatar" gorm:"size:255"`                                 // 头像
 		CreatedAt     time.Time      `json:"created_at"`
 		UpdatedAt     time.Time      `json:"updated_at"`
@@ -123,6 +124,21 @@ func (u *_User) FindByGitHubID(githubID string) (*User, error) {
 	var user User
 	err := getDB().
 		Where("git_hub_id = ?", githubID).
+		First(&user).Error
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
+}
+
+// FindByGoogleID 根据 Google 用户 ID（sub）查询用户
+func (u *_User) FindByGoogleID(googleID string) (*User, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var user User
+	err := getDB().
+		Where("google_id = ?", googleID).
 		First(&user).Error
 	if err != nil {
 		return nil, err
