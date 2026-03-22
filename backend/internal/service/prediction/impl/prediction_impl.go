@@ -107,7 +107,7 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 
 			for idx := range result.Questions {
 				if strings.TrimSpace(result.Questions[idx].Content) == "" {
-					result.Questions[idx].Content = fmt.Sprintf("方向：%s", module.Direction)
+					result.Questions[idx].Content = fmt.Sprintf("Direction: %s", module.Direction)
 				} else {
 					result.Questions[idx].Content = fmt.Sprintf("[%s] %s", module.Direction, result.Questions[idx].Content)
 				}
@@ -214,38 +214,42 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 }
 
 func (s *PredictionServiceImpl) buildRequirements(req *predictionIDL.PredictRequest) string {
-	requirements := fmt.Sprintf(`押题要求：
-- 类型：%s
-- 语言：%s
-- 岗位：%s
-- 难度：%s
-`, req.PredictionType, req.Language, req.JobTitle, req.Difficulty)
+	requirements := fmt.Sprintf(`Question generation requirements:
+- Type: %s
+- Output language: English
+- Job title: %s
+- Difficulty: %s
+`, req.PredictionType, req.JobTitle, req.Difficulty)
 
 	if req.CompanyName != nil {
-		requirements += fmt.Sprintf("- 目标公司：%s\n", *req.CompanyName)
+		requirements += fmt.Sprintf("- Target company: %s\n", *req.CompanyName)
 	}
+	requirements += "- Return all generated content in English.\n"
 
 	return requirements
 }
 
 func (s *PredictionServiceImpl) buildSplitPrompt(resumeContent string, req *predictionIDL.PredictRequest) string {
-	return fmt.Sprintf(`简历内容：
+	return fmt.Sprintf(`Resume content:
 %s
 
-请将上述简历拆分成 %d 个方向模块。
-每个方向模块都需要便于后续独立生成面试题。
+Please split the resume above into %d direction modules.
+Each direction module should support independent interview question generation.
 
-%s`, resumeContent, predictionAgent.DirectionCount, s.buildRequirements(req))
+%s
+
+Important: Return JSON values in English only.`, resumeContent, predictionAgent.DirectionCount, s.buildRequirements(req))
 }
 
 func (s *PredictionServiceImpl) buildDirectionPrompt(module predictionAgent.DirectionModule, requirements string) string {
-	return fmt.Sprintf(`方向：%s
+	return fmt.Sprintf(`Direction: %s
 
-方向模块内容：
+Direction module content:
 %s
 
 %s
-请围绕该方向严格生成 %d 道面试题。`, module.Direction, module.Content, requirements, predictionAgent.QuestionsPerDirection)
+Please generate exactly %d interview question(s) for this direction.
+Return all content in English.`, module.Direction, module.Content, requirements, predictionAgent.QuestionsPerDirection)
 }
 
 func runAgentAndCollectContent(ctx context.Context, agent adk.Agent, prompt string) (string, error) {

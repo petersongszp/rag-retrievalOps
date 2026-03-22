@@ -115,17 +115,17 @@ func GetRoleConfig(roleType RoleType) RoleConfig {
 // 这是一个临时方法，用于兼容现有的基于前缀的角色识别
 func DetectRoleFromContent(content string) RoleType {
 	// 优先检查副面试官/技术面试官关键词
-	if containsAny(content, []string{"副面试官", "技术副面", "技术面试官", "我是技术面试官："}) {
+	if containsAny(content, []string{"副面试官", "技术副面", "技术面试官", "我是技术面试官：", "I am the technical interviewer:"}) {
 		return RoleTechInterviewer
 	}
 
 	// 检查项目面试官
-	if containsAny(content, []string{"项目面试官", "项目负责人", "项目专家", "我是项目面试官："}) {
+	if containsAny(content, []string{"项目面试官", "项目负责人", "项目专家", "我是项目面试官：", "I am the project interviewer:"}) {
 		return RoleProjectInterviewer
 	}
 
 	// 检查主面试官
-	if containsAny(content, []string{"主面试官", "我是主面试官："}) {
+	if containsAny(content, []string{"主面试官", "我是主面试官：", "I am the main interviewer:"}) {
 		return RoleMainInterviewer
 	}
 

@@ -9,8 +9,7 @@ import (
 )
 
 const (
-	DirectionCount = 5
-	// todo 更改
+	DirectionCount           = 5
 	QuestionsPerDirection    = 1
 	TotalPredictionQuestions = DirectionCount * QuestionsPerDirection
 )
@@ -49,23 +48,24 @@ func NewResumeSplitAgent(userId uint) (adk.Agent, error) {
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "ResumeDirectionSplitAgent",
-		Description: "将简历拆分为押题方向模块",
-		Instruction: `你是一个资深面试策略分析师。你的任务是把输入的简历内容拆分成 4 个可独立出题的方向模块。
+		Description: "Split resume content into independent prediction directions",
+		Instruction: `You are a senior interview strategy analyst. Split the input resume into 5 independent direction modules for question generation.
 
-【重要要求】
-1. 只返回 JSON，不要 markdown 代码块，不要额外解释。
-2. 必须严格返回 4 个方向，且方向名称不能重复。
-3. 每个方向必须包含与该方向强相关的简历内容摘要，便于下游 Agent 独立出题。
-4. 方向应覆盖候选人的核心技术能力、项目实践、基础原理、系统设计/性能优化等维度。
+[Important Requirements]
+1. Return JSON only. Do not use markdown code fences and do not add explanations.
+		2. Return exactly 5 directions, and direction names must be unique.
+3. Each direction must include a concise resume summary that is highly relevant to that direction.
+4. Directions should cover core technical skills, project experience, fundamentals, and system design/performance optimization.
+5. All values in the JSON output must be written in English.
 
-【JSON 格式模板】
+[JSON Template]
 {
 	"directions": [
     {
-		  "direction": "方向名称",
-		  "content": "该方向的简历关键信息摘要"
+		  "direction": "Direction name",
+		  "content": "Key resume summary for this direction"
     },
-		... (共4个)
+		... (total 5)
   ]
 }
 `,
@@ -88,29 +88,30 @@ func NewDirectionalPredictionAgent(userId uint, direction string) (adk.Agent, er
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "DirectionalPredictionAgent_" + direction,
-		Description: "根据指定方向生成面试押题",
-		Instruction: `你是一个资深的面试官和技术专家。你的任务是根据给定的“单一方向模块内容”和押题要求，生成该方向下的 3 道面试题。
+		Description: "Generate interview prediction questions for a specific direction",
+		Instruction: `You are a senior interviewer and technical expert. Based on the given single direction module and requirements, generate 1 interview question for that direction.
 
-【重要要求】
-1. 必须严格生成 3 道题目，少于或多于 3 道都不允许。
-2. 只返回标准 JSON，不要 markdown 标记（如 '''json），不要解释性文字。
-3. 题目内容必须紧扣输入的方向模块，不要偏离方向。
+		[Important Requirements]
+		1. Generate exactly 1 question. Fewer or more are not allowed.
+		2. Return valid JSON only. Do not use markdown and do not add explanations.
+		3. Questions must stay tightly aligned with the input direction module.
+		4. All fields in the JSON output must be written in English.
 
-【JSON 格式模板】
-{
-  "questions": [
-    {
-      "question": "问题内容",
-      "content": "【重点考察】考察方向标题",
-      "focus": "重点考察（例如：项目经历真实性验证、基础知识掌握等）",
-      "thinking_path": "回答思路",
-      "reference_answer": "参考答案",
-      "follow_up": "可能追问（如果是多个追问，请用数组格式；如果是单个，请用字符串）"
-    },
-    ... (共3个)
-  ]
-}
-`,
+		[JSON Template]
+		{
+		  "questions": [
+			{
+			  "question": "Question text",
+			  "content": "[Key Assessment] Assessment topic",
+			  "focus": "What this question evaluates",
+			  "thinking_path": "Suggested answering approach",
+			  "reference_answer": "Reference answer",
+			  "follow_up": "Possible follow-up question(s)"
+			},
+			... (total 1)
+		  ]
+		}
+		`,
 		Model: model,
 	})
 	if err != nil {
