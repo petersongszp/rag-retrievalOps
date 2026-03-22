@@ -105,6 +105,11 @@ func Register(r *server.Hertz) {
 				_github.GET("/login", append(_githubloginMw(), interview.GitHubLogin)...)
 				_github.POST("/callback", append(_githubcallbackMw(), interview.GitHubCallback)...)
 			}
+			{
+				_google := _user.Group("/google", _googleMw()...)
+				_google.GET("/login", append(_googleloginMw(), interview.GoogleLogin)...)
+				_google.POST("/callback", append(_googlecallbackMw(), interview.GoogleCallback)...)
+			}
 		}
 	}
 }

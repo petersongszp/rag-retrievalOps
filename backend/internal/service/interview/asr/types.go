@@ -26,6 +26,10 @@ type AudioTranscriptionProvider interface {
 	Transcribe(ctx context.Context, req AudioTranscriptionRequest) (*AudioTranscriptionResult, error)
 }
 
+type TranscriptModifier interface {
+	Modify(ctx context.Context, req TranscriptModifyRequest) (string, error)
+}
+
 type Capability struct {
 	Enabled  bool   `json:"enabled"`
 	Reason   string `json:"reason,omitempty"`
@@ -41,6 +45,7 @@ type AudioTranscriptionRequest struct {
 	SessionID     string
 	InterviewType string
 	Domain        string
+	QuestionText  string
 }
 
 type AudioTranscriptionResult struct {
@@ -48,6 +53,11 @@ type AudioTranscriptionResult struct {
 	Provider string `json:"provider"`
 	Model    string `json:"model"`
 	TraceID  string `json:"trace_id,omitempty"`
+}
+
+type TranscriptModifyRequest struct {
+	QuestionText string
+	Transcript   string
 }
 
 type ServiceError struct {

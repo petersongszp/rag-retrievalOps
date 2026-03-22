@@ -3,6 +3,7 @@ package comprehensive
 // outputFormatPlainText 纯文本输出格式（用于SSE流式场景）
 const outputFormatPlainText = `
 输出要求：
+- 【语言】所有面向候选人提出的技术问题、追问、场景描述须使用英文（English）；身份前缀（如「我是主面试官：」）可保留中文，但前缀之后面向候选人的正文必须为英文。
 - 直接输出问题文本
 - 不要包含任何JSON格式、markdown标记或其他格式化符号
 - 不要输出"问题："、"Question:"等前缀

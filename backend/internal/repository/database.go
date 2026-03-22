@@ -71,6 +71,12 @@ func migrateDatabase() error {
 		&model.Resume{},
 		&model.PredictionRecord{},
 		&model.PredictionQuestion{},
+		// 支付模块
+		&model.PaymentOrder{},
+		&model.PaymentAttempt{},
+		&model.Subscription{},
+		&model.PaymentEvent{},
+		&model.PaymentCallback{},
 	)
 }
 

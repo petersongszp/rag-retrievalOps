@@ -43,6 +43,7 @@ func TranscribeInterviewAudio(ctx context.Context, c *app.RequestContext) {
 	sessionID := c.PostForm("session_id")
 	interviewType := c.PostForm("interview_type")
 	domain := c.PostForm("domain")
+	questionText := c.PostForm("question_text")
 
 	fileHeader, err := c.FormFile("file")
 	if err != nil || fileHeader == nil {
@@ -74,6 +75,7 @@ func TranscribeInterviewAudio(ctx context.Context, c *app.RequestContext) {
 		SessionID:     sessionID,
 		InterviewType: interviewType,
 		Domain:        domain,
+		QuestionText:  questionText,
 	})
 	if err != nil {
 		log.Printf(
@@ -87,7 +89,7 @@ func TranscribeInterviewAudio(ctx context.Context, c *app.RequestContext) {
 	}
 
 	log.Printf(
-		"[ASR] transcription success user_id=%d session_id=%s provider=%s model=%s trace_id=%s text=%q",
+		"[ASR] transcription success user_id=%d session_id=%s provider=%s model=%s trace_id=%s final_text=%q",
 		userID,
 		sessionID,
 		result.Provider,
