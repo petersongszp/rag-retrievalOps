@@ -10,7 +10,7 @@ export const predictionService = {
   },
 
   getPredictionDetail: async (id: number) => {
-    // The user gave `http://localhost:8888/api/prediction/2` which implies GET /prediction/:id
+    // The user gave `http://localhost:8899/api/prediction/2` which implies GET /prediction/:id
     return apiClient.get<any, GetPredictionDetailResponse>(PREDICTION_API.DETAIL(id));
   },
 

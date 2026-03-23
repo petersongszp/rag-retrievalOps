@@ -17,7 +17,7 @@ from ragas import evaluate
 from ragas.metrics import faithfulness, answer_relevancy, context_recall
 
 # Configuration
-API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8888")
+API_BASE_URL = os.getenv("API_BASE_URL", "http://localhost:8899")
 DATASET_FILE = "dataset.json"
 REPORT_FILE = "evaluation_report.json"
 

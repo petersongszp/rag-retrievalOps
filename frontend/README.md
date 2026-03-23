@@ -43,7 +43,7 @@ npm -v
 
 ```env
 # API基础URL（指向后端服务）
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8000/api
+NEXT_PUBLIC_API_BASE_URL=http://localhost:8899/api
 
 # 开发环境配置（如需其他配置可在此添加）
 ```

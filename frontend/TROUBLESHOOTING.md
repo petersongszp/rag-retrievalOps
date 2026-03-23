@@ -4,7 +4,7 @@
 
 ### 错误信息
 ```
-已拦截跨源请求：同源策略禁止读取位于 http://localhost:8888/api/interview/start/stream 的远程资源。
+已拦截跨源请求：同源策略禁止读取位于 http://localhost:8899/api/interview/start/stream 的远程资源。
 （原因：CORS 头缺少 'Access-Control-Allow-Origin'）。状态码：404。
 ```
 
@@ -25,13 +25,13 @@ cd backend
 go run main.go
 ```
 
-2. 检查后端是否监听在8888端口：
+2. 检查后端是否监听在8899端口：
 ```bash
 # Windows
-netstat -ano | findstr :8888
+netstat -ano | findstr :8899
 
 # Linux/Mac
-lsof -i :8888
+lsof -i :8899
 ```
 
 3. 使用前端诊断工具：
@@ -80,7 +80,7 @@ var jwtPublicRoutes = map[string]struct{}{
 [检测] 测试后端服务连接...
 [检测] 后端服务连接正常
 [面试启动] 尝试方案1: 使用Authorization header
-[面试启动] 请求URL: http://localhost:8888/api/interview/start/stream
+[面试启动] 请求URL: http://localhost:8899/api/interview/start/stream
 [面试启动] 收到响应: 404 Not Found
 ```
 
@@ -98,7 +98,7 @@ A: 404会导致后端不返回CORS头，先解决404问题
 A: 重新登录获取新的token
 
 **Q: 无法连接到后端服务**
-A: 检查后端是否运行在 http://localhost:8888
+A: 检查后端是否运行在 http://localhost:8899
 
 ### 技术细节
 

@@ -53,11 +53,11 @@ RUN mkdir -p logs && chown -R appuser:appuser /app
 USER appuser
 
 # 暴露端口
-EXPOSE 8888
+EXPOSE 8899
 
 # 健康检查
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f -X OPTIONS http://localhost:8888/health || exit 1
+    CMD curl -f -X OPTIONS http://localhost:8899/health || exit 1
 
 # 启动应用
 CMD ["./main"]

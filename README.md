@@ -45,7 +45,7 @@ docker-compose up -d mysql redis etcd minio milvus
     go mod tidy
     go run ./cmd/server/main.go
     ```
-*   **访问地址**：http://localhost:8888 (API Base: `/api`)
+*   **访问地址**：http://localhost:8899 (API Base: `/api`)
 
 ### 4. 前端应用 (Frontend)
 *   **安装依赖**：

@@ -80,4 +80,4 @@ python evaluate_trulens.py --no-api  # 仅生成维度占位报告（可不设 O
 
 - **Ragas 报错**: 确认 `OPENAI_API_KEY` 已设置；`ragas` 版本过新时若 API 变更可参考 [Ragas 文档](https://docs.ragas.io/) 调整 `evaluate.py`。
 - **TruLens 报错**: 确认已安装 `trulens` 与 `trulens-providers-openai`；Provider 方法名随版本可能不同，可查阅 [TruLens 文档](https://www.trulens.org/)。
-- **Go API 连接失败**: 确保后端服务运行在 `API_BASE_URL`（默认 `http://localhost:8888`）。
+- **Go API 连接失败**: 确保后端服务运行在 `API_BASE_URL`（默认 `http://localhost:8899`）。
