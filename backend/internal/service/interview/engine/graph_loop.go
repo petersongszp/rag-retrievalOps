@@ -103,92 +103,131 @@ func buildQuestionPrompt(state *InterviewState) (prompt string) {
 	isGroupInterview := state.AgentType == interview.GroupInterview
 
 	if state.QuestionIndex == 1 {
-		prompt = buildFirstQuestionPrompt(state, isGroupInterview)
+		prompt = buildFirstQuestionPrompt(state, isGroupInterview, true)
 		return
 	}
 
-	prompt = buildFollowUpPrompt(state, isGroupInterview)
+	prompt = buildFollowUpPrompt(state, isGroupInterview, true)
 	// 清空 NextActionHint，避免影响下一轮
 	state.NextActionHint = ""
 	return
 }
 
 // buildFirstQuestionPrompt 构建首题提示词
-func buildFirstQuestionPrompt(state *InterviewState, isGroupInterview bool) string {
-	if isGroupInterview {
-		// 多人面试：需要介绍团队和使用身份前缀
-		return fmt.Sprintf(`请作为面试官团队的负责人，根据简历和难度等级开始面试。
+func buildFirstQuestionPrompt(state *InterviewState, isGroupInterview bool, isEnglishInterview bool) string {
+	if isEnglishInterview {
+		return fmt.Sprintf(`Please act as the interviewer and start the interview based on the resume and difficulty level.
 
-简历ID: %d
-难度等级: %s
+Resume ID: %d
+Difficulty: %s
 
-要求：
-1. 请先向候选人问好并介绍面试团队（主面试官、技术面试官等）
-2. 然后提出第一个技术问题（面向候选人的提问正文必须使用英文 English）
-3. 必须包含身份前缀（如"我是主面试官张伟："）
+Requirements:
+1. Briefly greet the candidate, then ask the first technical question directly
+2. Ask exactly one question
+3. Keep the output in English only
 `, state.Session.ResumeId, state.Session.Difficulty)
 	}
 
-	// 普通面试：简洁直接，无需团队介绍
-	return fmt.Sprintf(`请作为面试官，根据简历和难度等级开始面试。
+	if isGroupInterview {
+		return fmt.Sprintf(`Please act as the lead interviewer and start this panel interview based on the resume and difficulty level.
 
-简历ID: %d
-难度等级: %s
+		Resume ID: %d
+		Difficulty: %s
 
-要求：
-1. 简单问候后直接提出第一个技术问题（面向候选人的提问必须使用英文 English）
+		Requirements:
+		1. Briefly greet the candidate and introduce the interview panel
+		2. Then ask the first technical question
+		3. Include an interviewer identity prefix (for example, "I am the main interviewer:")
+		4. Keep the output in English only
+`, state.Session.ResumeId, state.Session.Difficulty)
+	}
+
+	return fmt.Sprintf(`Please act as the interviewer and start the interview based on the resume and difficulty level.
+
+	Resume ID: %d
+	Difficulty: %s
+
+	Requirements:
+	1. Briefly greet the candidate, then ask the first technical question directly
+	2. Ask exactly one question
+	3. Keep the output in English only
 `, state.Session.ResumeId, state.Session.Difficulty)
 }
 
 // buildFollowUpPrompt 构建后续问题提示词
-func buildFollowUpPrompt(state *InterviewState, isGroupInterview bool) string {
+func buildFollowUpPrompt(state *InterviewState, isGroupInterview bool, isEnglishInterview bool) string {
 	// 构建历史记录文本
-	historyText := buildHistoryText(state.RecentHistory)
+	historyText := buildHistoryText(state.RecentHistory, isEnglishInterview)
 	actionHint := state.NextActionHint
 
-	if isGroupInterview {
-		// 多人面试：保留身份前缀要求
-		return fmt.Sprintf(`根据简历、难度等级和最近的问答历史，推动面试进程。
+	if isEnglishInterview {
+		return fmt.Sprintf(`Based on the resume, difficulty, and recent Q&A history, continue the interview.
 
-简历ID: %d
-难度等级: %s
-当前话题: %s
+Resume ID: %d
+Difficulty: %s
+Current topic: %s
 %s
 
-最近的问答历史（前%d道题）：
+Recent Q&A history (latest %d question(s)):
 %s
 
-要求：
-1. 根据上述提示进行提问（面向候选人的提问与追问必须使用英文 English）
-2. 避免重复之前问过的问题
-3. 必须包含身份前缀（如"我是主面试官张伟："或"我是技术面试官李明："）
+Requirements:
+1. Ask the next question using the guidance above
+2. Avoid repeating previously asked questions
+3. Output in English only
 `, state.Session.ResumeId, state.Session.Difficulty, state.TopicTracker.CurrentTopic, actionHint, len(state.RecentHistory), historyText)
 	}
 
-	// 普通面试：无需身份前缀
-	return fmt.Sprintf(`根据简历、难度等级和最近的问答历史，推动面试进程。
+	if isGroupInterview {
+		return fmt.Sprintf(`Based on the resume, difficulty, and recent Q&A history, continue the panel interview.
 
-简历ID: %d
-难度等级: %s
-当前话题: %s
+		Resume ID: %d
+		Difficulty: %s
+		Current topic: %s
 %s
 
-最近的问答历史（前%d道题）：
+		Recent Q&A history (latest %d question(s)):
 %s
 
-其他注意事项：
-1. 根据上述提示进行提问（面向候选人的提问与追问必须使用英文 English）
-2. 避免重复之前问过的问题
+		Requirements:
+		1. Ask the next question using the guidance above
+		2. Avoid repeating previously asked questions
+		3. Include an interviewer identity prefix (for example, "I am the main interviewer:" or "I am the technical interviewer:")
+		4. Output in English only
+`, state.Session.ResumeId, state.Session.Difficulty, state.TopicTracker.CurrentTopic, actionHint, len(state.RecentHistory), historyText)
+	}
+
+	return fmt.Sprintf(`Based on the resume, difficulty, and recent Q&A history, continue the interview.
+
+	Resume ID: %d
+	Difficulty: %s
+	Current topic: %s
+%s
+
+	Recent Q&A history (latest %d question(s)):
+%s
+
+	Requirements:
+	1. Ask the next question using the guidance above
+	2. Avoid repeating previously asked questions
+	3. Output in English only
 `, state.Session.ResumeId, state.Session.Difficulty, state.TopicTracker.CurrentTopic, actionHint, len(state.RecentHistory), historyText)
 }
 
 // buildHistoryText 构建问答历史文本
-func buildHistoryText(history []historyItem) string {
+func buildHistoryText(history []historyItem, isEnglishInterview bool) string {
 	if len(history) == 0 {
+		if isEnglishInterview {
+			return "(No history yet)"
+		}
 		return "（暂无历史记录）"
 	}
 	var sb strings.Builder
 	for i, h := range history {
+		if isEnglishInterview {
+			sb.WriteString(fmt.Sprintf("Question %d: %s\nAnswer %d: %s\n\n", i+1, h.Question, i+1, h.Answer))
+			continue
+		}
 		sb.WriteString(fmt.Sprintf("问题%d：%s\n回答%d：%s\n\n", i+1, h.Question, i+1, h.Answer))
 	}
 	return sb.String()
@@ -337,16 +376,15 @@ func evaluateNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 func deepenNode(ctx context.Context, state *InterviewState) (*InterviewState, error) {
 	log.Printf("[Graph] Branch: DEEPEN - Q%d score=%.2f, going deeper", state.QuestionIndex, state.EvalResult.Overall)
 	// 设置下一题提示：深入追问（自然过渡，不暴露策略）
-	state.NextActionHint = `请基于候选人刚才的回答，自然地深入追问一个相关的技术细节或原理性问题。
-语气要求：
-- 像正常对话一样自然衔接，例如"刚才你提到了...，那么..."或"关于这个，我想再深入问一下..."
-- 不要说"让我们深入一下"或"接下来我们深入探讨"这类生硬的过渡语
-- 直接提出问题，保持对话流畅
-追问方向（任选其一）：
-- 刚才回答中提到的某个概念的底层实现
-- 该方案在边界情况下的表现
-- 相关的性能优化或最佳实践
-【语言】面向候选人提出的实际问题必须使用英文（English）。`
+	state.NextActionHint = `Based on the candidate's latest answer, ask a deeper follow-up question about a related technical detail or principle.
+Tone requirements:
+- Keep the transition natural, like in a real conversation
+- Do not use stiff meta phrases like "let's go deeper"
+- Ask the question directly and keep the flow smooth
+Follow-up directions (pick one):
+- Underlying implementation of a concept mentioned in the answer
+- Behavior under edge cases
+- Performance optimization or best practices`
 
 	state.QuestionIndex++
 	return state, nil
@@ -357,16 +395,15 @@ func continueNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 	log.Printf("[Graph] Branch: CONTINUE - Q%d score=%.2f, continuing topic", state.QuestionIndex, state.EvalResult.Overall)
 
 	// 设置下一题提示：继续当前话题（自然过渡）
-	state.NextActionHint = `请继续考察当前话题的其他知识点。
-语气要求：
-- 自然过渡，例如"好的，那我们再看看..."或"明白了，接下来问你一个关于..."
-- 不要使用"继续当前话题"这类元描述
-- 像同事间技术交流一样自然
-考察方向：
-- 当前话题下尚未覆盖的子知识点
-- 从不同应用场景考察同一技术
-- 相关的工程实践问题
-【语言】面向候选人提出的实际问题必须使用英文（English）。`
+	state.NextActionHint = `Continue evaluating other knowledge points within the current topic.
+Tone requirements:
+- Use a natural transition as in normal technical discussion
+- Avoid meta descriptions such as "continue the current topic"
+- Keep it conversational and smooth
+Evaluation directions:
+- Subtopics not covered yet under the current topic
+- Same technology from different real-world scenarios
+- Related engineering-practice questions`
 
 	state.QuestionIndex++
 	return state, nil
@@ -376,17 +413,15 @@ func continueNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 func lowerNode(ctx context.Context, state *InterviewState) (*InterviewState, error) {
 	log.Printf("[Graph] Branch: LOWER - Q%d score=%.2f, lowering difficulty", state.QuestionIndex, state.EvalResult.Overall)
 	// 设置下一题提示：降低难度（自然过渡，不暴露意图）
-	state.NextActionHint = `请换一个更基础的问题来考察候选人。
-语气要求（重要！）：
-- 绝对不能说"让我们从基础开始"、"换个简单的问题"、"看来需要从更基础的层面"这类话
-- 不要暗示前一题回答不好
-- 自然过渡，例如"好，那我换个角度问一下..."或"嗯，那我问你另一个问题..."
-- 语气保持轻松友好，像正常对话
-问题选择：
-- 该话题下更基础的概念性问题
-- 候选人日常工作中一定会用到的知识
-- 可以从具体使用场景入手，而非抽象原理
-【语言】面向候选人提出的实际问题必须使用英文（English）。`
+	state.NextActionHint = `Switch to a more fundamental question to continue evaluating the candidate.
+Tone requirements (important):
+- Never imply the previous answer was poor
+- Use a natural transition and keep a friendly tone
+- Avoid saying things like "let's simplify this"
+Question selection:
+- More fundamental concepts under the same topic
+- Knowledge the candidate should use in daily work
+- Start from concrete use cases rather than abstract theory`
 
 	state.QuestionIndex++
 	return state, nil
@@ -403,17 +438,15 @@ func switchNode(ctx context.Context, state *InterviewState) (*InterviewState, er
 	state.TopicTracker.CurrentTopic = newTopic
 
 	// 设置下一题提示：切换话题（自然过渡）
-	state.NextActionHint = fmt.Sprintf(`请切换到新话题"%s"开始提问。
-语气要求（重要！）：
-- 自然过渡，例如"好，那我们聊聊另一块..."或"接下来我想问问你关于%s的问题..."
-- 不要说"让我们切换话题"、"现在换一个话题"这类生硬的表达
-- 不要解释为什么要换话题
-- 像朋友聊天一样自然转移话题
-问题选择：
-- 新话题下的入门级问题
-- 与候选人简历/经历相关的切入点（如有）
-- 偏实际应用的问题，便于候选人发挥
-【语言】面向候选人提出的实际问题必须使用英文（English）。`, newTopic, newTopic)
+	state.NextActionHint = fmt.Sprintf(`Switch to the new topic "%s" and ask the next question.
+Tone requirements (important):
+- Transition naturally without explicitly saying you are switching topics
+- Do not explain why the topic is changing
+- Keep the transition conversational and smooth
+Question selection:
+- Entry-level question under the new topic
+- Prefer angles connected to the candidate's resume/experience when possible
+- Use practical questions to encourage concrete answers`, newTopic)
 
 	state.QuestionIndex++
 	return state, nil

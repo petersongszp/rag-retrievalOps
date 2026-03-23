@@ -161,4 +161,3 @@ func TestSubscriptionStatusTransitions(t *testing.T) {
 		t.Fatalf("expected CANCELED, got %s", s.Status)
 	}
 }
-

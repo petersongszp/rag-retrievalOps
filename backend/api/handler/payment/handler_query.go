@@ -111,4 +111,3 @@ func GetActiveSubscription(ctx context.Context, c *app.RequestContext) {
 
 	response.Success(ctx, c, result)
 }
-

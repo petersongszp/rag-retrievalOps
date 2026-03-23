@@ -1,6 +1,7 @@
 package model
 
 import (
+	"fmt"
 	"time"
 )
 
@@ -182,10 +183,17 @@ func (r *_Resume) UpdateResumeStatus(id uint64, status string, errorMsg string) 
 	if errorMsg != "" {
 		updates["error_msg"] = errorMsg
 	}
-	return getDB().
+	tx := getDB().
 		Model(&Resume{}).
 		Where("id = ?", id).
-		Updates(updates).Error
+		Updates(updates)
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return fmt.Errorf("resume not found or not updated: id=%d", id)
+	}
+	return nil
 }
 
 // UpdateResumeContent 更新简历解析内容（解析成功时调用）
@@ -193,11 +201,18 @@ func (r *_Resume) UpdateResumeContent(id uint64, content string) error {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
-	return getDB().
+	tx := getDB().
 		Model(&Resume{}).
 		Where("id = ?", id).
 		Updates(map[string]interface{}{
 			"content": content,
 			"status":  "completed",
-		}).Error
+		})
+	if tx.Error != nil {
+		return tx.Error
+	}
+	if tx.RowsAffected == 0 {
+		return fmt.Errorf("resume not found or content not updated: id=%d", id)
+	}
+	return nil
 }

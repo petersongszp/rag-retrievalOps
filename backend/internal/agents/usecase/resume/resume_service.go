@@ -65,11 +65,12 @@ func ParseResume(ctx context.Context, userId uint, resumeFilePath string) (*Resu
 	startTime := time.Now()
 	log.Printf("[步骤1/3] 开始解析 PDF 文件...")
 
-	pdfReq := tools.PDFToTextRequest{
-		FilePath: resumeFilePath,
-		ToPages:  false,
+	pdfReq := tools.ResumeExtractionRequest{
+		FilePath:  resumeFilePath,
+		EnableOCR: true,
+		Language:  "zh",
 	}
-	pdfResult, err := tools.ConvertPDFToText(timeoutCtx, &pdfReq)
+	pdfResult, err := tools.ExtractResume(timeoutCtx, &pdfReq)
 	if err != nil {
 		log.Printf("[步骤1失败] PDF解析失败: %v", err)
 		return nil, fmt.Errorf("pdf parsing failed: %w", err)
@@ -80,7 +81,7 @@ func ParseResume(ctx context.Context, userId uint, resumeFilePath string) (*Resu
 	}
 
 	pdfDuration := time.Since(startTime)
-	contentLen := len(pdfResult.Content)
+	contentLen := len(pdfResult.RawText)
 	log.Printf("[步骤1完成] PDF 解析成功，文本长度: %d 字符，耗时: %v", contentLen, pdfDuration)
 
 	if contentLen == 0 {
@@ -116,7 +117,7 @@ JSON 格式要求（请严格遵守此结构）：
   "potential_weaknesses": "..."
 }`
 
-	userContent := fmt.Sprintf("这是候选人的简历内容：\n\n%s", pdfResult.Content)
+	userContent := fmt.Sprintf("这是候选人的简历内容：\n\n%s", pdfResult.RawText)
 
 	messages := []*schema.Message{
 		{

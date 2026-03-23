@@ -10,16 +10,16 @@ import (
 type OrderStatus string
 
 const (
-	OrderStatusCreated          OrderStatus = "CREATED"
-	OrderStatusPendingPayment   OrderStatus = "PENDING_PAYMENT"
-	OrderStatusProcessing       OrderStatus = "PROCESSING"
-	OrderStatusPaid             OrderStatus = "PAID"
-	OrderStatusFulfilled        OrderStatus = "FULFILLED"
-	OrderStatusFailed           OrderStatus = "FAILED"
-	OrderStatusCanceled         OrderStatus = "CANCELED"
-	OrderStatusExpired          OrderStatus = "EXPIRED"
-	OrderStatusRefunding        OrderStatus = "REFUNDING"
-	OrderStatusRefunded         OrderStatus = "REFUNDED"
+	OrderStatusCreated           OrderStatus = "CREATED"
+	OrderStatusPendingPayment    OrderStatus = "PENDING_PAYMENT"
+	OrderStatusProcessing        OrderStatus = "PROCESSING"
+	OrderStatusPaid              OrderStatus = "PAID"
+	OrderStatusFulfilled         OrderStatus = "FULFILLED"
+	OrderStatusFailed            OrderStatus = "FAILED"
+	OrderStatusCanceled          OrderStatus = "CANCELED"
+	OrderStatusExpired           OrderStatus = "EXPIRED"
+	OrderStatusRefunding         OrderStatus = "REFUNDING"
+	OrderStatusRefunded          OrderStatus = "REFUNDED"
 	OrderStatusPartiallyRefunded OrderStatus = "PARTIALLY_REFUNDED"
 )
 
@@ -100,4 +100,3 @@ func (d *_PaymentOrder) FindByUserID(userID uint, page, pageSize int) ([]*Paymen
 	err := query.Offset((page - 1) * pageSize).Limit(pageSize).Order("created_at DESC").Find(&orders).Error
 	return orders, total, err
 }
-

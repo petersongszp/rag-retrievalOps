@@ -12,14 +12,14 @@ const (
 
 // CheckoutRequest 创建支付请求
 type CheckoutRequest struct {
-	OrderNo     string
-	Amount      int64  // 最小货币单位
-	Currency    string // e.g. "usd"
-	ProductName string
-	SuccessURL  string
-	CancelURL   string
+	OrderNo       string
+	Amount        int64  // 最小货币单位
+	Currency      string // e.g. "usd"
+	ProductName   string
+	SuccessURL    string
+	CancelURL     string
 	CustomerEmail string
-	Metadata    map[string]string
+	Metadata      map[string]string
 }
 
 // CheckoutResult 创建支付结果
@@ -75,14 +75,14 @@ type WebhookEvent struct {
 
 // 标准化事件类型
 const (
-	EventCheckoutCompleted     = "checkout.completed"
-	EventPaymentSucceeded      = "payment.succeeded"
-	EventPaymentFailed         = "payment.failed"
-	EventSubscriptionCreated   = "subscription.created"
-	EventSubscriptionUpdated   = "subscription.updated"
-	EventSubscriptionCanceled  = "subscription.canceled"
-	EventSubscriptionRenewed   = "subscription.renewed"
-	EventRefundCompleted       = "refund.completed"
+	EventCheckoutCompleted    = "checkout.completed"
+	EventPaymentSucceeded     = "payment.succeeded"
+	EventPaymentFailed        = "payment.failed"
+	EventSubscriptionCreated  = "subscription.created"
+	EventSubscriptionUpdated  = "subscription.updated"
+	EventSubscriptionCanceled = "subscription.canceled"
+	EventSubscriptionRenewed  = "subscription.renewed"
+	EventRefundCompleted      = "refund.completed"
 )
 
 // Provider 支付渠道统一接口
@@ -105,4 +105,3 @@ type Provider interface {
 	// VerifyWebhook 验证 webhook 签名并解析事件
 	VerifyWebhook(ctx context.Context, payload *WebhookPayload) (*WebhookEvent, error)
 }
-

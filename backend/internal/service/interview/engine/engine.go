@@ -79,36 +79,38 @@ func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *Intervi
 		// 构建提示词
 		var prompt string
 		if questionIndex == 1 {
-			prompt = fmt.Sprintf(`请作为面试官团队的负责人，根据简历和难度等级开始面试。
+			prompt = fmt.Sprintf(`Please act as the lead interviewer and start this interview based on the resume and difficulty level.
 
-简历ID: %d
-难度等级: %s
+		Resume ID: %d
+		Difficulty: %s
 
-要求：
-1. 请先向候选人问好并介绍面试团队，然后提出第一个技术问题
-2. 必须包含身份前缀（如"我是主面试官："）
+		Requirements:
+		1. Briefly greet the candidate and introduce the interview panel, then ask the first technical question
+		2. Include an interviewer identity prefix (for example, "I am the main interviewer:")
+		3. Keep the output in English only
 `, session.ResumeId, session.Difficulty)
 		} else {
 			// 后续问题：包含最近2道题的历史上下文
 			historyText := ""
 			for i, h := range recentHistory {
-				historyText += fmt.Sprintf("问题%d：%s\n回答%d：%s\n\n", i+1, h.Question, i+1, h.Answer)
+				historyText += fmt.Sprintf("Question %d: %s\nAnswer %d: %s\n\n", i+1, h.Question, i+1, h.Answer)
 			}
 
-			prompt = fmt.Sprintf(`根据简历ID、难度等级和最近的问答历史，推动面试进程。
-如果你（主面试官）认为当前应该由副面试官或项目面试官进行提问，请通过工具调用由他们生成问题。
+			prompt = fmt.Sprintf(`Based on the resume ID, difficulty, and recent Q&A history, continue the interview.
+If you (the main interviewer) decide this turn should be handled by the technical interviewer or project interviewer, call the corresponding tool to generate the next question.
 
-简历ID: %d
-难度等级: %s
+		Resume ID: %d
+		Difficulty: %s
 
-最近的问答历史（前%d道题）：
+		Recent Q&A history (latest %d question(s)):
 %s
 
-要求：
-1. 根据用户的回答情况，引导面试进入下一阶段或深化当前技术话题
-2. 避免重复之前问过的问题
-3. 逐步深化面试深度
-4. 必须包含身份前缀（如"我是主面试官："或其他面试官前缀）
+		Requirements:
+		1. Use the candidate's previous answers to move to the next stage or deepen the current topic
+		2. Avoid repeating previously asked questions
+		3. Increase depth progressively
+		4. Include an interviewer identity prefix (for example, "I am the main interviewer:" or another interviewer prefix)
+		5. Keep the output in English only
 `, session.ResumeId, session.Difficulty, len(recentHistory), historyText)
 		}
 

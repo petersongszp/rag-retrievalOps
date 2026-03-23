@@ -132,4 +132,3 @@ func (s *paymentService) CreateCheckout(ctx context.Context, userID uint, req *C
 		ProviderID:  checkoutResult.ProviderID,
 	}, nil
 }
-

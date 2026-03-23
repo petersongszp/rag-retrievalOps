@@ -33,4 +33,3 @@ type Manager interface {
 func NewManager() Manager {
 	return newPaymentService()
 }
-

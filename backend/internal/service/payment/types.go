@@ -45,16 +45,16 @@ type CreateSubscriptionResponse struct {
 
 // OrderDetail 订单详情
 type OrderDetail struct {
-	OrderNo     string             `json:"order_no"`
-	OrderType   model.OrderType    `json:"order_type"`
-	ProductCode string             `json:"product_code"`
-	PriceCode   string             `json:"price_code"`
-	Amount      int64              `json:"amount"`
-	Currency    string             `json:"currency"`
-	Status      model.OrderStatus  `json:"status"`
-	Provider    string             `json:"provider"`
-	PaidAt      *time.Time         `json:"paid_at"`
-	CreatedAt   time.Time          `json:"created_at"`
+	OrderNo     string            `json:"order_no"`
+	OrderType   model.OrderType   `json:"order_type"`
+	ProductCode string            `json:"product_code"`
+	PriceCode   string            `json:"price_code"`
+	Amount      int64             `json:"amount"`
+	Currency    string            `json:"currency"`
+	Status      model.OrderStatus `json:"status"`
+	Provider    string            `json:"provider"`
+	PaidAt      *time.Time        `json:"paid_at"`
+	CreatedAt   time.Time         `json:"created_at"`
 }
 
 // OrderListResponse 订单列表响应
@@ -75,4 +75,3 @@ type SubscriptionDetail struct {
 	CancelAt           *time.Time               `json:"cancel_at"`
 	CreatedAt          time.Time                `json:"created_at"`
 }
-

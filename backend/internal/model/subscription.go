@@ -88,4 +88,3 @@ func (d *_Subscription) FindByUserID(userID uint) ([]*Subscription, error) {
 	err := getDB().Where("user_id = ?", userID).Order("created_at DESC").Find(&subs).Error
 	return subs, err
 }
-

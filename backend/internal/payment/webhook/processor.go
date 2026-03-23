@@ -88,4 +88,3 @@ func (p *Processor) handleEvent(tx *gorm.DB, event *payment.WebhookEvent) error 
 		return nil
 	}
 }
-

@@ -37,11 +37,11 @@ func TestExtractStripeData(t *testing.T) {
 		"type": "checkout.session.completed",
 		"data": map[string]interface{}{
 			"object": map[string]interface{}{
-				"id":              "cs_test_abc",
-				"status":          "complete",
-				"mode":            "payment",
-				"subscription":    "sub_xyz",
-				"payment_intent":  "pi_def",
+				"id":             "cs_test_abc",
+				"status":         "complete",
+				"mode":           "payment",
+				"subscription":   "sub_xyz",
+				"payment_intent": "pi_def",
 				"metadata": map[string]interface{}{
 					"order_no": "PAY20250101000001",
 				},
@@ -84,4 +84,3 @@ func TestExtractStripeDataEmpty(t *testing.T) {
 		t.Errorf("expected empty data, got %v", data2)
 	}
 }
-

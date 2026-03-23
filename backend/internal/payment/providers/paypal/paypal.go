@@ -107,7 +107,7 @@ func (a *Adapter) CreateSubscription(ctx context.Context, req *payment.Subscript
 	log.Printf("[PayPal] CreateSubscription: order_no=%s plan_id=%s", req.OrderNo, req.PriceID)
 
 	sub, err := a.client.CreateSubscription(ctx, pp.SubscriptionBase{
-		PlanID:  req.PriceID,
+		PlanID:   req.PriceID,
 		CustomID: req.OrderNo,
 		ApplicationContext: &pp.ApplicationContext{
 			ReturnURL:          req.SuccessURL,
@@ -260,4 +260,3 @@ func formatPayPalAmount(amountInMinorUnits int64, currency string) string {
 	minor := amountInMinorUnits % 100
 	return fmt.Sprintf("%d.%02d", major, minor)
 }
-

@@ -66,4 +66,3 @@ func TestExtractPayPalDataEmpty(t *testing.T) {
 		t.Errorf("expected empty data, got %v", data)
 	}
 }
-

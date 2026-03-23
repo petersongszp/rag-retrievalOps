@@ -78,4 +78,3 @@ func (d *_PaymentAttempt) FindByOrderNo(orderNo string) ([]*PaymentAttempt, erro
 	err := getDB().Where("order_no = ?", orderNo).Order("created_at DESC").Find(&attempts).Error
 	return attempts, err
 }
-

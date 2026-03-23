@@ -75,4 +75,3 @@ func (d *_PaymentEvent) IncrRetryCount(tx *gorm.DB, id uint64) error {
 	return tx.Model(&PaymentEvent{}).Where("id = ?", id).
 		UpdateColumn("retry_count", gorm.Expr("retry_count + 1")).Error
 }
-

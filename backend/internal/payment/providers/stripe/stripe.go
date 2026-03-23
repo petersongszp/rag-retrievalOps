@@ -198,4 +198,3 @@ func (a *Adapter) VerifyWebhook(ctx context.Context, payload *payment.WebhookPay
 		RawJSON:   string(payload.Body),
 	}, nil
 }
-

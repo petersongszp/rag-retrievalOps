@@ -137,4 +137,3 @@ func toOrderDetail(o *model.PaymentOrder) *OrderDetail {
 		CreatedAt:   o.CreatedAt,
 	}
 }
-

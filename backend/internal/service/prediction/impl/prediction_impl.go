@@ -1,19 +1,20 @@
 package impl
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	predictionIDL "interview-agents/api/model/prediction"
 	predictionAgent "interview-agents/internal/agents/prediction"
 	"interview-agents/internal/model"
 	"interview-agents/internal/service/prediction"
-	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"strings"
 	"time"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
+	"golang.org/x/sync/errgroup"
 )
 
 type PredictionServiceImpl struct{}
@@ -39,86 +40,92 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 		return nil, fmt.Errorf("resume not found: %w", err)
 	}
 
-	// 2. Construct Prompt
-	prompt := fmt.Sprintf(`
-简历内容：
-%s
-
-押题要求：
-- 类型：%s
-- 语言：%s
-- 岗位：%s
-- 难度：%s
-`, resume.Content, req.PredictionType, req.Language, req.JobTitle, req.Difficulty)
-
-	if req.CompanyName != nil {
-		prompt += fmt.Sprintf("- 目标公司：%s\n", *req.CompanyName)
-	}
-
-	log.Printf("[Prediction] Calling Agent with prompt length: %d", len(prompt))
-
-	// 3. Call Agent
-	agent, err := predictionAgent.NewPredictionAgent(userID)
+	// 2. 先拆分方向，再并行生成题目
+	splitAgent, err := predictionAgent.NewResumeSplitAgent(userID)
 	if err != nil {
-		log.Printf("[Prediction] Failed to create prediction agent: %v", err)
+		log.Printf("[Prediction] Failed to create resume split agent: %v", err)
 		return nil, err
 	}
 
-	// 使用 Runner 运行 Agent
-	runner := adk.NewRunner(ctx, adk.RunnerConfig{
-		Agent: agent,
-	})
+	splitPrompt := s.buildSplitPrompt(resume.Content, req)
+	log.Printf("[Prediction] Calling split agent with prompt length: %d", len(splitPrompt))
 
-	// 构建消息
-	messages := []adk.Message{
-		schema.UserMessage(prompt),
-	}
-
-	// 运行智能体
-	iter := runner.Run(ctx, messages)
-
-	var content string
-	for {
-		event, ok := iter.Next()
-		if !ok {
-			break
-		}
-
-		if event.Err != nil {
-			log.Printf("[Prediction] Agent generation failed: %v", event.Err)
-			return nil, fmt.Errorf("agent generation failed: %w", event.Err)
-		}
-
-		// 处理消息事件，收集最后一条消息内容
-		if event.Output != nil && event.Output.MessageOutput != nil {
-			message := event.Output.MessageOutput.Message.Content
-			if message != "" {
-				content = message
-			}
-		}
-	}
-
-	if content == "" {
-		log.Printf("[Prediction] Agent returned empty response")
-		return nil, fmt.Errorf("agent returned empty response")
-	}
-
-	log.Printf("[Prediction] Agent Raw Response: %s", content) // 打印原始响应，方便调试
-
-	// 清理可能存在的 Markdown 代码块标记
-	content = cleanJSONContent(content)
-	log.Printf("[Prediction] Cleaned JSON Content: %s", content)
-
-	var result predictionAgent.PredictionResult
-	err = json.Unmarshal([]byte(content), &result)
+	splitContent, err := runAgentAndCollectContent(ctx, splitAgent, splitPrompt)
 	if err != nil {
-		log.Printf("[Prediction] JSON Unmarshal failed: %v", err)
-		return nil, fmt.Errorf("failed to parse agent response: %v. Content: %s", err, content)
+		return nil, err
 	}
 
-	if len(result.Questions) == 0 {
-		log.Printf("[Prediction] No questions parsed from response")
-		return nil, fmt.Errorf("no questions generated")
+	var splitResult predictionAgent.ResumeSplitResult
+	if err = json.Unmarshal([]byte(cleanJSONContent(splitContent)), &splitResult); err != nil {
+		log.Printf("[Prediction] Split JSON Unmarshal failed: %v", err)
+		return nil, fmt.Errorf("failed to parse split agent response: %v", err)
+	}
+
+	if len(splitResult.Directions) != predictionAgent.DirectionCount {
+		return nil, fmt.Errorf("split directions mismatch: got %d, expect %d", len(splitResult.Directions), predictionAgent.DirectionCount)
+	}
+
+	seenDirections := make(map[string]struct{}, predictionAgent.DirectionCount)
+	for _, module := range splitResult.Directions {
+		direction := strings.TrimSpace(module.Direction)
+		content := strings.TrimSpace(module.Content)
+		if direction == "" || content == "" {
+			return nil, fmt.Errorf("invalid split result: direction and content must be non-empty")
+		}
+		if _, exists := seenDirections[direction]; exists {
+			return nil, fmt.Errorf("invalid split result: duplicated direction %q", direction)
+		}
+		seenDirections[direction] = struct{}{}
+	}
+
+	baseRequirements := s.buildRequirements(req)
+
+	directionResults := make([][]predictionAgent.PredictionQuestion, len(splitResult.Directions))
+	g, gctx := errgroup.WithContext(ctx)
+	for i, module := range splitResult.Directions {
+		i, module := i, module
+		g.Go(func() error {
+			agent, err := predictionAgent.NewDirectionalPredictionAgent(userID, module.Direction)
+			if err != nil {
+				return err
+			}
+
+			directionPrompt := s.buildDirectionPrompt(module, baseRequirements)
+			content, err := runAgentAndCollectContent(gctx, agent, directionPrompt)
+			if err != nil {
+				return err
+			}
+
+			var result predictionAgent.PredictionResult
+			if err := json.Unmarshal([]byte(cleanJSONContent(content)), &result); err != nil {
+				return fmt.Errorf("failed to parse direction %q response: %w", module.Direction, err)
+			}
+
+			if len(result.Questions) != predictionAgent.QuestionsPerDirection {
+				return fmt.Errorf("direction %q questions mismatch: got %d, expect %d", module.Direction, len(result.Questions), predictionAgent.QuestionsPerDirection)
+			}
+
+			for idx := range result.Questions {
+				if strings.TrimSpace(result.Questions[idx].Content) == "" {
+					result.Questions[idx].Content = fmt.Sprintf("Direction: %s", module.Direction)
+				} else {
+					result.Questions[idx].Content = fmt.Sprintf("[%s] %s", module.Direction, result.Questions[idx].Content)
+				}
+				if strings.TrimSpace(result.Questions[idx].Focus) == "" {
+					result.Questions[idx].Focus = module.Direction
+				} else {
+					result.Questions[idx].Focus = fmt.Sprintf("[%s] %s", module.Direction, result.Questions[idx].Focus)
+				}
+			}
+
+			directionResults[i] = result.Questions
+			return nil
+		})
+	}
+
+	if err := g.Wait(); err != nil {
+		log.Printf("[Prediction] Parallel generation failed: %v", err)
+		return nil, err
 	}
 
 	// 4. Save to DB
@@ -150,33 +157,28 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 
 	// 准备保存问题
 	var questions []model.PredictionQuestion
-	for i, q := range result.Questions {
-		// 处理 FollowUp
-		var followUpStr string
-		switch v := q.FollowUp.(type) {
-		case string:
-			followUpStr = v
-		default:
-			// 将其他类型（如数组、对象）转换为 JSON 字符串
-			b, err := json.Marshal(v)
-			if err != nil {
-				log.Printf("[Prediction] Warning: failed to marshal follow_up: %v", err)
-				followUpStr = fmt.Sprintf("%v", v)
-			} else {
-				followUpStr = string(b)
-			}
-		}
+	sort := 1
+	for _, moduleQuestions := range directionResults {
+		for _, q := range moduleQuestions {
+			// 处理 FollowUp
+			followUpStr := normalizeFollowUp(q.FollowUp)
 
-		questions = append(questions, model.PredictionQuestion{
-			RecordID:        record.ID, // 显式设置 RecordID
-			Question:        q.Question,
-			Content:         q.Content,
-			Focus:           q.Focus,
-			ThinkingPath:    q.ThinkingPath,
-			ReferenceAnswer: q.ReferenceAnswer,
-			FollowUp:        followUpStr,
-			Sort:            i + 1,
-		})
+			questions = append(questions, model.PredictionQuestion{
+				RecordID:        record.ID,
+				Question:        q.Question,
+				Content:         q.Content,
+				Focus:           q.Focus,
+				ThinkingPath:    q.ThinkingPath,
+				ReferenceAnswer: q.ReferenceAnswer,
+				FollowUp:        followUpStr,
+				Sort:            sort,
+			})
+			sort++
+		}
+	}
+
+	if len(questions) != predictionAgent.TotalPredictionQuestions {
+		return nil, fmt.Errorf("generated questions mismatch: got %d, expect %d", len(questions), predictionAgent.TotalPredictionQuestions)
 	}
 
 	// 保存问题列表
@@ -209,6 +211,90 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 		RecordID:  int64(record.ID),
 		Questions: responseQuestions,
 	}, nil
+}
+
+func (s *PredictionServiceImpl) buildRequirements(req *predictionIDL.PredictRequest) string {
+	requirements := fmt.Sprintf(`Question generation requirements:
+- Type: %s
+- Output language: English
+- Job title: %s
+- Difficulty: %s
+`, req.PredictionType, req.JobTitle, req.Difficulty)
+
+	if req.CompanyName != nil {
+		requirements += fmt.Sprintf("- Target company: %s\n", *req.CompanyName)
+	}
+	requirements += "- Return all generated content in English.\n"
+
+	return requirements
+}
+
+func (s *PredictionServiceImpl) buildSplitPrompt(resumeContent string, req *predictionIDL.PredictRequest) string {
+	return fmt.Sprintf(`Resume content:
+%s
+
+Please split the resume above into %d direction modules.
+Each direction module should support independent interview question generation.
+
+%s
+
+Important: Return JSON values in English only.`, resumeContent, predictionAgent.DirectionCount, s.buildRequirements(req))
+}
+
+func (s *PredictionServiceImpl) buildDirectionPrompt(module predictionAgent.DirectionModule, requirements string) string {
+	return fmt.Sprintf(`Direction: %s
+
+Direction module content:
+%s
+
+%s
+Please generate exactly %d interview question(s) for this direction.
+Return all content in English.`, module.Direction, module.Content, requirements, predictionAgent.QuestionsPerDirection)
+}
+
+func runAgentAndCollectContent(ctx context.Context, agent adk.Agent, prompt string) (string, error) {
+	runner := adk.NewRunner(ctx, adk.RunnerConfig{Agent: agent})
+	messages := []adk.Message{schema.UserMessage(prompt)}
+	iter := runner.Run(ctx, messages)
+
+	var content string
+	for {
+		event, ok := iter.Next()
+		if !ok {
+			break
+		}
+
+		if event.Err != nil {
+			return "", fmt.Errorf("agent generation failed: %w", event.Err)
+		}
+
+		if event.Output != nil && event.Output.MessageOutput != nil {
+			msg := event.Output.MessageOutput.Message.Content
+			if msg != "" {
+				content = msg
+			}
+		}
+	}
+
+	if content == "" {
+		return "", fmt.Errorf("agent returned empty response")
+	}
+
+	return content, nil
+}
+
+func normalizeFollowUp(v any) string {
+	switch follow := v.(type) {
+	case string:
+		return follow
+	default:
+		b, err := json.Marshal(follow)
+		if err != nil {
+			log.Printf("[Prediction] Warning: failed to marshal follow_up: %v", err)
+			return fmt.Sprintf("%v", follow)
+		}
+		return string(b)
+	}
 }
 
 // cleanJSONContent 辅助函数：清理 markdown 标记

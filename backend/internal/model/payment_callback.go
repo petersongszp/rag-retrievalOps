@@ -81,4 +81,3 @@ func (d *_PaymentCallback) FindByStatus(status CallbackStatus, limit int) ([]*Pa
 		Order("created_at ASC").Limit(limit).Find(&callbacks).Error
 	return callbacks, err
 }
-

@@ -20,4 +20,3 @@ func generateAttemptNo() string {
 func generateSubscriptionNo() string {
 	return fmt.Sprintf("SUB%s%04d", time.Now().Format("20060102150405"), rand.Intn(10000))
 }
-

@@ -36,4 +36,3 @@ func Register(r *server.Hertz) {
 		paymentGroup.POST("/webhook/:provider", handler.WebhookHandler)
 	}
 }
-

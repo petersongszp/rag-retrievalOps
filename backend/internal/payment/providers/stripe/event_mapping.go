@@ -67,4 +67,3 @@ func extractStripeData(raw map[string]interface{}) map[string]string {
 
 	return data
 }
-

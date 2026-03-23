@@ -115,7 +115,7 @@ func (p *Processor) handleSubscriptionCanceled(tx *gorm.DB, event *payment.Webho
 	log.Printf("[webhook] subscription canceled: provider_sub_id=%s event_id=%s", subID, event.EventID)
 	now := time.Now()
 	return model.SubscriptionDao.UpdateStatus(tx, "", model.SubscriptionStatusCanceled, map[string]interface{}{
-		"canceled_at":    &now,
+		"canceled_at":     &now,
 		"provider_sub_id": subID,
 	})
 }
@@ -131,4 +131,3 @@ func (p *Processor) handleSubscriptionRenewed(tx *gorm.DB, event *payment.Webhoo
 	// TODO: 更新订阅周期、延长权益
 	return nil
 }
-

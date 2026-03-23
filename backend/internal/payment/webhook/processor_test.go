@@ -144,4 +144,3 @@ func TestPaymentSucceededUpdatesOrder(t *testing.T) {
 		t.Fatal("expected paid_at to be set")
 	}
 }
-

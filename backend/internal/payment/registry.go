@@ -37,4 +37,3 @@ func GetProvider(name ProviderName) (Provider, error) {
 func GetProviderByString(name string) (Provider, error) {
 	return GetProvider(ProviderName(name))
 }
-
