@@ -12,6 +12,7 @@ import (
 	userapi "interview-agents/api/model/user"
 	"interview-agents/internal/config"
 	"io"
+	"log"
 	"net/http"
 	"net/url"
 	"os"
@@ -28,7 +29,8 @@ type UserServer struct {
 func NewUserServer() *UserServer {
 	return &UserServer{
 		httpClient: &http.Client{
-			Timeout: 10 * time.Second,
+			// OAuth exchanges with third-party providers can be slower under cross-region networks.
+			Timeout: 30 * time.Second,
 		},
 	}
 }
@@ -670,7 +672,39 @@ type googleTokenResponse struct {
 	ErrorDesc    string `json:"error_description,omitempty"`
 }
 
-func (s *UserServer) getGoogleAccessToken(ctx context.Context, code, clientID, clientSecret, redirectURL string) (string, error) {
+func classifyGoogleOAuthErr(err error, statusCode int) string {
+	if err == nil {
+		return "success"
+	}
+	if errors.Is(err, context.DeadlineExceeded) || strings.Contains(strings.ToLower(err.Error()), "timeout") {
+		return "timeout"
+	}
+	if strings.Contains(err.Error(), "解析 Google") {
+		return "decode_error"
+	}
+	if strings.Contains(err.Error(), "Google 未返回 access_token") || strings.Contains(err.Error(), "Google 用户信息不完整") {
+		return "invalid_response"
+	}
+	if strings.Contains(err.Error(), "Google 授权失败") {
+		return "provider_error"
+	}
+	if statusCode >= 500 {
+		return "http_5xx"
+	}
+	if statusCode >= 400 {
+		return "http_4xx"
+	}
+	return "network_or_unknown"
+}
+
+func (s *UserServer) getGoogleAccessToken(ctx context.Context, code, clientID, clientSecret, redirectURL string) (accessToken string, err error) {
+	start := time.Now()
+	httpStatus := 0
+	defer func() {
+		log.Printf("[oauth][google] provider=google stage=token_exchange duration_ms=%d success=%t http_status=%d err_category=%s err=%q",
+			time.Since(start).Milliseconds(), err == nil, httpStatus, classifyGoogleOAuthErr(err, httpStatus), firstNonEmpty(fmt.Sprint(err), ""))
+	}()
+
 	body := url.Values{}
 	body.Set("client_id", clientID)
 	body.Set("client_secret", clientSecret)
@@ -689,6 +723,7 @@ func (s *UserServer) getGoogleAccessToken(ctx context.Context, code, clientID, c
 		return "", fmt.Errorf("请求 Google token 失败: %w", err)
 	}
 	defer resp.Body.Close()
+	httpStatus = resp.StatusCode
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -721,7 +756,14 @@ type googleUserInfo struct {
 	FamilyName    string `json:"family_name"`
 }
 
-func (s *UserServer) getGoogleUserInfo(ctx context.Context, accessToken string) (*googleUserInfo, error) {
+func (s *UserServer) getGoogleUserInfo(ctx context.Context, accessToken string) (info *googleUserInfo, err error) {
+	start := time.Now()
+	httpStatus := 0
+	defer func() {
+		log.Printf("[oauth][google] provider=google stage=userinfo_fetch duration_ms=%d success=%t http_status=%d err_category=%s err=%q",
+			time.Since(start).Milliseconds(), err == nil, httpStatus, classifyGoogleOAuthErr(err, httpStatus), firstNonEmpty(fmt.Sprint(err), ""))
+	}()
+
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodGet, "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	if err != nil {
 		return nil, fmt.Errorf("创建 Google 用户信息请求失败: %w", err)
@@ -733,6 +775,7 @@ func (s *UserServer) getGoogleUserInfo(ctx context.Context, accessToken string) 
 		return nil, fmt.Errorf("请求 Google 用户信息失败: %w", err)
 	}
 	defer resp.Body.Close()
+	httpStatus = resp.StatusCode
 
 	data, err := io.ReadAll(resp.Body)
 	if err != nil {
