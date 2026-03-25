@@ -28,7 +28,7 @@ function GitHubCallbackContent() {
 
     (async () => {
       try {
-        const res: any = await apiClient.post('/user/github/callback', { code });
+        const res: any = await apiClient.post('/user/github/callback', { code }, { timeout: 30000 });
         const data = res?.data ?? res;
         const token = data?.token || data?.accessToken;
         if (!token) {
@@ -56,8 +56,10 @@ function GitHubCallbackContent() {
         setStatus('success');
         setTimeout(() => router.replace('/'), 800);
       } catch (e: any) {
-        const msg =
-          e?.response?.data?.message || e?.message || 'GitHub 登录验证失败，请重试';
+        const isTimeout = e?.code === 'ECONNABORTED' || String(e?.message || '').includes('timeout');
+        const msg = isTimeout
+          ? 'GitHub 登录请求超时，请检查后端服务与 GitHub 连通性后重试'
+          : e?.response?.data?.message || e?.message || 'GitHub 登录验证失败，请重试';
         setErrorMsg(msg);
         setStatus('error');
       }
