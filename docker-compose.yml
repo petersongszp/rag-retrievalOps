@@ -199,7 +199,7 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:88/api
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:81/api
     depends_on:
       - backend
     networks:
