@@ -71,3 +71,10 @@ export const PREDICTION_API = {
   DELETE: `${API_BASE_URL}/prediction/delete`,
 };
 
+// 支付模块
+export const PAYMENT_API = {
+  CHECKOUT_CREATE: `${API_BASE_URL}/payment/checkout/create`,
+  ORDER_QUERY: `${API_BASE_URL}/payment/order/query`,
+  ORDER_LIST: `${API_BASE_URL}/payment/order/list`,
+};
+
