@@ -272,6 +272,7 @@ const Navbar: FC = () => {
                 items: [
                   { key: 'center', label: <Link href="/user/center">{"User Center"}</Link> },
                   { key: 'interviews', label: <Link href="/user/interviews">{"Interview Records"}</Link> },
+                  { key: 'pay', label: <Link href="/user/pay">{"Payment"}</Link> },
                   { key: 'press', label: <Link href="/user/press">{"Prediction Records"}</Link> },
                   { key: 'notes', label: <Link href="/user/notes">{"Note List"}</Link> },
                   { key: 'models', label: <Link href="/user/models">{"User Models"}</Link> },

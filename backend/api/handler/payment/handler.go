@@ -31,9 +31,12 @@ func CreateCheckout(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	log.Printf("[Payment] CreateCheckout start: user_id=%d provider=%s product=%s idempotency_key=%s", userID, req.Provider, req.ProductCode)
+	log.Printf("[Payment] CreateCheckout start: user_id=%d provider=%s product=%s", userID, req.Provider, req.ProductCode)
 
 	svc := paymentService.NewManager()
+	idempotencyKey := uuid.New().String()
+	log.Printf("[Payment] CreateCheckout idempotency_key generated: user_id=%d idempotency_key=%s", userID, idempotencyKey)
+
 	result, err := svc.CreateCheckout(ctx, userID, &paymentService.CreateCheckoutRequest{
 		ProductCode:    req.ProductCode,
 		PriceCode:      req.PriceCode,
@@ -43,7 +46,7 @@ func CreateCheckout(ctx context.Context, c *app.RequestContext) {
 		ProductName:    req.ProductName,
 		SuccessURL:     req.SuccessURL,
 		CancelURL:      req.CancelURL,
-		IdempotencyKey: uuid.New().String(),
+		IdempotencyKey: idempotencyKey,
 	})
 	if err != nil {
 		log.Printf("[Payment] CreateCheckout failed: user_id=%d err=%v", userID, err)

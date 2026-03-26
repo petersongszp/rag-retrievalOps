@@ -52,7 +52,7 @@ func (p *Processor) Process(ctx context.Context, provider payment.ProviderName, 
 
 	// 3. 在事务内处理业务逻辑
 	processErr := model.WithTransaction(ctx, func(tx *gorm.DB) error {
-		return p.handleEvent(tx, event)
+		return p.handleEvent(tx, provider, event)
 	})
 
 	// 4. 更新事件处理状态
@@ -67,22 +67,22 @@ func (p *Processor) Process(ctx context.Context, provider payment.ProviderName, 
 }
 
 // handleEvent 根据事件类型分发处理
-func (p *Processor) handleEvent(tx *gorm.DB, event *payment.WebhookEvent) error {
+func (p *Processor) handleEvent(tx *gorm.DB, provider payment.ProviderName, event *payment.WebhookEvent) error {
 	switch event.EventType {
 	case payment.EventCheckoutCompleted:
-		return p.handleCheckoutCompleted(tx, event)
+		return p.handleCheckoutCompleted(tx, provider, event)
 	case payment.EventPaymentSucceeded:
-		return p.handlePaymentSucceeded(tx, event)
+		return p.handlePaymentSucceeded(tx, provider, event)
 	case payment.EventPaymentFailed:
-		return p.handlePaymentFailed(tx, event)
+		return p.handlePaymentFailed(tx, provider, event)
 	case payment.EventSubscriptionCreated:
-		return p.handleSubscriptionCreated(tx, event)
+		return p.handleSubscriptionCreated(tx, provider, event)
 	case payment.EventSubscriptionUpdated:
-		return p.handleSubscriptionUpdated(tx, event)
+		return p.handleSubscriptionUpdated(tx, provider, event)
 	case payment.EventSubscriptionCanceled:
-		return p.handleSubscriptionCanceled(tx, event)
+		return p.handleSubscriptionCanceled(tx, provider, event)
 	case payment.EventSubscriptionRenewed:
-		return p.handleSubscriptionRenewed(tx, event)
+		return p.handleSubscriptionRenewed(tx, provider, event)
 	default:
 		log.Printf("[webhook] unhandled event type: %s (raw: %s)", event.EventType, event.RawType)
 		return nil
