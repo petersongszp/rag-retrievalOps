@@ -106,6 +106,8 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api
       cache_from:
         - type=local,src=/tmp/.buildx-cache/frontend
 #      cache_to:

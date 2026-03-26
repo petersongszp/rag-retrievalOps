@@ -17,7 +17,6 @@ ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8899/a
 # 复制应用代码
 COPY . .
 
-# 构建应用
 RUN npm run build
 
 # 多阶段构建 - 第二阶段：运行时镜像
