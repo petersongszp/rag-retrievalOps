@@ -146,6 +146,14 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
+      # 本地构建缓存（超级提速）
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache/backend
+    volumes:
+      - ./backend/config.yaml:/app/config.yaml
+      - ./backend/logs:/app/logs
+      # Go 模块缓存，避免每次重新下载依赖
+      - go-mod-cache:/go/pkg/mod
     container_name: app-backend
     restart: always
     ports:
@@ -160,7 +168,6 @@ services:
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
       MILVUS_ADDRESS: milvus:19530
-      # PORT: 8888
     depends_on:
       mysql:
         condition: service_healthy
@@ -168,9 +175,6 @@ services:
         condition: service_healthy
       milvus:
         condition: service_healthy
-    volumes:
-      - ./backend/config.yaml:/app/config.yaml
-      - ./backend/logs:/app/logs
     networks:
       - app-network
 
@@ -194,12 +198,18 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      # 本地构建缓存
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache/frontend
+    volumes:
+      # Node 模块缓存，避免每次 npm install
+      - node-mod-cache:/app/node_modules
     container_name: app-frontend
     restart: always
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_API_BASE_URL: http://localhost:81/api
+      NEXT_PUBLIC_API_BASE_URL: http://localhost:8899/api
     depends_on:
       - backend
     networks:
@@ -217,7 +227,8 @@ volumes:
     driver: local
   milvus-data:
     driver: local
-
+  go-mod-cache:
+  node-mod-cache:
 # 网络定义
 networks:
   app-network:

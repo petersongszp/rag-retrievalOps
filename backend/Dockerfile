@@ -1,5 +1,6 @@
 # 多阶段构建 - 第一阶段：构建Go应用
-FROM golang:1.24-alpine AS builder
+# 【重要】这里改成和 go.mod 一致的 go 版本
+FROM golang:1.25.1-alpine AS builder
 
 # 安装必要的工具
 RUN apk add --no-cache git ca-certificates tzdata
@@ -21,7 +22,7 @@ RUN go mod download
 COPY . .
 
 # 构建应用
-RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o main ./cmd/server/main.go
+RUN CGO_ENABLED=0 GOOS=linux go build -installsuffix cgo -o main ./cmd/server/main.go
 
 # 多阶段构建 - 第二阶段：运行时镜像
 FROM alpine:3.18
