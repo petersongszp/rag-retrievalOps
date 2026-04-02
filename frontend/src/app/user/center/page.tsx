@@ -1,14 +1,8 @@
 'use client';
 
-import {
-  UploadOutlined,
-  FileOutlined,
-  DeleteOutlined,
-  InboxOutlined,
-} from '@ant-design/icons';
+import { UploadOutlined, FileOutlined, DeleteOutlined, InboxOutlined } from '@ant-design/icons';
 import { useEffect, useState, useCallback } from 'react';
 
-import Link from 'next/link';
 import type { UploadProps } from 'antd';
 import {
   Typography,
@@ -21,12 +15,11 @@ import {
   message,
   Spin,
   Popconfirm,
-  Alert,
   Table,
   Space,
 } from 'antd';
 import apiClient from '@/services/api/client';
-import { API_BASE_URL, USER_API, RESUME_API, MODEL_API } from '@/config/api';
+import { USER_API, RESUME_API } from '@/config/api';
 
 const { Dragger } = Upload;
 const { Title } = Typography;
@@ -46,43 +39,41 @@ interface ResumeInfo {
 }
 
 export default function UserCenterPage() {
-  
-  
   const [profile, setProfile] = useState<{ id?: number; username?: string; email?: string } | null>(
     null
   );
-  
+
   const columns = [
     {
-      title: "Order ID",
+      title: 'Order ID',
       dataIndex: 'id',
       key: 'id',
       render: (text: string) => <span className="text-slate-500 font-mono">{text}</span>,
     },
     {
-      title: "Type",
+      title: 'Type',
       dataIndex: 'type',
       key: 'type',
       render: (text: string) => <span className="font-medium text-slate-700">{text}</span>,
     },
     {
-      title: "Amount",
+      title: 'Amount',
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => <span className="text-slate-900 font-bold">¥{amount}</span>,
     },
     {
-      title: "Status",
+      title: 'Status',
       dataIndex: 'status',
       key: 'status',
       render: () => (
         <Tag color="success" className="border-0 bg-green-50 text-green-600 rounded-full px-3">
-          {"Success"}
+          {'Success'}
         </Tag>
       ),
     },
     {
-      title: "Time",
+      title: 'Time',
       dataIndex: 'time',
       key: 'time',
       render: (text: string) => <span className="text-slate-400 text-sm">{text}</span>,
@@ -111,8 +102,6 @@ export default function UserCenterPage() {
   const [resumes, setResumes] = useState<ResumeInfo[]>([]);
   const [uploading, setUploading] = useState(false);
   const [loadingResumes, setLoadingResumes] = useState(false);
-  const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
-  const [checkingConfig, setCheckingConfig] = useState<boolean>(false);
 
   // 获取简历列表
   const fetchResumes = useCallback(async () => {
@@ -129,13 +118,8 @@ export default function UserCenterPage() {
 
   // 上传简历（异步处理）
   const handleUpload = async (file: File) => {
-    if (modelConfigured === false) {
-      message.error("Model not configured, cannot start interview");
-      return false;
-    }
-
     if (resumes.length >= 3) {
-      message.warning("Max 3 resumes allowed");
+      message.warning('Max 3 resumes allowed');
       return false;
     }
 
@@ -151,13 +135,13 @@ export default function UserCenterPage() {
 
       // 检查返回状态
       if (res?.status === 'pending' || res?.status === 'processing') {
-        message.info("Uploaded, parsing...");
+        message.info('Uploaded, parsing...');
         // 开始轮询检查状态
         if (res?.resume_id) {
           pollResumeStatus(res.resume_id);
         }
       } else {
-        message.success("Resume uploaded successfully");
+        message.success('Resume uploaded successfully');
       }
       fetchResumes();
     } catch (err: any) {
@@ -181,18 +165,18 @@ export default function UserCenterPage() {
         const resume = data?.resume;
 
         if (resume?.status === 'completed') {
-          message.success("Parsing completed");
+          message.success('Parsing completed');
           fetchResumes();
           return;
         } else if (resume?.status === 'failed') {
-          message.error(`${"Parsing failed"}: ${resume?.error_msg || '未知错误'}`);
+          message.error(`${'Parsing failed'}: ${resume?.error_msg || '未知错误'}`);
           fetchResumes();
           return;
         } else if (attempts < maxAttempts) {
           // 继续轮询
           setTimeout(poll, interval);
         } else {
-          message.warning("Parsing timeout, please refresh later");
+          message.warning('Parsing timeout, please refresh later');
           fetchResumes();
         }
       } catch (err) {
@@ -211,7 +195,7 @@ export default function UserCenterPage() {
   const handleSetDefault = async (resumeId: number) => {
     try {
       await apiClient.post(RESUME_API.SET_DEFAULT, { resume_id: resumeId });
-      message.success("Default resume set");
+      message.success('Default resume set');
       fetchResumes();
     } catch (err: any) {
       message.error(err?.message || '设置失败');
@@ -222,7 +206,7 @@ export default function UserCenterPage() {
   const handleDelete = async (resumeId: number) => {
     try {
       await apiClient.delete(RESUME_API.DELETE(resumeId));
-      message.success("Resume deleted");
+      message.success('Resume deleted');
       fetchResumes();
     } catch (err: any) {
       message.error(err?.message || '删除失败');
@@ -255,34 +239,11 @@ export default function UserCenterPage() {
   };
 
   useEffect(() => {
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    setCheckingConfig(true);
-    fetch(MODEL_API.CHECK, {
-      method: 'GET',
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-        'X-Auth-Token': token || '',
-      },
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => null);
-        const configured = !!(data && data.data && data.data.configured);
-        setModelConfigured(configured);
-      })
-      .catch(() => {
-        setModelConfigured(false);
-      })
-      .finally(() => {
-        setCheckingConfig(false);
-      });
-  }, []);
-
-  useEffect(() => {
     (async () => {
       try {
         const data: any = await apiClient.get(USER_API.GET_PROFILE);
         setProfile(data || null);
-      } catch { }
+      } catch {}
     })();
     fetchResumes();
   }, [fetchResumes]);
@@ -295,8 +256,8 @@ export default function UserCenterPage() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="mb-8 animate-fade-in-up">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{"User Center"}</h1>
-          <p className="text-slate-500 mt-2">{"Manage your personal info, resumes, and records"}</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{'User Center'}</h1>
+          <p className="text-slate-500 mt-2">{'Manage your personal info, resumes, and records'}</p>
         </div>
 
         <Row gutter={[24, 24]}>
@@ -319,16 +280,16 @@ export default function UserCenterPage() {
                   color="blue"
                   className="border-0 bg-blue-50 text-blue-600 px-3 py-1 rounded-full font-medium"
                 >
-                  {"Member"}
+                  {'Member'}
                 </Tag>
 
                 <div className="w-full mt-8 space-y-3 text-left bg-slate-50/50 rounded-2xl p-4 border border-slate-100">
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">{"Username"}</span>
+                    <span className="text-slate-500">{'Username'}</span>
                     <span className="font-medium text-slate-700">{profile?.username ?? '-'}</span>
                   </div>
                   <div className="flex justify-between items-center text-sm">
-                    <span className="text-slate-500">{"Bound Email"}</span>
+                    <span className="text-slate-500">{'Bound Email'}</span>
                     <span className="font-medium text-slate-700">{profile?.email ?? '-'}</span>
                   </div>
                 </div>
@@ -346,7 +307,7 @@ export default function UserCenterPage() {
                         <FileOutlined />
                       </div>
                       <div>
-                        <h3 className="text-lg font-bold text-slate-800">{"My Resumes"}</h3>
+                        <h3 className="text-lg font-bold text-slate-800">{'My Resumes'}</h3>
                         <p className="text-xs text-slate-400">已上传 {resumes.length}/3 份</p>
                       </div>
                     </div>
@@ -369,13 +330,27 @@ export default function UserCenterPage() {
                                   {resume.file_name}
                                   {/* 状态标签 */}
                                   {resume.status === 'pending' && (
-                                    <Tag color="processing" className="ml-2 border-0">等待解析</Tag>
+                                    <Tag color="processing" className="ml-2 border-0">
+                                      等待解析
+                                    </Tag>
                                   )}
                                   {resume.status === 'processing' && (
-                                    <Tag color="processing" icon={<Spin size="small" className="mr-1" />} className="ml-2 border-0">解析中...</Tag>
+                                    <Tag
+                                      color="processing"
+                                      icon={<Spin size="small" className="mr-1" />}
+                                      className="ml-2 border-0"
+                                    >
+                                      解析中...
+                                    </Tag>
                                   )}
                                   {resume.status === 'failed' && (
-                                    <Tag color="error" className="ml-2 border-0" title={resume.error_msg}>解析失败</Tag>
+                                    <Tag
+                                      color="error"
+                                      className="ml-2 border-0"
+                                      title={resume.error_msg}
+                                    >
+                                      解析失败
+                                    </Tag>
                                   )}
                                 </div>
                                 <div className="text-xs text-slate-400 flex gap-2 mt-1">
@@ -393,14 +368,16 @@ export default function UserCenterPage() {
                                   onClick={() => handleSetDefault(resume.id)}
                                   className="opacity-0 group-hover:opacity-100 transition-opacity text-blue-600 bg-white shadow-sm border border-blue-100"
                                 >
-                                  {"Set Default"}
+                                  {'Set Default'}
                                 </Button>
                               )}
                               {resume.is_default ? (
-                                <Tag color="blue" className="m-0 border-0 bg-blue-50 text-blue-600">默认</Tag>
+                                <Tag color="blue" className="m-0 border-0 bg-blue-50 text-blue-600">
+                                  默认
+                                </Tag>
                               ) : null}
                               <Popconfirm
-                                title={"Are you sure you want to delete this resume?"}
+                                title={'Are you sure you want to delete this resume?'}
                                 onConfirm={() => handleDelete(resume.id)}
                                 okText="Yes"
                                 cancelText="No"
@@ -422,28 +399,9 @@ export default function UserCenterPage() {
                     {/* 上传区域 */}
                     {resumes.length < 3 && (
                       <>
-                        {!checkingConfig && modelConfigured === false && (
-                          <Alert
-                            message={"Model not configured, cannot start interview"}
-                            description={
-                              <span>
-                                {"Please go to User Models page to configure"}{' '}
-                                <Link
-                                  href="/user/models"
-                                  className="text-blue-600 font-medium underline hover:text-blue-700"
-                                >
-                                  {"User Center"}
-                                </Link>
-                              </span>
-                            }
-                            type="warning"
-                            showIcon
-                            className="mb-4 rounded-xl border-orange-100 bg-orange-50"
-                          />
-                        )}
                         <Dragger
                           {...uploadProps}
-                          disabled={uploading || !modelConfigured || checkingConfig}
+                          disabled={uploading}
                           className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl hover:border-blue-400 transition-colors"
                           style={{ padding: '40px 0', background: 'rgb(248 250 252)' }}
                         >
@@ -455,22 +413,16 @@ export default function UserCenterPage() {
                             )}
                           </p>
                           <p className="text-base font-medium text-slate-700 mb-2">
-                            {uploading
-                              ? "Uploaded, parsing..."
-                              : modelConfigured === false
-                                ? "Model not configured, cannot start interview"
-                                : "Upload Resume"}
+                            {uploading ? 'Uploaded, parsing...' : 'Upload Resume'}
                           </p>
-                          <p className="text-sm text-slate-400">
-                            {"PDF supported, max 10MB"}
-                          </p>
+                          <p className="text-sm text-slate-400">{'PDF supported, max 10MB'}</p>
                         </Dragger>
                       </>
                     )}
 
                     {resumes.length >= 3 && (
                       <div className="text-center text-slate-400 py-8 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
-                        {"Max 3 resumes allowed"}
+                        {'Max 3 resumes allowed'}
                       </div>
                     )}
                   </Spin>

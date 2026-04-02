@@ -22,6 +22,7 @@ type Config struct {
 	Security         SecurityConfig     `yaml:"security"`
 	GoogleSearch     GoogleConfig       `yaml:"google_search"`
 	OpenAI           OpenAIConfig       `yaml:"openai"`
+	LLM              LLMConfig          `yaml:"llm"`
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
@@ -184,6 +185,14 @@ type OpenAIConfig struct {
 	BaseURL   string `yaml:"base_url"`
 }
 
+// LLMConfig LLM 大模型配置（全局统一使用）
+type LLMConfig struct {
+	APIKey       string `yaml:"api_key"`
+	BaseURL      string `yaml:"base_url"`
+	ModelName    string `yaml:"model_name"`
+	ProviderName string `yaml:"provider_name"`
+}
+
 // RateLimitModelConfig 单个模型的限流配置
 type RateLimitModelConfig struct {
 	RPM int `yaml:"rpm"` // 每分钟最大请求数
@@ -304,6 +313,12 @@ func (c *Config) ExpandEnv() {
 	c.OpenAI.APIKey = expandEnvVar(c.OpenAI.APIKey)
 	c.OpenAI.BaseURL = expandEnvVar(c.OpenAI.BaseURL)
 	c.OpenAI.ModelName = expandEnvVar(c.OpenAI.ModelName)
+
+	// 展开 LLM 配置
+	c.LLM.APIKey = expandEnvVar(c.LLM.APIKey)
+	c.LLM.BaseURL = expandEnvVar(c.LLM.BaseURL)
+	c.LLM.ModelName = expandEnvVar(c.LLM.ModelName)
+	c.LLM.ProviderName = expandEnvVar(c.LLM.ProviderName)
 
 	// 展开 Google 配置
 	c.GoogleSearch.APIKey = expandEnvVar(c.GoogleSearch.APIKey)
