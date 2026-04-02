@@ -5,7 +5,7 @@ services:
     container_name: app-mysql
     restart: always
     ports:
-      - "3306:3306"
+      - '3306:3306'
     environment:
       MYSQL_ROOT_PASSWORD: ${DB_PASSWORD:-root}
       MYSQL_DATABASE: ${DB_NAME:-interview_agent}
@@ -13,7 +13,16 @@ services:
     volumes:
       - mysql-data:/var/lib/mysql
     healthcheck:
-      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-p${DB_PASSWORD:-root}"]
+      test:
+        [
+          'CMD',
+          'mysqladmin',
+          'ping',
+          '-h',
+          'localhost',
+          '-uroot',
+          '-p${DB_PASSWORD:-root}',
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -26,10 +35,10 @@ services:
     container_name: app-redis
     restart: always
     ports:
-      - "6379:6379"
+      - '6379:6379'
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-root}
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-root}", "ping"]
+      test: ['CMD', 'redis-cli', '-a', '${REDIS_PASSWORD:-root}', 'ping']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -64,7 +73,7 @@ services:
       - ETCD_INITIAL_CLUSTER_STATE=new
     command: etcd
     healthcheck:
-      test: ["CMD", "etcdctl", "endpoint", "health"]
+      test: ['CMD', 'etcdctl', 'endpoint', 'health']
       interval: 30s
       timeout: 20s
       retries: 3
@@ -149,7 +158,7 @@ services:
     container_name: app-backend
     restart: always
     ports:
-      - "8888:8888"
+      - '8888:8888'
     environment:
       DB_HOST: mysql
       DB_PORT: 3306
@@ -159,8 +168,17 @@ services:
       REDIS_HOST: redis
       REDIS_PORT: 6379
       REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
-      # MILVUS_ADDRESS: milvus:19530
-      # PORT: 8888
+      LLM_API_KEY: ${LLM_API_KEY}
+      LLM_BASE_URL: ${LLM_BASE_URL}
+      LLM_MODEL_NAME: ${LLM_MODEL_NAME}
+      LLM_PROVIDER_NAME: ${LLM_PROVIDER_NAME}
+      EMBEDDING_API_KEY: ${EMBEDDING_API_KEY}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL}
+      EMBEDDING_BASE_URL: ${EMBEDDING_BASE_URL}
+      OPENAI_ASR_BASE_URL: ${OPENAI_ASR_BASE_URL}
+      OPENAI_ASR_MODIFY_LLM_MODEL: ${OPENAI_ASR_MODIFY_LLM_MODEL}
+      OPENAI_ASR_MODEL_NAME: ${OPENAI_ASR_MODEL_NAME}
+      OPENAI_ASR_API_KEY: ${OPENAI_ASR_API_KEY}
     depends_on:
       mysql:
         condition: service_healthy
@@ -184,7 +202,7 @@ services:
     container_name: app-frontend
     restart: always
     ports:
-      - "3000:3000"
+      - '3000:3000'
     environment:
       NEXT_PUBLIC_API_BASE_URL: http://101.42.249.106:8888/api
     depends_on:
@@ -209,4 +227,3 @@ volumes:
 networks:
   app-network:
     driver: bridge
-
