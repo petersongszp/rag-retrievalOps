@@ -10,8 +10,8 @@ import (
 	"interview-agents/internal/agents/llm"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
-	"interview-agents/internal/observability/looptrace"
 	"interview-agents/internal/mq"
+	"interview-agents/internal/observability/looptrace"
 	paymentpkg "interview-agents/internal/payment"
 	paypalAdapter "interview-agents/internal/payment/providers/paypal"
 	stripeAdapter "interview-agents/internal/payment/providers/stripe"
@@ -50,9 +50,10 @@ func main() {
 	}
 
 	// 3. 展开配置中的环境变量引用（${VAR_NAME}）
-	// 这使得 config.yaml 可以使用环境变量作为占位符，支持多环境配置（如 .env.local, .env.prod）
-	cfg.ExpandEnv()
+	// 已在 LoadConfig 中自动完成（对 YAML 原文做环境变量替换后再反序列化）
 	log.Println("Environment variables expanded in configuration")
+	log.Printf("DEBUG LLM_API_KEY from env: %q", os.Getenv("LLM_API_KEY"))
+	log.Printf("DEBUG cfg.LLM.APIKey after expand: %q", cfg.LLM.APIKey)
 
 	// 4. 初始化数据库
 	log.Println("Initializing database connection...")

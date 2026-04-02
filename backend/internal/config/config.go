@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"log"
 	"os"
 	"regexp"
@@ -211,21 +212,42 @@ type LLMRateLimitConfig struct {
 var Global Config
 
 // LoadConfig 从文件加载配置
+// 先对 YAML 原文做环境变量替换（${VAR} / $VAR），再反序列化到结构体。
+// 这样所有配置字段自动支持环境变量注入，无需在 ExpandEnv 中逐字段维护。
 func LoadConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
+	expanded := expandEnvInBytes(data)
+
 	var cfg Config
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
+	if err = yaml.Unmarshal(expanded, &cfg); err != nil {
 		return nil, err
 	}
 
 	Global = cfg
 	log.Println("配置加载成功")
 	return &cfg, nil
+}
+
+// expandEnvInBytes 对字节切片中的 ${VAR_NAME} / $VAR_NAME 做环境变量替换
+func expandEnvInBytes(data []byte) []byte {
+	re := regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
+	result := re.ReplaceAllFunc(data, func(match []byte) []byte {
+		varName := ""
+		if bytes.HasPrefix(match, []byte("${")) {
+			varName = string(match[2 : len(match)-1])
+		} else {
+			varName = string(match[1:])
+		}
+		if val, ok := os.LookupEnv(varName); ok {
+			return []byte(val)
+		}
+		return match
+	})
+	return result
 }
 
 // EmbeddingConfig Embedding服务配置
