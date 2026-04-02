@@ -3,7 +3,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Typography, Button, Input, Avatar, Progress, message } from 'antd';
-import FailoverModal, { FailoverData } from '@/components/FailoverModal';
 import { INTERVIEW_API } from '@/config/api';
 import { useASRCapability } from '@/hooks/useASRCapability';
 import { useSpeechAnswerInput } from '@/hooks/useSpeechAnswerInput';
@@ -41,8 +40,6 @@ export default function MultiAgentInterviewStartPage() {
   const [starting, setStarting] = useState(false);
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
-  const [failoverData, setFailoverData] = useState<FailoverData | null>(null);
-  const [showFailoverModal, setShowFailoverModal] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
@@ -151,14 +148,6 @@ export default function MultiAgentInterviewStartPage() {
             if (payload?.type === 'session_id' || payload?.type === 'start') {
               const sid = payload.session_id || payload.data?.session_id || '';
               if (sid) setSessionId(sid);
-            } else if (payload?.type === 'model_failover_required') {
-              console.error('[模型失效]', payload.data);
-              setFailoverData(payload.data);
-              setShowFailoverModal(true);
-              setStarting(false);
-              setSubmitting(false);
-              setWaitingNextQuestion(false);
-              break; // Interrupt the stream loop
             } else if (payload?.type === 'structured_message') {
               // 处理结构化消息（新协议）
               const role: RoleType = payload.role || 'main_interviewer';
@@ -735,28 +724,6 @@ export default function MultiAgentInterviewStartPage() {
           </div>
         </div>
       </footer>
-
-      <FailoverModal
-        open={showFailoverModal}
-        data={failoverData}
-        onSuccess={() => {
-          setShowFailoverModal(false);
-          setFailoverData(null);
-          if (answer.trim()) {
-            onSubmit();
-          } else {
-            if (conversationHistory.length === 0) {
-              window.location.reload();
-            } else {
-              onSubmit('continue' as any);
-            }
-          }
-        }}
-        onCancel={() => {
-          setShowFailoverModal(false);
-          router.push('/');
-        }}
-      />
     </div>
   );
 }

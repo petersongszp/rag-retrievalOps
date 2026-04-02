@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { INTERVIEW_API } from '@/config/api';
 import { Typography, Button, Input, Avatar, message } from 'antd';
-import FailoverModal, { FailoverData } from '@/components/FailoverModal';
 import {
   AudioOutlined,
   CustomerServiceOutlined,
@@ -34,8 +33,6 @@ export default function SpecialInterviewStartPage() {
   const [starting, setStarting] = useState(false);
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
-  const [failoverData, setFailoverData] = useState<FailoverData | null>(null);
-  const [showFailoverModal, setShowFailoverModal] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const [currentDomain, setCurrentDomain] = useState<string>('');
   const asrCapability = useASRCapability();
@@ -121,7 +118,9 @@ export default function SpecialInterviewStartPage() {
           console.log('[检测] 后端服务连接正常');
         } catch (e) {
           const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
-          message.error(`Cannot connect to backend service. Please confirm it is running on ${apiUrl}`);
+          message.error(
+            `Cannot connect to backend service. Please confirm it is running on ${apiUrl}`
+          );
           setStarting(false);
           console.error('[检测] 后端服务连接失败:', e);
           return;
@@ -167,8 +166,7 @@ export default function SpecialInterviewStartPage() {
           } else if (response.status === 404) {
             console.error('[面试启动] 404错误 - 接口不存在');
             message.error({
-              content:
-                'API returned 404, please check routes',
+              content: 'API returned 404, please check routes',
               duration: 10,
             });
           } else {
@@ -217,14 +215,6 @@ export default function SpecialInterviewStartPage() {
                   console.log('[面试开始] session_id:', sid);
                   setSessionId(sid);
                   setStarting(false);
-                } else if (payload?.type === 'model_failover_required') {
-                  console.error('[模型失效]', payload.data);
-                  setFailoverData(payload.data);
-                  setShowFailoverModal(true);
-                  setStarting(false);
-                  setSubmitting(false);
-                  setWaitingNextQuestion(false);
-                  break; // Interrupt the stream loop
                 } else if (
                   payload?.type === 'chunk' ||
                   payload?.type === 'question' ||
@@ -441,8 +431,12 @@ export default function SpecialInterviewStartPage() {
               <CustomerServiceOutlined />
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">Special Interview</h1>
-              <p className="text-xs text-slate-500 m-0">{currentDomain || 'Skill Specific Practice'}</p>
+              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">
+                Special Interview
+              </h1>
+              <p className="text-xs text-slate-500 m-0">
+                {currentDomain || 'Skill Specific Practice'}
+              </p>
             </div>
           </div>
 
@@ -668,35 +662,6 @@ export default function SpecialInterviewStartPage() {
           </div>
         </div>
       </footer>
-
-      <FailoverModal
-        open={showFailoverModal}
-        data={failoverData}
-        onSuccess={() => {
-          setShowFailoverModal(false);
-          setFailoverData(null);
-          // Auto resubmit the previous action if possible
-          if (answer.trim()) {
-            onSubmit();
-          } else {
-            // In case it died generating the first question, just reload the page or force a restart.
-            // For simplicity:
-            if (conversationHistory.length === 0) {
-              window.location.reload();
-            } else {
-              // Tell backend to keep going from current DB state if applicable.
-              // It's safer to just resubmit an empty string or standard 'continue' action but backend
-              // supports "continue" as an arbitrary action. Let's send an empty submission since
-              // we're waiting for the question generation. Note: user might have to just refresh.
-              onSubmit('continue' as any);
-            }
-          }
-        }}
-        onCancel={() => {
-          setShowFailoverModal(false);
-          router.push('/');
-        }}
-      />
     </div>
   );
 }

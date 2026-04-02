@@ -56,7 +56,7 @@ type ResumeParseResult struct {
 func ParseResume(ctx context.Context, userId uint, resumeFilePath string) (*ResumeParseResult, error) {
 	// 添加 300 秒 (5分钟) 超时
 	log.Printf("验证生效了吗---")
-	timeoutCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 400*time.Second)
 	defer cancel()
 
 	log.Printf("[ParseResume] 开始执行简历解析流水线，用户ID: %d, 文件: %s", userId, resumeFilePath)
@@ -94,15 +94,10 @@ func ParseResume(ctx context.Context, userId uint, resumeFilePath string) (*Resu
 	systemPrompt := `你是一个专业的简历分析专家。你的任务是根据提供的简历内容，提取关键信息用于面试准备。
 
 任务要求：
-1. **[思维链 CoT]** 在生成最终 JSON 之前，请先在 <thinking>...</thinking> 标签内进行一步步的深度思考和分析。
-   - 分析简历的整体结构和质量。
-   - 逐个识别关键字段（如姓名、学校、公司），并处理可能存在的格式混乱或OCR错误。
-   - 对模棱两可的信息进行逻辑推理（例如：区分"项目经历"和"工作经历"）。
-   - 检查提取的数据是否完整和真实。
-2. 提取简历中的所有关键信息（基本信息、教育背景、工作经历、技术栈、项目经验、技能、证书等）。
-3. 分析候选人的背景特点（技术方向、行业经验、核心竞争力）。
-4. 必须返回标准的 JSON 格式，JSON 数据必须位于思考过程之后。
-5. 必须填充真实数据，不要留空。
+1. 提取简历中的所有关键信息（基本信息、教育背景、工作经历、技术栈、项目经验、技能、证书等）。
+2. 分析候选人的背景特点（技术方向、行业经验、核心竞争力）。
+3. 必须返回标准的 JSON 格式，不要返回任何其他内容（不要包含思维链、markdown代码块或任何解释性文字）。
+4. 必须填充真实数据，不要留空。
 
 JSON 格式要求（请严格遵守此结构）：
 {
@@ -143,11 +138,9 @@ JSON 格式要求（请严格遵守此结构）：
 
 	// 调用 Generate (增加重试机制)
 	var respMsg *schema.Message
-	maxRetries := 3
+	maxRetries := 2
 	for i := 0; i < maxRetries; i++ {
-		// 为每次请求设置独立的超时时间 (例如 90秒)，总超时由 timeoutCtx (300秒) 控制
-		// 这样如果一次请求卡住，可以有机会重试
-		callCtx, callCancel := context.WithTimeout(timeoutCtx, 90*time.Second)
+		callCtx, callCancel := context.WithTimeout(timeoutCtx, 180*time.Second)
 
 		log.Printf("[步骤3] 正在尝试第 %d/%d 次调用大模型...", i+1, maxRetries)
 		respMsg, err = chatModel.Generate(callCtx, messages)

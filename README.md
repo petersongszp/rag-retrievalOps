@@ -19,8 +19,28 @@
 ```bash
 cp .env.example .env
 ```
+--- 
+### 2. 使用 docker 容器化一键启动 (强烈推荐-环境稳定 bug 少,所有依赖一键搞定)
+需要先启动docker环境，如果是win电脑，启动docker desktop，如果是mac电脑，启动docker desktop或者colima等工具，如果是linux电脑，启动docker服务。
+```bash
+# 在项目根目录运行
+docker-compose up -d
+```
+这将自动构建并启动 Nginx（网关）、Backend(后端)、 Frontend(前端) 以及所有依赖服务。  
+**启动后的访问地址**：http://localhost:81 
 
-### 2. 启动依赖服务（Docker）
+-- 后续如果修改了代码或修改了配置，重启对应服务即可    
+-- docker 有缓存层，重载速度很快，对本地开发测试很友好
+```bash
+# docker-compose 重启服务加载配置命令
+# 修改配置或者代码后要使用强制重载,这样才能加载修改的内容
+# 哪个服务使用了改动的配置就重启哪个服务,没修改的服务不用重载
+
+# 在项目根目录运行
+docker-compose -f docker-compose.yml up -d --force-recreate --build backend
+````
+--- 
+### 3. 仅按需启动 Docker 依赖服务,后端或前端使用本机运行 
 使用 Docker Compose 启动 MySQL、Redis 等；如需向量检索再启动 Milvus 及其依赖。
 
 **仅需 MySQL + Redis（推荐本地开发）：**
@@ -37,7 +57,7 @@ docker-compose up -d mysql redis etcd minio milvus
 **使用本机已运行的 MySQL/Redis 容器：**  
 若你已有其他 Docker 或本机 MySQL/Redis，只需在 `.env` 中设置 `DB_HOST`、`DB_PORT`、`DB_NAME`、`DB_USER`、`DB_PASSWORD` 以及 `REDIS_HOST`、`REDIS_PORT`、`REDIS_PASSWORD` 指向现有服务即可，无需再起本项目 compose 中的 mysql/redis。
 
-### 3. 后端服务 (Backend)
+####  -- 后端服务单独启动 (Backend)（不推荐，win 环境下需要手动下载一些依赖工具）
 *   **配置文件**：`backend/config.yaml`（已支持环境变量注入，无需手动修改）
 *   **启动命令**：
     ```bash
@@ -47,7 +67,7 @@ docker-compose up -d mysql redis etcd minio milvus
     ```
 *   **访问地址**：http://localhost:8899 (API Base: `/api`)
 
-### 4. 前端应用 (Frontend)
+#### -- 前端应用单独启动 (Frontend)（win 环境不推荐，会有 url 拼接 bug ）
 *   **安装依赖**：
     ```bash
     cd frontend
@@ -59,13 +79,7 @@ docker-compose up -d mysql redis etcd minio milvus
     ```
 *   **访问地址**：http://localhost:3000
 
-### 5. 全栈容器化启动 (可选)
-如果您不想手动运行 Go 和 Node.js，可以使用 Docker 启动所有服务：
-```bash
-# 在项目根目录运行
-docker-compose up -d
-```
-这将自动构建并启动 Backend, Frontend 以及所有依赖服务。
+
 
 ## 技术栈
 
