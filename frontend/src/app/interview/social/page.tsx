@@ -13,34 +13,26 @@ import {
   message,
   Modal,
   Spin,
-  Alert,
 } from 'antd';
 import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 
-import Link from 'next/link';
 import { CheckCircleOutlined, FileOutlined } from '@ant-design/icons';
 import apiClient from '@/services/api/client';
-import { API_BASE_URL } from '@/config/api';
 
 const { Title, Paragraph, Text } = Typography;
 
-// 简历信息类型
 interface ResumeInfo {
   id: number;
   file_name: string;
 }
 
 export default function SocialInterviewPage() {
-  
-  
   const [form] = Form.useForm();
   const [selectedResumeId, setSelectedResumeId] = useState<number | null>(null);
   const [resumes, setResumes] = useState<ResumeInfo[]>([]);
   const [loadingResumes, setLoadingResumes] = useState(false);
   const [starting, setStarting] = useState(false);
-  const [modelConfigured, setModelConfigured] = useState<boolean | null>(null);
-  const [checkingConfig, setCheckingConfig] = useState<boolean>(false);
   const [showNoResumeModal, setShowNoResumeModal] = useState(false);
   const router = useRouter();
 
@@ -48,7 +40,7 @@ export default function SocialInterviewPage() {
   const fetchResumes = useCallback(async () => {
     setLoadingResumes(true);
     try {
-      const data: any = await apiClient.get("/resume/list");
+      const data: any = await apiClient.get('/resume/list');
       const list = data?.resumes || [];
       setResumes(list);
       if (list.length === 0) {
@@ -63,33 +55,13 @@ export default function SocialInterviewPage() {
 
   useEffect(() => {
     fetchResumes();
-    const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null;
-    setCheckingConfig(true);
-    fetch(`${API_BASE_URL}/user/model/check`, {
-      method: 'GET',
-      headers: {
-        Authorization: token ? `Bearer ${token}` : '',
-        'X-Auth-Token': token || '',
-      },
-    })
-      .then(async (res) => {
-        const data = await res.json().catch(() => null);
-        const configured = !!(data && data.data && data.data.configured);
-        setModelConfigured(configured);
-      })
-      .catch(() => {
-        setModelConfigured(false);
-      })
-      .finally(() => {
-        setCheckingConfig(false);
-      });
   }, [fetchResumes]);
 
   const features = [
-    { title: "Technical Essence", desc: "Dig deep into principles, build continuous follow-up" },
-    { title: "Design & Decision", desc: "Assess architectural ability via project difficulties" },
-    { title: "Communication", desc: "From passive answering to active display" },
-    { title: "Level Positioning", desc: "Benchmark against big factory level systems" },
+    { title: 'Technical Essence', desc: 'Dig deep into principles, build continuous follow-up' },
+    { title: 'Design & Decision', desc: 'Assess architectural ability via project difficulties' },
+    { title: 'Communication', desc: 'From passive answering to active display' },
+    { title: 'Level Positioning', desc: 'Benchmark against big factory level systems' },
   ];
 
   return (
@@ -98,10 +70,13 @@ export default function SocialInterviewPage() {
         {/* Header */}
         <div className="text-center mb-10">
           <Title level={2} className="!text-3xl !font-bold text-slate-800 !mb-3">
-            {"Comprehensive Interview"} · <span className="text-blue-600">{"Experienced Interview"}</span>
+            {'Comprehensive Interview'} ·{' '}
+            <span className="text-blue-600">{'Experienced Interview'}</span>
           </Title>
           <Paragraph className="text-slate-500 text-base max-w-2xl mx-auto">
-            {"Simulate real interview scenarios with deep follow-up questions based on your resume, project experience, and job competency."}
+            {
+              'Simulate real interview scenarios with deep follow-up questions based on your resume, project experience, and job competency.'
+            }
           </Paragraph>
         </div>
 
@@ -121,9 +96,11 @@ export default function SocialInterviewPage() {
               <div className="h-full flex flex-col">
                 <div className="mb-6">
                   <Title level={4} className="!mb-2 !font-bold text-slate-800">
-                    {"Core Assessment Points"}
+                    {'Core Assessment Points'}
                   </Title>
-                  <Text className="text-slate-400 text-sm">{"For experienced engineers, deep digging"}</Text>
+                  <Text className="text-slate-400 text-sm">
+                    {'For experienced engineers, deep digging'}
+                  </Text>
                 </div>
 
                 <div className="space-y-6 flex-1">
@@ -144,7 +121,9 @@ export default function SocialInterviewPage() {
 
                 <div className="mt-8 pt-8 border-t border-slate-50 hidden lg:block">
                   <div className="bg-slate-50 rounded-xl p-4 text-xs text-slate-500 leading-relaxed">
-                    {"💡 Tip: Detailed project difficulties in your resume yield a better experience."}
+                    {
+                      '💡 Tip: Detailed project difficulties in your resume yield a better experience.'
+                    }
                   </div>
                 </div>
               </div>
@@ -158,31 +137,35 @@ export default function SocialInterviewPage() {
                   className="!mb-8 !font-bold text-slate-800 flex items-center gap-2"
                 >
                   <span className="w-1.5 h-6 bg-blue-500 rounded-full block"></span>
-                  {"Interview Configuration"}
+                  {'Interview Configuration'}
                 </Title>
 
                 <Form
                   form={form}
                   layout="vertical"
                   size="large"
-                  initialValues={{ job: "Java Backend Developer", level: '简单' }}
+                  initialValues={{ job: 'Java Backend Developer', level: '简单' }}
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">{"Select Resume"}</span>}
+                    label={<span className="font-medium text-slate-700">{'Select Resume'}</span>}
                     name="resume_id"
-                    rules={[{ required: true, message: "Please select a resume" }]}
+                    rules={[{ required: true, message: 'Please select a resume' }]}
                     className="!mb-2"
                   >
                     <Select
-                      placeholder={"Please select a resume"}
+                      placeholder={'Please select a resume'}
                       loading={loadingResumes}
                       disabled={starting}
                       className="!h-12"
                       variant="filled"
                       onChange={(value) => setSelectedResumeId(value)}
                       notFoundContent={
-                        loadingResumes ? <Spin size="small" /> : "No resume, please upload in personal center"
+                        loadingResumes ? (
+                          <Spin size="small" />
+                        ) : (
+                          'No resume, please upload in personal center'
+                        )
                       }
                       options={resumes.map((r) => ({
                         value: r.id,
@@ -198,94 +181,67 @@ export default function SocialInterviewPage() {
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                     <Form.Item
-                      label={<span className="font-medium text-slate-700">{"Job Intention"}</span>}
+                      label={<span className="font-medium text-slate-700">{'Job Intention'}</span>}
                       name="job"
                       className="!mb-2"
                     >
                       <Input
-                        placeholder={"e.g., Java Backend Developer"}
+                        placeholder={'e.g., Java Backend Developer'}
                         className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                       />
                     </Form.Item>
 
                     <Form.Item
-                      label={<span className="font-medium text-slate-700">{"Difficulty Level"}</span>}
+                      label={
+                        <span className="font-medium text-slate-700">{'Difficulty Level'}</span>
+                      }
                       name="level"
-                      rules={[{ required: true, message: "Difficulty Level" }]}
+                      rules={[{ required: true, message: 'Difficulty Level' }]}
                       className="!mb-2"
                     >
                       <Select
                         className="!h-12"
                         variant="filled"
                         options={[
-                          { value: '简单', label: "Simple" },
-                          { value: '中等', label: "Normal" },
-                          { value: '复杂', label: "Hard" },
+                          { value: '简单', label: 'Simple' },
+                          { value: '中等', label: 'Normal' },
+                          { value: '复杂', label: 'Hard' },
                         ]}
                       />
                     </Form.Item>
                   </div>
 
                   <Form.Item
-                    label={<span className="font-medium text-slate-700">{"Target Company"}</span>}
+                    label={<span className="font-medium text-slate-700">{'Target Company'}</span>}
                     name="company_name"
                     className="!mb-6"
                   >
                     <Input
-                      placeholder={"e.g., ByteDance"}
+                      placeholder={'e.g., ByteDance'}
                       maxLength={100}
                       className="!h-12 !bg-slate-50 border-slate-200 hover:bg-white focus:bg-white transition-colors"
                     />
                   </Form.Item>
 
                   <div className="mt-2">
-                    {!checkingConfig && modelConfigured === false && (
-                      <Alert
-                        message={"Model not configured, cannot start interview"}
-                        description={
-                          <span>
-                            {"Please go to User Models page to configure"}{' '}
-                            <Link href="/user/models" className="text-blue-500 underline">
-                              {"User Models Page"}
-                            </Link>{' '}
-                            {"Interview Configuration".toLowerCase()}
-                          </span>
-                        }
-                        type="warning"
-                        showIcon
-                        className="mb-6 rounded-xl"
-                      />
-                    )}
-                    {checkingConfig && (
-                      <div className="mb-4 flex justify-center">
-                        <Tag color="default" className="px-3 py-1 rounded-full">
-                          {"Checking model configuration..."}
-                        </Tag>
-                      </div>
-                    )}
-
                     <Button
                       type="primary"
                       block
                       size="large"
                       className="!h-14 !text-lg !font-medium !rounded-xl bg-gradient-to-r from-blue-500 to-indigo-600 hover:!from-blue-600 hover:!to-indigo-700 border-0 shadow-lg shadow-blue-500/30 hover:shadow-blue-500/40 transition-all duration-300 transform hover:-translate-y-0.5"
                       loading={starting}
-                      disabled={starting || checkingConfig || modelConfigured === false}
+                      disabled={starting}
                       onClick={async () => {
                         try {
                           await form.validateFields();
                         } catch (e) {
-                          message.error("Please complete the form before starting interview");
-                          return;
-                        }
-                        if (!modelConfigured) {
-                          message.error("Model not configured, cannot start interview");
+                          message.error('Please complete the form before starting interview');
                           return;
                         }
                         const values = form.getFieldsValue();
                         const params = {
                           type: '综合面试',
-                          domain: '社招简历面试', // Updated domain
+                          domain: '社招简历面试',
                           difficulty: values.level,
                           position_name: values.job || '',
                           company_name: String(values.company_name || ''),
@@ -299,10 +255,10 @@ export default function SocialInterviewPage() {
                         router.push('/interview/social/start');
                       }}
                     >
-                      {"Start Interview"}
+                      {'Start Interview'}
                     </Button>
                     <div className="text-center text-slate-400 text-sm mt-4">
-                      {"Includes deep architecture design and scenario follow-ups"}
+                      {'Includes deep architecture design and scenario follow-ups'}
                     </div>
                   </div>
                 </Form>
@@ -313,15 +269,19 @@ export default function SocialInterviewPage() {
       </div>
       <Modal
         open={showNoResumeModal}
-        title={"Friendly Reminder"}
+        title={'Friendly Reminder'}
         footer={null}
         onCancel={() => setShowNoResumeModal(false)}
         centered
       >
         <div className="text-center py-6">
-          <div className="mb-4 text-slate-600 text-lg">{"No resume detected, cannot start interview."}</div>
+          <div className="mb-4 text-slate-600 text-lg">
+            {'No resume detected, cannot start interview.'}
+          </div>
           <div className="mb-8 text-slate-500">
-            {"Please go to personal center to upload your resume, AI will generate questions based on it."}
+            {
+              'Please go to personal center to upload your resume, AI will generate questions based on it.'
+            }
           </div>
           <Button
             type="primary"
@@ -329,7 +289,7 @@ export default function SocialInterviewPage() {
             onClick={() => router.push('/user/center')}
             className="w-full bg-indigo-600 hover:bg-indigo-500"
           >
-            {"Go to Upload Resume"}
+            {'Go to Upload Resume'}
           </Button>
         </div>
       </Modal>

@@ -484,24 +484,8 @@ func CheckUserModelConfigured(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	modelManager := userservice.NewModelManager()
-	defaultModel, err := modelManager.CheckUserModelConfigured(ctx, int64(userID))
-	if err != nil {
-		response.InternalServerError(ctx, c, err.Error())
-		return
-	}
-
-	// 返回检查结果
 	resp := user.NewCheckUserModelConfiguredResponse()
-
-	// 判断是否已配置并启用：模型存在且 is_default = 1
-	if defaultModel != nil && defaultModel.IsDefault == 1 {
-		// 已配置并启用，可以开始问答
-		resp.Configured = true
-	} else {
-		// 未配置或未启用，不能开始问答
-		resp.Configured = false
-	}
+	resp.Configured = true
 
 	response.Success(ctx, c, resp)
 }

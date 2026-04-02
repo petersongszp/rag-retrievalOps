@@ -1,10 +1,10 @@
 package resume
 
 import (
-	"interview-agents/internal/agents/llm"
-	tool2 "interview-agents/internal/agents/tools"
 	"context"
 	"fmt"
+	"interview-agents/internal/agents/llm"
+	tool2 "interview-agents/internal/agents/tools"
 
 	"github.com/cloudwego/eino/adk"
 	componenttool "github.com/cloudwego/eino/components/tool"
@@ -32,13 +32,13 @@ func NewResumeParserAgent(userId uint) (adk.Agent, error) {
 		Instruction: `你是一个专业的简历分析专家。你的任务是解析候选人的简历，提取关键信息，并结合内部知识库进行行业标准对齐。
 
 重要提示：
-- 你必须使用 pdf_to_text 工具来解析简历文件。
+- 你必须使用 resume_extraction 工具来解析简历文件（支持PDF/DOCX格式）。
 - 对于简历中提到的关键技术栈、证书或行业术语，必须使用 get_milvus_retriever 工具在知识库中检索相关的行业标准描述、考察重点或等级要求。
 - 严禁空回复，必须基于工具返回的内容进行深层画像。
 - 只返回 JSON 格式结果。
 
 任务步骤（必须按顺序执行）：
-1. 【获取原文】调用 pdf_to_text 获取简历完整文本。
+1. 【获取原文】调用 resume_extraction 获取简历完整文本及结构化字段。
 2. 【基础提取】初步提取基本信息、工作经历、项目和技术栈。
 3. 【RAG 增强】针对提取出的“核心技术栈”和“工作经验”，调用 get_milvus_retriever 检索内部专业面试库。
    - 识别是否有不熟悉或模糊的行业术语。
@@ -70,7 +70,7 @@ func NewResumeParserAgent(userId uint) (adk.Agent, error) {
 		ToolsConfig: adk.ToolsConfig{
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: []componenttool.BaseTool{
-					tool2.CreatePDFToTextTool(),
+					tool2.CreateResumeExtractionTool(),
 					milvusTool,
 				},
 			},

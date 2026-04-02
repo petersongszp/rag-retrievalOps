@@ -15,7 +15,6 @@ import {
   Progress,
   message,
 } from 'antd';
-import FailoverModal, { FailoverData } from '@/components/FailoverModal';
 import {
   AudioOutlined,
   CustomerServiceOutlined,
@@ -49,8 +48,6 @@ export default function SocialInterviewStartPage() {
   const [starting, setStarting] = useState(false);
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
-  const [failoverData, setFailoverData] = useState<FailoverData | null>(null);
-  const [showFailoverModal, setShowFailoverModal] = useState(false);
   const chatContainerRef = useRef<HTMLDivElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
@@ -135,7 +132,9 @@ export default function SocialInterviewStartPage() {
           console.log('[检测] 后端服务连接正常');
         } catch (e) {
           const apiUrl = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
-          message.error(`Cannot connect to backend service. Please confirm it is running on ${apiUrl}`);
+          message.error(
+            `Cannot connect to backend service. Please confirm it is running on ${apiUrl}`
+          );
           setStarting(false);
           console.error('[检测] 后端服务连接失败:', e);
           return;
@@ -181,8 +180,7 @@ export default function SocialInterviewStartPage() {
           } else if (response.status === 404) {
             console.error('[面试启动] 404错误 - 接口不存在');
             message.error({
-              content:
-                'API returned 404, please check routes',
+              content: 'API returned 404, please check routes',
               duration: 10,
             });
           } else {
@@ -231,14 +229,6 @@ export default function SocialInterviewStartPage() {
                   console.log('[面试开始] session_id:', sid);
                   setSessionId(sid);
                   setStarting(false);
-                } else if (payload?.type === 'model_failover_required') {
-                  console.error('[模型失效]', payload.data);
-                  setFailoverData(payload.data);
-                  setShowFailoverModal(true);
-                  setStarting(false);
-                  setSubmitting(false);
-                  setWaitingNextQuestion(false);
-                  break; // Interrupt the stream loop
                 } else if (
                   payload?.type === 'chunk' ||
                   payload?.type === 'question' ||
@@ -467,7 +457,9 @@ export default function SocialInterviewStartPage() {
               <CustomerServiceOutlined />
             </div>
             <div>
-              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">General Interview</h1>
+              <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">
+                General Interview
+              </h1>
               <p className="text-xs text-slate-500 m-0">Social Recruitment Resume Interview</p>
             </div>
           </div>
@@ -694,28 +686,6 @@ export default function SocialInterviewStartPage() {
           </div>
         </div>
       </footer>
-
-      <FailoverModal
-        open={showFailoverModal}
-        data={failoverData}
-        onSuccess={() => {
-          setShowFailoverModal(false);
-          setFailoverData(null);
-          if (answer.trim()) {
-            onSubmit();
-          } else {
-            if (conversationHistory.length === 0) {
-              window.location.reload();
-            } else {
-              onSubmit('continue' as any);
-            }
-          }
-        }}
-        onCancel={() => {
-          setShowFailoverModal(false);
-          router.push('/');
-        }}
-      />
     </div>
   );
 }

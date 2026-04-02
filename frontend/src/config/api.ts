@@ -16,7 +16,6 @@ export const USER_API = {
   LOGIN: `${API_BASE_URL}/user/login`,
   REGISTER: `${API_BASE_URL}/user/register`,
   GET_PROFILE: `${API_BASE_URL}/user/profile`,
-  SWITCH_MODEL: `${API_BASE_URL}/user/model/switch`,
   GITHUB_LOGIN: `${API_BASE_URL}/user/github/login`,
   GITHUB_CALLBACK: `${API_BASE_URL}/user/github/callback`,
   GOOGLE_LOGIN: `${API_BASE_URL}/user/google/login`,
@@ -51,18 +50,6 @@ export const RESUME_API = {
   SET_DEFAULT: `${API_BASE_URL}/resume/set-default`,
 };
 
-
-
-// AI 模型配置模块
-export const MODEL_API = {
-  CHECK: `${API_BASE_URL}/user/model/check`,
-  LIST: `${API_BASE_URL}/user/model/list`,
-  DETAILS: (id: string | number) => `${API_BASE_URL}/user/model/details/${id}`,
-  CREATE: `${API_BASE_URL}/user/create/model`,
-  UPDATE: (id: string | number) => `${API_BASE_URL}/user/model/update/${id}`,
-  DELETE: (id: string | number) => `${API_BASE_URL}/user/model/delete/${id}`,
-};
-
 // 其他功能 (预测/押题)
 export const PREDICTION_API = {
   LIST: `${API_BASE_URL}/prediction/list`,
@@ -77,4 +64,3 @@ export const PAYMENT_API = {
   ORDER_QUERY: `${API_BASE_URL}/payment/order/query`,
   ORDER_LIST: `${API_BASE_URL}/payment/order/list`,
 };
-

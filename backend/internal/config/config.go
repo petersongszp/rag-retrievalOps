@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"log"
 	"os"
 	"regexp"
@@ -22,6 +23,7 @@ type Config struct {
 	Security         SecurityConfig     `yaml:"security"`
 	GoogleSearch     GoogleConfig       `yaml:"google_search"`
 	OpenAI           OpenAIConfig       `yaml:"openai"`
+	LLM              LLMConfig          `yaml:"llm"`
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
@@ -184,6 +186,14 @@ type OpenAIConfig struct {
 	BaseURL   string `yaml:"base_url"`
 }
 
+// LLMConfig LLM 大模型配置（全局统一使用）
+type LLMConfig struct {
+	APIKey       string `yaml:"api_key"`
+	BaseURL      string `yaml:"base_url"`
+	ModelName    string `yaml:"model_name"`
+	ProviderName string `yaml:"provider_name"`
+}
+
 // RateLimitModelConfig 单个模型的限流配置
 type RateLimitModelConfig struct {
 	RPM int `yaml:"rpm"` // 每分钟最大请求数
@@ -202,21 +212,42 @@ type LLMRateLimitConfig struct {
 var Global Config
 
 // LoadConfig 从文件加载配置
+// 先对 YAML 原文做环境变量替换（${VAR} / $VAR），再反序列化到结构体。
+// 这样所有配置字段自动支持环境变量注入，无需在 ExpandEnv 中逐字段维护。
 func LoadConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
 
+	expanded := expandEnvInBytes(data)
+
 	var cfg Config
-	err = yaml.Unmarshal(data, &cfg)
-	if err != nil {
+	if err = yaml.Unmarshal(expanded, &cfg); err != nil {
 		return nil, err
 	}
 
 	Global = cfg
 	log.Println("配置加载成功")
 	return &cfg, nil
+}
+
+// expandEnvInBytes 对字节切片中的 ${VAR_NAME} / $VAR_NAME 做环境变量替换
+func expandEnvInBytes(data []byte) []byte {
+	re := regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
+	result := re.ReplaceAllFunc(data, func(match []byte) []byte {
+		varName := ""
+		if bytes.HasPrefix(match, []byte("${")) {
+			varName = string(match[2 : len(match)-1])
+		} else {
+			varName = string(match[1:])
+		}
+		if val, ok := os.LookupEnv(varName); ok {
+			return []byte(val)
+		}
+		return match
+	})
+	return result
 }
 
 // EmbeddingConfig Embedding服务配置
@@ -304,6 +335,12 @@ func (c *Config) ExpandEnv() {
 	c.OpenAI.APIKey = expandEnvVar(c.OpenAI.APIKey)
 	c.OpenAI.BaseURL = expandEnvVar(c.OpenAI.BaseURL)
 	c.OpenAI.ModelName = expandEnvVar(c.OpenAI.ModelName)
+
+	// 展开 LLM 配置
+	c.LLM.APIKey = expandEnvVar(c.LLM.APIKey)
+	c.LLM.BaseURL = expandEnvVar(c.LLM.BaseURL)
+	c.LLM.ModelName = expandEnvVar(c.LLM.ModelName)
+	c.LLM.ProviderName = expandEnvVar(c.LLM.ProviderName)
 
 	// 展开 Google 配置
 	c.GoogleSearch.APIKey = expandEnvVar(c.GoogleSearch.APIKey)
