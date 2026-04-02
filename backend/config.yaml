@@ -184,3 +184,11 @@ rate_limit:
     # "deepseek-chat":
     #   rpm: 100
     #   tpm: 500000
+
+#SMTP配置
+email:
+  smtp_host: smtp.gmail.com
+  smtp_port: 587
+  smtp_user: Temp@gmail.com  # 替换为您的Gmail邮箱
+  smtp_pass: TempPassword  # 粘贴刚才生成的16位应用专用密码
+  from_email: Temp@gmail.com  # 与smtp_user相同
