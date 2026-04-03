@@ -227,7 +227,7 @@ const Navbar: FC = () => {
               />
             </a>
           </Dropdown>
-          <Link
+          {/* <Link
             href="/interview/multi"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
@@ -239,7 +239,7 @@ const Navbar: FC = () => {
               offset={[10, -8]}
               className="scale-75 origin-left"
             />
-          </Link>
+          </Link> */}
           <Link
             href="/interview/special"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
@@ -276,7 +276,7 @@ const Navbar: FC = () => {
                   },
                   { key: 'pay', label: <Link href="/user/pay">{'Payment'}</Link> },
                   { key: 'press', label: <Link href="/user/press">{'Prediction Records'}</Link> },
-                  { key: 'notes', label: <Link href="/user/notes">{'Note List'}</Link> },
+                  // { key: 'notes', label: <Link href="/user/notes">{'Note List'}</Link> },
                   { type: 'divider' },
                   {
                     key: 'logout',
