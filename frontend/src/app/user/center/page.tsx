@@ -316,8 +316,12 @@ export default function UserCenterPage() {
                   <Spin spinning={loadingResumes}>
                     {resumes.length > 0 ? (
                       <div className="space-y-3 mb-6">
-                        {resumes.map((resume) => (
-                          <div
+                        {resumes.map((resume) => {
+                          const latestId = resumes.length > 0
+                            ? resumes.reduce((a, b) => (a.created_at > b.created_at ? a : b)).id
+                            : -1;
+                          const isDefault = resume.id === latestId;
+                          return (                          <div
                             key={resume.id}
                             className="group flex items-center justify-between p-4 bg-slate-50 hover:bg-blue-50/50 border border-slate-100 hover:border-blue-100 rounded-2xl transition-all duration-300"
                           >
@@ -361,7 +365,7 @@ export default function UserCenterPage() {
                               </div>
                             </div>
                             <Space>
-                              {!resume.is_default && (
+                              {!isDefault && (
                                 <Button
                                   type="text"
                                   size="small"
@@ -371,7 +375,7 @@ export default function UserCenterPage() {
                                   {'Set Default'}
                                 </Button>
                               )}
-                              {resume.is_default ? (
+                              {isDefault ? (
                                 <Tag color="blue" className="m-0 border-0 bg-blue-50 text-blue-600">
                                   Default
                                 </Tag>
@@ -392,7 +396,8 @@ export default function UserCenterPage() {
                               </Popconfirm>
                             </Space>
                           </div>
-                        ))}
+                        );
+                        })}
                       </div>
                     ) : null}
 
