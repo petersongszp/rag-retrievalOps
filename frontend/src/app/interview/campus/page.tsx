@@ -119,7 +119,7 @@ export default function CampusInterviewPage() {
                   form={form}
                   layout="vertical"
                   size="large"
-                  initialValues={{ job: 'Java Backend Developer', level: '简单' }}
+                  initialValues={{ job: 'Java Backend Developer', level: 'simple' }}
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
@@ -178,9 +178,9 @@ export default function CampusInterviewPage() {
                         className="!h-12"
                         variant="filled"
                         options={[
-                          { value: '简单', label: 'Simple' },
-                          { value: '中等', label: 'Normal' },
-                          { value: '复杂', label: 'Hard' },
+                          { value: 'simple', label: 'Simple' },
+                          { value: 'normal', label: 'Normal' },
+                          { value: 'hard', label: 'Hard' },
                         ]}
                       />
                     </Form.Item>
@@ -219,8 +219,8 @@ export default function CampusInterviewPage() {
                         }
                         const values = form.getFieldsValue();
                         const params = {
-                          type: '综合面试',
-                          domain: '校招简历面试',
+                          type: 'comprehensive',
+                          domain: 'campus',
                           difficulty: values.level,
                           position_name: values.job || '',
                           company_name: String(values.company_name || ''),

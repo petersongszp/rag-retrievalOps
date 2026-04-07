@@ -23,22 +23,22 @@ import { INTERVIEW_API } from '@/config/api';
 const { Title } = Typography;
 
 const QUOTES = [
-  '面试是双向选择，保持自信，展现最好的自己。',
-  '每一次面试都是一次成长的机会，无论结果如何，你都在进步。',
-  '相信自己的积累，你比想象中更优秀。',
-  '保持平常心，最好的机会往往在不经意间到来。',
-  '失败只是暂时的，坚持下去，成功就在拐角处。',
-  '准备充分，心态平和，你一定行！',
-  '每一个Offer背后，都有无数次的努力与尝试。',
-  '面试官也是未来的同事，像朋友一样交流吧。',
-  '星光不问赶路人，时光不负有心人。',
-  '沉着冷静，你的潜力无限大。',
+  'Interviewing is a two-way street. Stay confident and show your best self.',
+  'Every interview is a chance to grow, regardless of the outcome.',
+  'Trust your preparation — you are better than you think.',
+  'Stay calm. The best opportunities often come when you least expect them.',
+  'Failure is temporary. Keep going, success is just around the corner.',
+  'Prepare well, stay positive — you\'ve got this!',
+  'Behind every offer are countless efforts and attempts.',
+  'Interviewers are future colleagues too. Chat like friends.',
+  'Hard work never betrays those who persevere.',
+  'Stay calm and composed — your potential is limitless.',
 ];
 
 export default function InterviewRecordsPage() {
   
   const [quote, setQuote] = useState('');
-  const [filter, setFilter] = useState('全部');
+  const [filter, setFilter] = useState('all');
 
   const [list, setList] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -76,7 +76,7 @@ export default function InterviewRecordsPage() {
       }));
       setList(items);
     } catch (e: any) {
-      message.error(e?.response?.data?.message || '加载失败');
+      message.error(e?.response?.data?.message || 'Load failed');
     } finally {
       setLoading(false);
     }
@@ -99,10 +99,10 @@ export default function InterviewRecordsPage() {
     let filtered = list;
 
     // 根据类型筛选
-    if (filter !== '全部') {
-      if (filter === '综合面试') {
-        filtered = filtered.filter((it) => it.type === '综合面试');
-      } else if (filter === '社招' || filter === '校招') {
+    if (filter !== 'all') {
+      if (filter === 'comprehensive') {
+        filtered = filtered.filter((it) => it.type === 'comprehensive');
+      } else if (filter === 'experienced' || filter === 'campus') {
         filtered = filtered.filter((it) => it.domain === filter);
       }
     }
@@ -173,7 +173,7 @@ export default function InterviewRecordsPage() {
                       icon={<ReloadOutlined />}
                       onClick={refreshQuote}
                       className="text-slate-400 hover:text-blue-600 bg-white/50 hover:bg-white rounded-full"
-                      title="换一句"
+                      title="New quote"
                     />
                   </div>
                   <div className="flex items-start gap-5">
@@ -213,10 +213,10 @@ export default function InterviewRecordsPage() {
                 onChange={setFilter}
                 style={{ width: 180 }}
                 options={[
-                  { value: '全部', label: "All Types" },
-                  { value: '综合面试', label: "Comprehensive" },
-                  { value: '社招', label: "Experienced" },
-                  { value: '校招', label: "Campus" },
+                  { value: 'all', label: "All Types" },
+                  { value: 'comprehensive', label: "Comprehensive" },
+                  { value: 'experienced', label: "Experienced" },
+                  { value: 'campus', label: "Campus" },
                 ]}
                 className="font-medium"
                 size="large"
@@ -286,7 +286,7 @@ export default function InterviewRecordsPage() {
                         border: 'border-slate-100',
                       };
                       const createdTime = it.createdAt
-                        ? new Date(it.createdAt).toLocaleString('zh-CN')
+                        ? new Date(it.createdAt).toLocaleString('en-US')
                         : '-';
 
                       return (

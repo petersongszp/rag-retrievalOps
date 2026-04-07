@@ -134,18 +134,18 @@ func handleResumeUpload(ctx context.Context, c *app.RequestContext) (string, err
 
 	// 验证文件类型
 	if filepath.Ext(fileHeader.Filename) != ".pdf" {
-		return "", fmt.Errorf("只支持 PDF 格式的简历文件")
+		return "", fmt.Errorf("Only PDF format is supported")
 	}
 
 	// 验证文件大小
 	if fileHeader.Size > 10*1024*1024 {
-		return "", fmt.Errorf("文件大小不能超过 10MB")
+		return "", fmt.Errorf("File size cannot exceed 10MB")
 	}
 
 	// 打开上传的文件
 	file, err := fileHeader.Open()
 	if err != nil {
-		return "", fmt.Errorf("无法打开上传的文件: %v", err)
+		return "", fmt.Errorf("Failed to open uploaded file: %v", err)
 	}
 	defer func(file multipart.File) {
 		err := file.Close()
@@ -157,7 +157,7 @@ func handleResumeUpload(ctx context.Context, c *app.RequestContext) (string, err
 	// 获取 OSS 实例
 	ossClient, err := getOSS()
 	if err != nil {
-		return "", fmt.Errorf("系统存储初始化失败: %v", err)
+		return "", fmt.Errorf("Storage system initialization failed: %v", err)
 	}
 
 	// 生成唯一的文件名 (key)
@@ -168,7 +168,7 @@ func handleResumeUpload(ctx context.Context, c *app.RequestContext) (string, err
 	// 注意: c 是 RequestContext, 实现了 context.Context
 	storedPath, err := ossClient.PutObject(ctx, fileName, file, fileHeader.Size, "application/pdf")
 	if err != nil {
-		return "", fmt.Errorf("文件保存失败: %v", err)
+		return "", fmt.Errorf("File save failed: %v", err)
 	}
 
 	// 对于 LocalOSS，storedPath 就是绝对路径，可以直接用于后续的 PDF 解析

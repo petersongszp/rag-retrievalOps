@@ -143,7 +143,7 @@ export default function MultiAgentInterviewPage() {
                   form={form}
                   layout="vertical"
                   size="large"
-                  initialValues={{ job: 'Senior Frontend Engineer', level: '中等' }}
+                  initialValues={{ job: 'Senior Frontend Engineer', level: 'normal' }}
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
@@ -205,9 +205,9 @@ export default function MultiAgentInterviewPage() {
                         className="!h-12"
                         variant="filled"
                         options={[
-                          { value: '简单', label: 'Junior' },
-                          { value: '中等', label: 'Senior' },
-                          { value: '复杂', label: 'Expert' },
+                          { value: 'simple', label: 'Junior' },
+                          { value: 'normal', label: 'Senior' },
+                          { value: 'hard', label: 'Expert' },
                         ]}
                       />
                     </Form.Item>
@@ -242,8 +242,8 @@ export default function MultiAgentInterviewPage() {
                         }
                         const values = form.getFieldsValue();
                         const params = {
-                          type: '多人模拟面试',
-                          domain: 'Eino多智能体架构',
+                          type: 'multi-agent',
+                          domain: 'eino',
                           difficulty: values.level,
                           position_name: values.job || '',
                           company_name: String(values.company_name || ''),

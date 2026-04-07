@@ -53,7 +53,7 @@ export default function SocialInterviewStartPage() {
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
     sessionId,
-    interviewType: '综合面试',
+    interviewType: 'comprehensive',
     questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
@@ -102,9 +102,9 @@ export default function SocialInterviewStartPage() {
     setStarting(true);
     const sanitize = (s: string) => s.replace(/[<>&"'`]/g, '');
     const requestBody = {
-      type: String(params.type || '综合面试'),
-      domain: String(params.domain || '社招简历面试'),
-      difficulty: String(params.difficulty || '简单'),
+      type: String(params.type || 'comprehensive'),
+      domain: String(params.domain || 'experienced'),
+      difficulty: String(params.difficulty || 'simple'),
       position_name: String(params.position_name || ''),
       company_name: sanitize(String(params.company_name || '')),
       resume_id: Number(params.resume_id),

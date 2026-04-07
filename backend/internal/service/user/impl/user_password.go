@@ -1,12 +1,12 @@
 package impl
 
 import (
-	"interview-agents/internal/model"
-	"interview-agents/internal/repository"
-	"interview-agents/internal/service/common"
 	"context"
 	"errors"
 	"fmt"
+	"interview-agents/internal/model"
+	"interview-agents/internal/repository"
+	"interview-agents/internal/service/common"
 
 	"github.com/google/uuid"
 	"gorm.io/gorm"
@@ -23,7 +23,7 @@ func (s *UserServer) ForgotPassword(ctx context.Context, email string) error {
 	_, err := model.UserDao.FindByEmail(email)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return errors.New("该邮箱未注册")
+			return errors.New("Email not registered")
 		}
 		return err
 	}
@@ -35,23 +35,23 @@ func (s *UserServer) ForgotPassword(ctx context.Context, email string) error {
 	key := ResetTokenPrefix + token
 	err = repository.SetCache(ctx, key, email, ResetTokenExpiration)
 	if err != nil {
-		return fmt.Errorf("生成凭证失败: %v", err)
+		return fmt.Errorf("Failed to generate token: %v", err)
 	}
 
 	// 4. 发送邮件
 	// TODO: 从配置或环境变量获取前端地址
 	resetLink := fmt.Sprintf("http://localhost:3000/reset-password?token=%s", token)
-	subject := "重置您的密码"
+	subject := "Reset Your Password"
 	body := fmt.Sprintf(`
-		<h3>密码重置请求</h3>
-		<p>您收到这封邮件是因为您请求重置密码。</p>
-		<p>请点击下面的链接重置密码（15分钟内有效）：</p>
+		<h3>Password Reset Request</h3>
+		<p>You received this email because you requested a password reset.</p>
+		<p>Please click the link below to reset your password (valid for 15 minutes):</p>
 		<p><a href="%s">%s</a></p>
-		<p>如果这不是您发起的请求，请忽略此邮件。</p>
+		<p>If you did not request this, please ignore this email.</p>
 	`, resetLink, resetLink)
 
 	if err := common.SendEmail(email, subject, body); err != nil {
-		return fmt.Errorf("发送邮件失败: %v", err)
+		return fmt.Errorf("Failed to send email: %v", err)
 	}
 
 	return nil
@@ -63,16 +63,16 @@ func (s *UserServer) ResetPassword(ctx context.Context, token, newPassword strin
 	key := ResetTokenPrefix + token
 	email, err := repository.GetCache(ctx, key)
 	if err != nil {
-		return errors.New("重置链接无效或已过期")
+		return errors.New("Reset link is invalid or has expired")
 	}
 	if email == "" {
-		return errors.New("重置链接无效或已过期")
+		return errors.New("Reset link is invalid or has expired")
 	}
 
 	// 2. 查找用户
 	user, err := model.UserDao.FindByEmail(email)
 	if err != nil {
-		return errors.New("用户不存在")
+		return errors.New("User not found")
 	}
 
 	// 3. 加密新密码

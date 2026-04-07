@@ -102,7 +102,7 @@ func StartInterviewStream(ctx context.Context, c *app.RequestContext) {
 		// 发送开始事件
 		err = core.SendSSEEvent(pipeWriter, map[string]interface{}{
 			"type":       "start",
-			"message":    "面试已开始，正在生成第一个问题...",
+			"message":    "Interview started. Generating first question...",
 			"session_id": session.SessionID,
 		})
 		if err != nil {

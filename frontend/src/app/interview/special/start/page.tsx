@@ -39,7 +39,7 @@ export default function SpecialInterviewStartPage() {
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
     sessionId,
-    interviewType: '专项面试',
+    interviewType: 'special',
     domain: currentDomain,
     questionText,
     onTranscript: (transcript) => {
@@ -91,7 +91,7 @@ export default function SpecialInterviewStartPage() {
 
     // 接口传参格式必须严格遵循以下JSON结构
     const requestBody = {
-      type: '专项面试',
+      type: 'special',
       domain: String(params.domain || ''),
       difficulty: String(params.difficulty || ''),
     };

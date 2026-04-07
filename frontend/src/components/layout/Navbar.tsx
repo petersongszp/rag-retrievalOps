@@ -122,13 +122,13 @@ const Navbar: FC = () => {
       const res: any = await apiClient.get('/user/google/login');
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('获取 Google 登录地址失败');
+        message.error('Failed to get Google login URL');
         setGoogleLoading(false);
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'Google 登录失败');
+      message.error(e?.response?.data?.message || e?.message || 'Google login failed');
       setGoogleLoading(false);
     }
   };
@@ -153,10 +153,10 @@ const Navbar: FC = () => {
           </div>
           <div className="flex flex-col justify-center h-10">
             <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 leading-none mb-0.5 pt-1">
-              面试吧
+              Interview Bar
             </span>
             <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium leading-none scale-90 origin-left">
-              INTERVIEW MASTER
+              INTERVIEW Bar
             </span>
           </div>
         </div>
@@ -364,7 +364,7 @@ const Navbar: FC = () => {
                     {'Login'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -391,7 +391,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google 登录
+                        Google
                       </Button>
                       <Button
                         type="default"
@@ -412,7 +412,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub 登录
+                        GitHub
                       </Button>
                     </div>
                   </div>
@@ -457,7 +457,7 @@ const Navbar: FC = () => {
                     {'Register and Login'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -484,7 +484,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google 登录
+                        Google
                       </Button>
                       <Button
                         type="default"
@@ -505,7 +505,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub 登录
+                        GitHub
                       </Button>
                     </div>
                   </div>

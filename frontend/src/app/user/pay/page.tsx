@@ -16,13 +16,13 @@ export default function PayPage() {
     () => [
       {
         key: 'vip_monthly',
-        label: 'VIP 月卡（一次性）',
+        label: 'VIP Monthly (One-time)',
         provider: 'paypal',
         product_code: 'monthly',
         price_code: 'monthly_9.99',
         amount: 999, // 最小货币单位（示例：$9.99 -> 999 cents）
         currency: 'usd',
-        product_name: 'VIP会员月卡',
+        product_name: 'VIP Monthly Pass',
       },
     ],
     [],
@@ -30,7 +30,7 @@ export default function PayPage() {
 
   const handleCreateCheckout = async (p: (typeof products)[number]) => {
     if (!isAuthenticated || !user) {
-      message.error('请先登录后再支付');
+      message.error('Please login first');
       return;
     }
 
@@ -55,7 +55,7 @@ export default function PayPage() {
 
       const res: any = await apiClient.post(PAYMENT_API.CHECKOUT_CREATE, req);
       if (!res?.checkout_url || !res?.order_no) {
-        throw new Error('支付服务返回数据缺失：checkout_url / order_no');
+        throw new Error('Payment service returned incomplete data');
       }
 
       localStorage.setItem('payment_last_order_no', String(res.order_no));
@@ -64,7 +64,7 @@ export default function PayPage() {
       // 跳转到 PayPal approve 页面
       window.location.href = res.checkout_url;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || '发起支付失败');
+      message.error(e?.response?.data?.message || e?.message || 'Payment initiation failed');
     } finally {
       setLoading(false);
     }
@@ -74,9 +74,9 @@ export default function PayPage() {
     <div className="min-h-screen bg-slate-50 py-10">
       <div className="container mx-auto px-4">
         <Title level={2} className="text-slate-900 mb-2">
-          支付中心
+          Payment Center
         </Title>
-        <Text className="text-slate-500">选择套餐并使用 PayPal 完成一次性支付。</Text>
+        <Text className="text-slate-500">Select a plan and complete payment via PayPal.</Text>
 
         <div className="mt-8 grid grid-cols-1 md:grid-cols-2 gap-6">
           {products.map((p) => (
@@ -88,7 +88,7 @@ export default function PayPage() {
                     <Tag color="blue">{p.provider.toUpperCase()}</Tag>
                   </div>
                   <div className="mt-2 text-sm text-slate-500">
-                    金额：{(p.amount / 100).toFixed(2)} {p.currency.toUpperCase()}
+                    Amount: {(p.amount / 100).toFixed(2)} {p.currency.toUpperCase()}
                   </div>
                 </div>
                 <div className="text-right">
@@ -98,7 +98,7 @@ export default function PayPage() {
                     onClick={() => handleCreateCheckout(p)}
                     disabled={loading}
                   >
-                    {loading ? <Spin size="small" /> : '立即支付'}
+                    {loading ? <Spin size="small" /> : 'Pay Now'}
                   </Button>
                 </div>
               </div>
@@ -107,7 +107,7 @@ export default function PayPage() {
         </div>
 
         <div className="mt-6 text-xs text-slate-400">
-          提示：支付结果以后端 webhook 校验为准，页面会在支付成功后轮询订单状态。
+          Note: Payment results are verified by backend webhook.
         </div>
       </div>
     </div>

@@ -84,7 +84,7 @@ export default function UserCenterPage() {
     {
       key: '1',
       id: 'ORDER_20241101_001',
-      type: 'VIP会员 - 月卡',
+      type: 'VIP Monthly Pass',
       amount: 29.9,
       status: 'success',
       time: '2024-11-01 12:30:00',
@@ -92,7 +92,7 @@ export default function UserCenterPage() {
     {
       key: '2',
       id: 'ORDER_20241005_008',
-      type: '面试加油包',
+      type: 'Interview Boost Pack',
       amount: 9.9,
       status: 'success',
       time: '2024-10-05 09:15:00',
@@ -145,7 +145,7 @@ export default function UserCenterPage() {
       }
       fetchResumes();
     } catch (err: any) {
-      message.error(err?.message || '简历上传失败');
+      message.error(err?.message || 'Resume upload failed');
     } finally {
       setUploading(false);
     }
@@ -169,7 +169,7 @@ export default function UserCenterPage() {
           fetchResumes();
           return;
         } else if (resume?.status === 'failed') {
-          message.error(`${'Parsing failed'}: ${resume?.error_msg || '未知错误'}`);
+          message.error(`${'Parsing failed'}: ${resume?.error_msg || 'Unknown error'}`);
           fetchResumes();
           return;
         } else if (attempts < maxAttempts) {
@@ -198,7 +198,7 @@ export default function UserCenterPage() {
       message.success('Default resume set');
       fetchResumes();
     } catch (err: any) {
-      message.error(err?.message || '设置失败');
+      message.error(err?.message || 'Failed to set default');
     }
   };
 
@@ -209,7 +209,7 @@ export default function UserCenterPage() {
       message.success('Resume deleted');
       fetchResumes();
     } catch (err: any) {
-      message.error(err?.message || '删除失败');
+      message.error(err?.message || 'Delete failed');
     }
   };
 
@@ -274,7 +274,7 @@ export default function UserCenterPage() {
                   />
                 </div>
                 <h2 className="text-xl font-bold text-slate-800 mb-1">
-                  {profile?.username || '未登录'}
+                  {profile?.username || 'Not logged in'}
                 </h2>
                 <Tag
                   color="blue"
@@ -308,7 +308,7 @@ export default function UserCenterPage() {
                       </div>
                       <div>
                         <h3 className="text-lg font-bold text-slate-800">{'My Resumes'}</h3>
-                        <p className="text-xs text-slate-400">已上传 {resumes.length}/3 份</p>
+                        <p className="text-xs text-slate-400">Uploaded {resumes.length}/3</p>
                       </div>
                     </div>
                   </div>
@@ -331,7 +331,7 @@ export default function UserCenterPage() {
                                   {/* 状态标签 */}
                                   {resume.status === 'pending' && (
                                     <Tag color="processing" className="ml-2 border-0">
-                                      等待解析
+                                      Pending
                                     </Tag>
                                   )}
                                   {resume.status === 'processing' && (
@@ -340,7 +340,7 @@ export default function UserCenterPage() {
                                       icon={<Spin size="small" className="mr-1" />}
                                       className="ml-2 border-0"
                                     >
-                                      解析中...
+                                      Processing...
                                     </Tag>
                                   )}
                                   {resume.status === 'failed' && (
@@ -349,7 +349,7 @@ export default function UserCenterPage() {
                                       className="ml-2 border-0"
                                       title={resume.error_msg}
                                     >
-                                      解析失败
+                                      Failed
                                     </Tag>
                                   )}
                                 </div>
@@ -373,7 +373,7 @@ export default function UserCenterPage() {
                               )}
                               {resume.is_default ? (
                                 <Tag color="blue" className="m-0 border-0 bg-blue-50 text-blue-600">
-                                  默认
+                                  Default
                                 </Tag>
                               ) : null}
                               <Popconfirm

@@ -17,11 +17,12 @@ function GoogleCallbackContent() {
   useEffect(() => {
     const code = searchParams.get('code');
     if (!code) {
-      setErrorMsg('缺少授权码，请从登录页重新使用 Google 登录');
+      setErrorMsg('Missing authorization code. Please retry Google login from the login page.');
       setStatus('error');
       return;
     }
 
+    // 防止 React Strict Mode 或依赖变化导致 effect 执行两次，用同一 code 重复请求会报错并先显示"登录失败"
     if (didRun.current) return;
     didRun.current = true;
 
@@ -31,7 +32,7 @@ function GoogleCallbackContent() {
         const data = res?.data ?? res;
         const token = data?.token || data?.accessToken;
         if (!token) {
-          setErrorMsg('登录失败：未返回令牌');
+          setErrorMsg('Login failed: No token returned');
           setStatus('error');
           return;
         }
@@ -50,15 +51,15 @@ function GoogleCallbackContent() {
             avatar: user.avatar,
           });
         } else {
-          login({ id: '0', email: '', name: 'Google 用户', username: 'google_user' });
+          login({ id: '0', email: '', name: 'Google User', username: 'google_user' });
         }
         setStatus('success');
         setTimeout(() => router.replace('/'), 800);
       } catch (e: any) {
         const isTimeout = e?.code === 'ECONNABORTED' || String(e?.message || '').includes('timeout');
         const msg = isTimeout
-          ? 'Google 登录请求超时，请检查后端服务与 Google 连通性后重试'
-          : e?.response?.data?.message || e?.message || 'Google 登录验证失败，请重试';
+          ? 'Google login request timed out. Please check backend connectivity and retry.'
+          : e?.response?.data?.message || e?.message || 'Google login verification failed. Please retry.';
         setErrorMsg(msg);
         setStatus('error');
       }
@@ -69,7 +70,7 @@ function GoogleCallbackContent() {
     return (
       <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
         <Spin size="large" />
-        <p className="text-slate-500">正在完成 Google 登录…</p>
+        <p className="text-slate-500">Completing Google login…</p>
       </div>
     );
   }
@@ -79,14 +80,14 @@ function GoogleCallbackContent() {
       <div className="flex justify-center items-center min-h-[60vh] px-4">
         <Result
           status="error"
-          title="登录失败"
+          title="Login Failed"
           subTitle={errorMsg}
           extra={[
             <Button type="primary" key="home" onClick={() => router.push('/')}>
-              返回首页
+              Go Home
             </Button>,
             <Button key="retry" onClick={() => router.push('/')}>
-              重新登录
+              Retry Login
             </Button>,
           ]}
         />
@@ -97,7 +98,7 @@ function GoogleCallbackContent() {
   return (
     <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
       <Spin size="large" />
-      <p className="text-slate-500">登录成功，正在跳转…</p>
+      <p className="text-slate-500">Login successful, redirecting…</p>
     </div>
   );
 }
@@ -108,7 +109,7 @@ export default function GoogleCallbackPage() {
       fallback={
         <div className="flex flex-col items-center justify-center min-h-[60vh] gap-4">
           <Spin size="large" />
-          <p className="text-slate-500">加载中…</p>
+          <p className="text-slate-500">Loading…</p>
         </div>
       }
     >

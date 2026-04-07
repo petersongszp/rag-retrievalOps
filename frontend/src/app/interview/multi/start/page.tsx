@@ -45,7 +45,7 @@ export default function MultiAgentInterviewStartPage() {
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
     sessionId,
-    interviewType: '多对一面试',
+    interviewType: 'multi-agent',
     questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
