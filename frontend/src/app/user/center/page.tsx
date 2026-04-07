@@ -407,7 +407,7 @@ export default function UserCenterPage() {
                         <Dragger
                           {...uploadProps}
                           disabled={uploading}
-                          className="bg-slate-50 border-2 border-dashed border-slate-200 rounded-2xl hover:border-blue-400 transition-colors"
+                          className="[&]:!border-0 [&]:!border-none rounded-2xl overflow-hidden"
                           style={{ padding: '40px 0', background: 'rgb(248 250 252)' }}
                         >
                           <p className="ant-upload-drag-icon text-blue-500 mb-4">
