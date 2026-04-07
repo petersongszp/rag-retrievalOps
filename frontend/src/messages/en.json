@@ -243,7 +243,7 @@
     "generating": "Generating predictions...",
     "submitSuccess": "Started generating...",
     "submitError": "Submission failed, please try again",
-    "footerText": "First free prediction with 20 questions · Takes about 30 seconds",
+    "footerText": "First free prediction with 5 questions · Takes about 60 seconds",
     "sideCards": {
       "card1": {
         "title": "Quick Positioning",
