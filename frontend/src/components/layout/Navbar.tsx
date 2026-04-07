@@ -258,12 +258,12 @@ const Navbar: FC = () => {
         </nav>
 
         <div className="flex items-center gap-4">
-          <Button
+          {/* <Button
             type="text"
             shape="circle"
             icon={<BellOutlined className="text-slate-600 text-lg" />}
             className="hover:bg-slate-100 flex items-center justify-center"
-          />
+          /> */}
           {authed ? (
             <Dropdown
               trigger={['hover']}
