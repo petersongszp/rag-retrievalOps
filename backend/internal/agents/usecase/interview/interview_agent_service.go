@@ -147,6 +147,8 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 	iter := runner.Run(ctx, messages)
 
 	var lastMessage string
+	// Eino 在一次 Run 中可能对同一轮助手回复产出第二条 MessageStream（内容重复），会导致 SSE chunk 与 structured_message 整段重复
+	streamCompleted := false
 	for {
 		event, ok := iter.Next()
 		if !ok {
@@ -174,7 +176,24 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 				if stream == nil {
 					continue
 				}
+				// 已消费过一条完整流式回复，后续 MessageStream 仅排空，不再推给前端
+				if streamCompleted {
+					for {
+						msg, err := stream.Recv()
+						if err != nil {
+							if err == io.EOF {
+								break
+							}
+							monitor.OnError(ctx, runInfo, err)
+							return "", err
+						}
+						_ = msg
+					}
+					log.Printf("[runAgentWithIterator] skipped duplicate MessageStream (same run)")
+					continue
+				}
 
+				streamHadAssistant := false
 				for {
 					msg, err := stream.Recv()
 					if err != nil {
@@ -191,6 +210,7 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 					}
 
 					if msg.Content != "" {
+						streamHadAssistant = true
 						lastMessage += msg.Content
 						if callback != nil {
 							if err := callback(msg.Content); err != nil {
@@ -200,7 +220,16 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 						}
 					}
 				}
+				// 仅当本条流里确实出现过 Assistant 正文时，才认为「本轮流式回复已结束」，避免首条流只有 Tool 时误跳过后续真实流
+				if streamHadAssistant {
+					streamCompleted = true
+				}
 			} else if mo.Message != nil && mo.Message.Content != "" {
+				// 已在流式中收到过助手正文后，再收到非流式整包常为重复；无正文时仍要走非流式
+				if streamCompleted && lastMessage != "" {
+					log.Printf("[runAgentWithIterator] skipped duplicate non-stream Message after stream completed")
+					continue
+				}
 				// 处理非流式消息
 				msg := mo.Message
 				// 修复：仅处理 Assistant 角色
