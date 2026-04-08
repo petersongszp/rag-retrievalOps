@@ -41,6 +41,7 @@ export default function MultiAgentInterviewStartPage() {
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
@@ -322,6 +323,13 @@ export default function MultiAgentInterviewStartPage() {
       chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
   }, [conversationHistory, waitingNextQuestion, starting]);
+
+  // 对话框解锁时自动聚焦输入框
+  useEffect(() => {
+    if (!waitingNextQuestion && !starting && answerInputRef.current) {
+      answerInputRef.current.focus();
+    }
+  }, [waitingNextQuestion, starting]);
 
   const onSubmit = async (act?: 'next' | 'quit') => {
     if (!sessionId) return;
@@ -632,6 +640,7 @@ export default function MultiAgentInterviewStartPage() {
             <div className="absolute -inset-1 bg-gradient-to-r from-orange-500 to-amber-500 rounded-3xl blur opacity-20 group-focus-within:opacity-40 transition-opacity duration-500" />
             <div className="relative bg-white rounded-2xl border border-slate-200 shadow-lg shadow-slate-100/50 transition-all focus-within:border-orange-400">
               <Input.TextArea
+                ref={answerInputRef}
                 value={answer}
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder={

@@ -35,6 +35,7 @@ export default function CampusInterviewStartPage() {
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
@@ -313,6 +314,13 @@ export default function CampusInterviewStartPage() {
     }
   }, [conversationHistory, waitingNextQuestion]);
 
+  // 对话框解锁时自动聚焦输入框
+  useEffect(() => {
+    if (!waitingNextQuestion && !starting && answerInputRef.current) {
+      answerInputRef.current.focus();
+    }
+  }, [waitingNextQuestion, starting]);
+
   const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const ss = String(elapsed % 60).padStart(2, '0');
   // 总共10道题，根据当前题目序号计算进度
@@ -588,6 +596,7 @@ export default function CampusInterviewStartPage() {
         <div className="max-w-4xl mx-auto px-4">
           <div className="relative bg-white rounded-2xl border border-slate-200 shadow-lg shadow-slate-100/50 transition-all focus-within:shadow-xl focus-within:border-green-400 focus-within:ring-1 focus-within:ring-green-100">
             <Input.TextArea
+              ref={answerInputRef}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               placeholder={
