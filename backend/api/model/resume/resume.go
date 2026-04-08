@@ -5,6 +5,7 @@ package resume
 import (
 	"context"
 	"fmt"
+
 	"github.com/apache/thrift/lib/go/thrift"
 )
 
@@ -2795,6 +2796,8 @@ type ListInterviewRecordsRequest struct {
 	Page *int32 `thrift:"page,1,optional" json:"page,omitempty" query:"page"`
 	// 每页数量，默认 10
 	PageSize *int32 `thrift:"page_size,2,optional" json:"page_size,omitempty" query:"page_size"`
+	// 面试状态筛选（可选）
+	Status *string `thrift:"status,3,optional" json:"status,omitempty" query:"status"`
 }
 
 func NewListInterviewRecordsRequest() *ListInterviewRecordsRequest {
@@ -2825,6 +2828,7 @@ func (p *ListInterviewRecordsRequest) GetPageSize() (v int32) {
 var fieldIDToName_ListInterviewRecordsRequest = map[int16]string{
 	1: "page",
 	2: "page_size",
+	3: "status",
 }
 
 func (p *ListInterviewRecordsRequest) IsSetPage() bool {
@@ -2833,6 +2837,10 @@ func (p *ListInterviewRecordsRequest) IsSetPage() bool {
 
 func (p *ListInterviewRecordsRequest) IsSetPageSize() bool {
 	return p.PageSize != nil
+}
+
+func (p *ListInterviewRecordsRequest) IsSetStatus() bool {
+	return p.Status != nil
 }
 
 func (p *ListInterviewRecordsRequest) Read(iprot thrift.TProtocol) (err error) {
@@ -2865,6 +2873,14 @@ func (p *ListInterviewRecordsRequest) Read(iprot thrift.TProtocol) (err error) {
 		case 2:
 			if fieldTypeId == thrift.I32 {
 				if err = p.ReadField2(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err = p.ReadField3(iprot); err != nil {
 					goto ReadFieldError
 				}
 			} else if err = iprot.Skip(fieldTypeId); err != nil {
@@ -2922,6 +2938,18 @@ func (p *ListInterviewRecordsRequest) ReadField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
+func (p *ListInterviewRecordsRequest) ReadField3(iprot thrift.TProtocol) error {
+
+	var _field *string
+	if v, err := iprot.ReadString(); err != nil {
+		return err
+	} else {
+		_field = &v
+	}
+	p.Status = _field
+	return nil
+}
+
 func (p *ListInterviewRecordsRequest) Write(oprot thrift.TProtocol) (err error) {
 	var fieldId int16
 	if err = oprot.WriteStructBegin("ListInterviewRecordsRequest"); err != nil {
@@ -2934,6 +2962,10 @@ func (p *ListInterviewRecordsRequest) Write(oprot thrift.TProtocol) (err error) 
 		}
 		if err = p.writeField2(oprot); err != nil {
 			fieldId = 2
+			goto WriteFieldError
+		}
+		if err = p.writeField3(oprot); err != nil {
+			fieldId = 3
 			goto WriteFieldError
 		}
 	}
@@ -2990,6 +3022,25 @@ WriteFieldBeginError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 2 begin error: ", p), err)
 WriteFieldEndError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 2 end error: ", p), err)
+}
+
+func (p *ListInterviewRecordsRequest) writeField3(oprot thrift.TProtocol) (err error) {
+	if p.IsSetStatus() {
+		if err = oprot.WriteFieldBegin("status", thrift.STRING, 3); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := oprot.WriteString(*p.Status); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 3 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 3 end error: ", p), err)
 }
 
 func (p *ListInterviewRecordsRequest) String() string {

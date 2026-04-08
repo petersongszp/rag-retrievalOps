@@ -1175,8 +1175,9 @@ func (p *PredictResponse) String() string {
 
 // 获取押题记录列表请求
 type ListPredictionRequest struct {
-	Page *int32 `thrift:"page,1,optional" json:"page,omitempty" query:"page"`
-	Size *int32 `thrift:"size,2,optional" json:"size,omitempty" query:"size"`
+	Page *int32  `thrift:"page,1,optional" json:"page,omitempty" query:"page"`
+	Size *int32  `thrift:"size,2,optional" json:"size,omitempty" query:"size"`
+	Type *string `thrift:"type,3,optional" json:"type,omitempty" query:"type"`
 }
 
 func NewListPredictionRequest() *ListPredictionRequest {
@@ -1207,6 +1208,7 @@ func (p *ListPredictionRequest) GetSize() (v int32) {
 var fieldIDToName_ListPredictionRequest = map[int16]string{
 	1: "page",
 	2: "size",
+	3: "type",
 }
 
 func (p *ListPredictionRequest) IsSetPage() bool {
@@ -1215,6 +1217,10 @@ func (p *ListPredictionRequest) IsSetPage() bool {
 
 func (p *ListPredictionRequest) IsSetSize() bool {
 	return p.Size != nil
+}
+
+func (p *ListPredictionRequest) IsSetType() bool {
+	return p.Type != nil
 }
 
 func (p *ListPredictionRequest) Read(iprot thrift.TProtocol) (err error) {
@@ -1247,6 +1253,14 @@ func (p *ListPredictionRequest) Read(iprot thrift.TProtocol) (err error) {
 		case 2:
 			if fieldTypeId == thrift.I32 {
 				if err = p.ReadField2(iprot); err != nil {
+					goto ReadFieldError
+				}
+			} else if err = iprot.Skip(fieldTypeId); err != nil {
+				goto SkipFieldError
+			}
+		case 3:
+			if fieldTypeId == thrift.STRING {
+				if err = p.ReadField3(iprot); err != nil {
 					goto ReadFieldError
 				}
 			} else if err = iprot.Skip(fieldTypeId); err != nil {
@@ -1304,6 +1318,18 @@ func (p *ListPredictionRequest) ReadField2(iprot thrift.TProtocol) error {
 	return nil
 }
 
+func (p *ListPredictionRequest) ReadField3(iprot thrift.TProtocol) error {
+
+	var _field *string
+	if v, err := iprot.ReadString(); err != nil {
+		return err
+	} else {
+		_field = &v
+	}
+	p.Type = _field
+	return nil
+}
+
 func (p *ListPredictionRequest) Write(oprot thrift.TProtocol) (err error) {
 	var fieldId int16
 	if err = oprot.WriteStructBegin("ListPredictionRequest"); err != nil {
@@ -1316,6 +1342,10 @@ func (p *ListPredictionRequest) Write(oprot thrift.TProtocol) (err error) {
 		}
 		if err = p.writeField2(oprot); err != nil {
 			fieldId = 2
+			goto WriteFieldError
+		}
+		if err = p.writeField3(oprot); err != nil {
+			fieldId = 3
 			goto WriteFieldError
 		}
 	}
@@ -1372,6 +1402,25 @@ WriteFieldBeginError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 2 begin error: ", p), err)
 WriteFieldEndError:
 	return thrift.PrependError(fmt.Sprintf("%T write field 2 end error: ", p), err)
+}
+
+func (p *ListPredictionRequest) writeField3(oprot thrift.TProtocol) (err error) {
+	if p.IsSetType() {
+		if err = oprot.WriteFieldBegin("type", thrift.STRING, 3); err != nil {
+			goto WriteFieldBeginError
+		}
+		if err := oprot.WriteString(*p.Type); err != nil {
+			return err
+		}
+		if err = oprot.WriteFieldEnd(); err != nil {
+			goto WriteFieldEndError
+		}
+	}
+	return nil
+WriteFieldBeginError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 3 begin error: ", p), err)
+WriteFieldEndError:
+	return thrift.PrependError(fmt.Sprintf("%T write field 3 end error: ", p), err)
 }
 
 func (p *ListPredictionRequest) String() string {
