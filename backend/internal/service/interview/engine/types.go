@@ -31,6 +31,67 @@ type InterviewSession struct {
 	StartTime     time.Time
 	LastActivity  time.Time
 	QuestionCount int32 // 面试问题总数（用于统计）
+
+	// dialoguesSnapshot：每轮 evaluate 后追加，供用户主动结束面试（EndInterview）或 context 取消时落库。
+	// 与 Graph 内 finalState 解耦，避免 Invoke 在 cancel 时返回 nil 导致无法保存已答内容。
+	dialoguesMu       sync.Mutex
+	dialoguesSnapshot []*InterviewDialogueData
+	dialoguesPersisted bool // 已写入 interview_dialogues，避免与图错误分支重复 INSERT
+}
+
+// AppendDialogueSnapshot 追加一轮已评分对话（在 graph evaluateNode 中调用）。
+func (s *InterviewSession) AppendDialogueSnapshot(d *InterviewDialogueData) {
+	if s == nil || d == nil {
+		return
+	}
+	copyD := *d
+	if d.Topics != nil {
+		copyD.Topics = append([]string(nil), d.Topics...)
+	}
+	s.dialoguesMu.Lock()
+	defer s.dialoguesMu.Unlock()
+	s.dialoguesSnapshot = append(s.dialoguesSnapshot, &copyD)
+}
+
+// GetDialoguesSnapshot 返回快照副本，避免调用方与 graph 并发读写。
+func (s *InterviewSession) GetDialoguesSnapshot() []*InterviewDialogueData {
+	if s == nil {
+		return nil
+	}
+	s.dialoguesMu.Lock()
+	defer s.dialoguesMu.Unlock()
+	out := make([]*InterviewDialogueData, len(s.dialoguesSnapshot))
+	for i, d := range s.dialoguesSnapshot {
+		if d == nil {
+			continue
+		}
+		cp := *d
+		if d.Topics != nil {
+			cp.Topics = append([]string(nil), d.Topics...)
+		}
+		out[i] = &cp
+	}
+	return out
+}
+
+// MarkDialoguesPersisted 标记对话已持久化。
+func (s *InterviewSession) MarkDialoguesPersisted() {
+	if s == nil {
+		return
+	}
+	s.dialoguesMu.Lock()
+	defer s.dialoguesMu.Unlock()
+	s.dialoguesPersisted = true
+}
+
+// IsDialoguesPersisted 是否已写入数据库。
+func (s *InterviewSession) IsDialoguesPersisted() bool {
+	if s == nil {
+		return false
+	}
+	s.dialoguesMu.Lock()
+	defer s.dialoguesMu.Unlock()
+	return s.dialoguesPersisted
 }
 
 // 全局会话管理器单例
