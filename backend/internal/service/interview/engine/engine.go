@@ -254,12 +254,12 @@ If you (the main interviewer) decide this turn should be handled by the technica
 	}
 }
 
-// saveAllDialogues 保存所有30道问题到数据库
-// 新逻辑：直接保存所有问题，不再区分主问题和追问
-func (e *InterviewEngine) saveAllDialogues(ctx context.Context, session *InterviewSession, questions []*InterviewDialogueData) error {
-	log.Printf("[Interview Engine] Saving %d questions to database, sessionID: %s", len(questions), session.SessionID)
-
-	// 逐个保存每道问题
+// PersistInterviewDialogues 将问答写入 interview_dialogues（正常结束、图中途失败、用户主动结束等路径复用）。
+func PersistInterviewDialogues(ctx context.Context, session *InterviewSession, questions []*InterviewDialogueData) error {
+	if session == nil || len(questions) == 0 {
+		return nil
+	}
+	log.Printf("[Interview Engine] Saving %d question(s) to database, sessionID: %s", len(questions), session.SessionID)
 	for i, q := range questions {
 		dialogue := &model.InterviewDialogue{
 			UserID:    session.UserID,
@@ -268,18 +268,20 @@ func (e *InterviewEngine) saveAllDialogues(ctx context.Context, session *Intervi
 			Answer:    q.Answer,
 			CreatedAt: time.Now(),
 		}
-
 		if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
 			return fmt.Errorf("failed to save question %d: %w", i+1, err)
 		}
-
 		if (i+1)%10 == 0 {
 			log.Printf("[Interview Engine] Saved %d/%d questions, sessionID: %s", i+1, len(questions), session.SessionID)
 		}
 	}
-
-	log.Printf("[Interview Engine] Successfully saved all %d questions to database, sessionID: %s", len(questions), session.SessionID)
+	log.Printf("[Interview Engine] Successfully saved %d question(s), sessionID: %s", len(questions), session.SessionID)
 	return nil
+}
+
+// saveAllDialogues 保存所有问题到数据库
+func (e *InterviewEngine) saveAllDialogues(ctx context.Context, session *InterviewSession, questions []*InterviewDialogueData) error {
+	return PersistInterviewDialogues(ctx, session, questions)
 }
 
 // selectAgentType 根据面试类型和领域选择智能体类型
