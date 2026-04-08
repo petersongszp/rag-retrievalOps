@@ -268,6 +268,13 @@ func PersistInterviewDialogues(ctx context.Context, session *InterviewSession, q
 			Answer:    q.Answer,
 			CreatedAt: time.Now(),
 		}
+
+		// 检测问题是否存在，存在则跳过，防止重复插入
+		exists, _ := model.InterviewDialogueDao.CheckDialogueIsExists(dialogue)
+		if exists {
+			continue
+		}
+
 		if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
 			return fmt.Errorf("failed to save question %d: %w", i+1, err)
 		}

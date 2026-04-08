@@ -368,6 +368,12 @@ func evaluateNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 	// 更新会话计数
 	state.Session.QuestionCount = int32(state.QuestionIndex)
 
+	// 保存 dialogue 数据
+	err = saveDialogue(ctx, state.Session, dialogue)
+	if err != nil {
+		return state, err
+	}
+
 	// 发送进度
 	_ = SendSSEEvent(state.Writer, map[string]interface{}{
 		"type":     "answer_received",
@@ -748,6 +754,7 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 }
 
 // saveAllDialoguesFromGraph 保存对话（复用现有方法）
+// Deprecated 暂时没看到有用到的地方，冗余代码，建议删除
 func (e *InterviewEngine) saveAllDialoguesFromGraph(ctx context.Context, session *InterviewSession, dialogues []*InterviewDialogueData) error {
 	for i, q := range dialogues {
 		dialogue := &model.InterviewDialogue{
@@ -760,6 +767,21 @@ func (e *InterviewEngine) saveAllDialoguesFromGraph(ctx context.Context, session
 		if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
 			return fmt.Errorf("failed to save question %d: %w", i+1, err)
 		}
+	}
+	return nil
+}
+
+// saveDialogue 保存 Dialogue 数据
+func saveDialogue(ctx context.Context, session *InterviewSession, dialogueData *InterviewDialogueData) error {
+	dialogue := &model.InterviewDialogue{
+		UserID:    session.UserID,
+		ReportID:  session.RecordID,
+		Question:  dialogueData.Question,
+		Answer:    dialogueData.Answer,
+		CreatedAt: time.Now(),
+	}
+	if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
+		return fmt.Errorf("failed to save question %w", err)
 	}
 	return nil
 }

@@ -43,3 +43,24 @@ func (dao *_InterviewDialogue) GetInterviewDialoguesByUserIdAndRecordId(userId u
 	err := getDB().Where("user_id = ? AND report_id = ?", userId, reportId).Order("id ASC").Find(&dialogues).Error
 	return &dialogues, err
 }
+
+// CheckDialogueIsExists 检测用户的回答是否存在
+func (dao *_InterviewDialogue) CheckDialogueIsExists(dialogue *InterviewDialogue) (bool, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var count int64
+	err := getDB().
+		Model(&InterviewDialogue{}).
+		Where("user_id = ? AND report_id = ? AND question = ? AND answer = ?",
+			dialogue.UserID,
+			dialogue.ReportID,
+			dialogue.Question,
+			dialogue.Answer).
+		Count(&count).Error
+
+	if err != nil {
+		return false, err
+	}
+	return count > 0, nil
+}
