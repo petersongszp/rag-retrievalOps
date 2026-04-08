@@ -255,17 +255,25 @@ func EndInterview(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 更新会话状态
-	session.Status = "completed"
+	// 用户主动结束：先把已产生的问答落库（与 Graph 内 finalState 解耦，避免 cancel 后 Invoke 拿不到状态导致 interview_dialogues 为空）
+	snapshot := session.GetDialoguesSnapshot()
+	if len(snapshot) > 0 {
+		if err := core.PersistInterviewDialogues(ctx, session, snapshot); err != nil {
+			response.ErrorFromErr(ctx, c, err)
+			return
+		}
+		session.MarkDialoguesPersisted()
+	}
+
+	session.Status = "aborted"
 	endTime := time.Now()
 	session.LastActivity = endTime
-	// 计算面试时长
 	duration := int64(endTime.Sub(session.StartTime).Seconds())
 	endTimeMs := endTime.UnixMilli()
 	totalQuestions := session.QuestionCount
-	answeredQuestions := session.QuestionCount // 已回答的问题数 = 主问题数
+	answeredQuestions := session.QuestionCount
 
-	// 取消面试循环，立即关闭 SSE 连接
+	// 取消面试循环，关闭 SSE（须在落库之后，便于图内错误分支识别 DialoguesPersisted 并避免重复写入）
 	if session.CancelFunc != nil {
 		session.CancelFunc()
 	}
@@ -273,7 +281,7 @@ func EndInterview(ctx context.Context, c *app.RequestContext) {
 	updateDTO := &interviewsapi.InterviewRecordDTO{
 		ID:       int64(session.RecordID),
 		UserID:   int32(session.UserID),
-		Status:   "completed",
+		Status:   "aborted",
 		Duration: &duration,
 	}
 	if err := interviewSvc.UpdateInterviewRecord(ctx, updateDTO); err != nil {
@@ -386,6 +394,9 @@ func GetInterviewAnswerRecord(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
+	}
+	if resp != nil {
+		resp.Records = model.MergeAnswerRecordsWithDialogueFallback(userId, reportID, resp.Records)
 	}
 	response.Success(ctx, c, resp)
 }

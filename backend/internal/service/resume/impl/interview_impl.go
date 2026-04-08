@@ -195,12 +195,14 @@ func (s *InterviewServiceImpl) GetAnswerReport(ctx context.Context, userID uint,
 		return nil, err
 	}
 
+	records := model.MergeAnswerRecordsWithDialogueFallback(userID, reportID, report.Records)
+
 	// 返回答题报告数据
 	return map[string]interface{}{
 		"id":         report.ID,
 		"user_id":    report.UserID,
 		"report_id":  report.ReportID,
-		"records":    report.Records,
+		"records":    records,
 		"deleted":    report.Deleted,
 		"created_at": report.CreatedAt,
 		"updated_at": report.UpdatedAt,

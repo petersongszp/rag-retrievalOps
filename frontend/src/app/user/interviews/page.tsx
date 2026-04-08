@@ -278,6 +278,18 @@ export default function InterviewRecordsPage() {
                           bg: 'bg-green-50',
                           border: 'border-green-100',
                         },
+                        aborted: {
+                          text: "已中断",
+                          color: 'text-slate-600',
+                          bg: 'bg-slate-100',
+                          border: 'border-slate-200',
+                        },
+                        failed: {
+                          text: "异常结束",
+                          color: 'text-red-600',
+                          bg: 'bg-red-50',
+                          border: 'border-red-100',
+                        },
                       };
                       const statusInfo = statusMap[it.status] || {
                         text: it.status,

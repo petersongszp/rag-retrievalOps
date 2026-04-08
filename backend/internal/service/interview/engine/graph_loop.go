@@ -2,6 +2,7 @@ package core
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"log"
@@ -350,6 +351,10 @@ func evaluateNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 	}
 
 	state.AllDialogues = append(state.AllDialogues, dialogue)
+	// 同步到 Session 快照：用户主动结束或 context cancel 时 Invoke 可能拿不到 finalState，仍可依此落库。
+	if state.Session != nil {
+		state.Session.AppendDialogueSnapshot(dialogue)
+	}
 
 	// 更新历史
 	state.RecentHistory = append(state.RecentHistory, historyItem{
@@ -362,6 +367,12 @@ func evaluateNode(ctx context.Context, state *InterviewState) (*InterviewState, 
 
 	// 更新会话计数
 	state.Session.QuestionCount = int32(state.QuestionIndex)
+
+	// 保存 dialogue 数据
+	err = saveDialogue(ctx, state.Session, dialogue)
+	if err != nil {
+		return state, err
+	}
 
 	// 发送进度
 	_ = SendSSEEvent(state.Writer, map[string]interface{}{
@@ -621,6 +632,42 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 	if err != nil {
 		log.Printf("[Graph] Graph execution failed: %v", err)
 
+		// 图中途失败或 context cancel 时，尽力保存已产生的问答：
+		// - 优先用 finalState.AllDialogues（模型错误等非 cancel 场景）
+		// - cancel 时 Invoke 常返回 nil finalState，改用 Session 上每轮 evaluate 写入的快照
+		if !session.IsDialoguesPersisted() {
+			var dlg []*InterviewDialogueData
+			if finalState != nil && len(finalState.AllDialogues) > 0 {
+				dlg = finalState.AllDialogues
+			} else {
+				dlg = session.GetDialoguesSnapshot()
+			}
+			if len(dlg) > 0 {
+				if saveErr := e.saveAllDialogues(ctx, session, dlg); saveErr != nil {
+					log.Printf("[Graph] Failed to save dialogues after graph error: %v", saveErr)
+				} else {
+					log.Printf("[Graph] Saved %d dialogue(s) after graph error, reportID: %d", len(dlg), session.RecordID)
+					session.MarkDialoguesPersisted()
+					endTime := time.Now()
+					session.LastActivity = endTime
+					duration := int64(endTime.Sub(session.StartTime).Seconds())
+					st := "failed"
+					if stderrors.Is(err, context.Canceled) {
+						st = "aborted"
+					}
+					updateDTO := &interviewsapi.InterviewRecordDTO{
+						ID:       int64(session.RecordID),
+						UserID:   int32(session.UserID),
+						Status:   st,
+						Duration: &duration,
+					}
+					if upErr := e.interviewSvc.UpdateInterviewRecord(ctx, updateDTO); upErr != nil {
+						log.Printf("[Graph] Failed to update interview record after partial save: %v", upErr)
+					}
+				}
+			}
+		}
+
 		// 检查是否是大模型不可用错误
 		// 注意: 引发的 error 被 eino wrapping 为 [NodeRunError], default errors.As 可能匹配不到深层结构
 		// 因此增加 string contain 判断，或者直接尝试 errors.As
@@ -675,6 +722,7 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 		SendCompleteEvent(e.writer)
 		return
 	}
+	session.MarkDialoguesPersisted()
 	endTime := time.Now()
 	session.LastActivity = endTime
 	session.Status = "completed"
@@ -706,6 +754,7 @@ func (e *InterviewEngine) RunInterviewLoopWithGraph(ctx context.Context, session
 }
 
 // saveAllDialoguesFromGraph 保存对话（复用现有方法）
+// Deprecated 暂时没看到有用到的地方，冗余代码，建议删除
 func (e *InterviewEngine) saveAllDialoguesFromGraph(ctx context.Context, session *InterviewSession, dialogues []*InterviewDialogueData) error {
 	for i, q := range dialogues {
 		dialogue := &model.InterviewDialogue{
@@ -718,6 +767,21 @@ func (e *InterviewEngine) saveAllDialoguesFromGraph(ctx context.Context, session
 		if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
 			return fmt.Errorf("failed to save question %d: %w", i+1, err)
 		}
+	}
+	return nil
+}
+
+// saveDialogue 保存 Dialogue 数据
+func saveDialogue(ctx context.Context, session *InterviewSession, dialogueData *InterviewDialogueData) error {
+	dialogue := &model.InterviewDialogue{
+		UserID:    session.UserID,
+		ReportID:  session.RecordID,
+		Question:  dialogueData.Question,
+		Answer:    dialogueData.Answer,
+		CreatedAt: time.Now(),
+	}
+	if err := model.InterviewDialogueDao.Create(dialogue); err != nil {
+		return fmt.Errorf("failed to save question %w", err)
 	}
 	return nil
 }
