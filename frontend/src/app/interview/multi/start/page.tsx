@@ -41,6 +41,7 @@ export default function MultiAgentInterviewStartPage() {
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
@@ -319,9 +320,10 @@ export default function MultiAgentInterviewStartPage() {
   }, []);
 
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
-    }
+    const frameId = window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frameId);
   }, [conversationHistory, waitingNextQuestion, starting]);
 
   // 对话框解锁时自动聚焦输入框
@@ -478,7 +480,7 @@ export default function MultiAgentInterviewStartPage() {
       </header>
 
       <main className="flex-1 overflow-y-auto relative z-10 scroll-smooth" ref={chatContainerRef}>
-        <div className="max-w-4xl mx-auto px-4 py-10 space-y-8 pb-32">
+        <div className="max-w-4xl mx-auto px-4 py-10 space-y-8 pb-40">
           {conversationHistory.length === 0 && !starting && (
             <div className="flex flex-col items-center justify-center py-20 text-center animate-pulse">
               <RobotOutlined style={{ fontSize: '40px', color: '#cbd5e1' }} />
@@ -598,6 +600,8 @@ export default function MultiAgentInterviewStartPage() {
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} aria-hidden="true" className="h-px scroll-mb-44" />
         </div>
       </main>
 
