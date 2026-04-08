@@ -7,7 +7,6 @@ import { Typography, Button, Input, Avatar, message } from 'antd';
 import {
   AudioOutlined,
   CustomerServiceOutlined,
-  QuestionCircleOutlined,
   SendOutlined,
   StopOutlined,
 } from '@ant-design/icons';
@@ -623,34 +622,28 @@ export default function SpecialInterviewStartPage() {
                     className="!text-slate-400 !w-9 !h-9"
                   />
                 )}
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<QuestionCircleOutlined className="text-slate-400" />}
-                  className="!text-slate-400"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
-                <Button
-                  type="primary"
-                  shape="round"
-                  icon={<SendOutlined />}
-                  loading={submitting}
-                  disabled={
-                    !sessionId ||
-                    waitingNextQuestion ||
-                    starting ||
-                    speechInput.isRecording ||
-                    speechInput.isStopping ||
-                    speechInput.isTranscribing ||
-                    !answer.trim()
-                  }
-                  onClick={() => onSubmit()}
-                  className="!bg-purple-500 hover:!bg-purple-600 !shadow-purple-200 !border-0"
-                >
-                  Send
-                </Button>
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
+                  <Button
+                    type="primary"
+                    shape="round"
+                    icon={<SendOutlined />}
+                    loading={submitting}
+                    disabled={
+                      !sessionId ||
+                      waitingNextQuestion ||
+                      starting ||
+                      speechInput.isRecording ||
+                      speechInput.isStopping ||
+                      speechInput.isTranscribing ||
+                      !answer.trim()
+                    }
+                    onClick={() => onSubmit()}
+                    className="!bg-purple-500 hover:!bg-purple-600 !shadow-purple-200 !border-0"
+                  >
+                    Send
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
