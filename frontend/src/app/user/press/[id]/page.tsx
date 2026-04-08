@@ -54,7 +54,7 @@ export default function PressDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Spin size="large" tip="加载中..." />
+        <Spin size="large" tip="loading..." />
       </div>
     );
   }
@@ -62,7 +62,7 @@ export default function PressDetailPage() {
   if (!current) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-500">
-        未找到相关记录
+        No relevant records found
       </div>
     );
   }
@@ -77,9 +77,9 @@ export default function PressDetailPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <BookOutlined className="text-blue-600" />
-            押题详情
+            Resume Prediction Details
           </h1>
-          <p className="text-slate-500 mt-2 ml-11">查看为您生成的精准面试题目与详细解析</p>
+          <p className="text-slate-500 mt-2 ml-11">Check out the precise interview questions and detailed explanations generated for you</p>
         </div>
 
         <Row
@@ -95,7 +95,7 @@ export default function PressDetailPage() {
               <div className="p-5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
                 <Space align="center" className="font-bold text-slate-700">
                   <BookOutlined className="text-blue-500" />
-                  <span>题目目录</span>
+                  <span>Question List</span>
                 </Space>
               </div>
               <div className="max-h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar">
@@ -140,17 +140,17 @@ export default function PressDetailPage() {
                       color="blue"
                       className="px-3 py-1 rounded-full border-0 bg-blue-50 text-blue-600 font-medium"
                     >
-                      整体思路
+                      Overall Thinking
                     </Tag>
                     <Tag
                       color="green"
                       className="px-3 py-1 rounded-full border-0 bg-green-50 text-green-600 font-medium"
                     >
-                      参考答案
+                      Reference Answer
                     </Tag>
-                    <Tag className="px-3 py-1 rounded-full border-slate-200 text-slate-500 hover:text-blue-600 cursor-pointer transition-colors">
+                    {/* <Tag className="px-3 py-1 rounded-full border-slate-200 text-slate-500 hover:text-blue-600 cursor-pointer transition-colors">
                       收藏单题
-                    </Tag>
+                    </Tag> */}
                   </Space>
                 </div>
 
@@ -163,7 +163,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
                         <StarOutlined />
                       </div>
-                      重点考察
+                      Key Focus
                     </div>
                      <div className="bg-purple-50/50 rounded-xl p-4 border border-purple-100 text-slate-700">
                         {current.focus}
@@ -175,7 +175,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
                         <CheckCircleOutlined />
                       </div>
-                      答案思路
+                      Answer Thinking
                     </div>
                     {/* Changed from structured idea array to text block for thinking_path */}
                      <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 text-slate-700 leading-relaxed whitespace-pre-wrap">
@@ -188,7 +188,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
                         <BookOutlined />
                       </div>
-                      参考答案
+                      Reference Answer
                     </div>
                     <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl p-6 border border-slate-100 text-slate-700 leading-loose whitespace-pre-wrap">
                       {current.reference_answer}
@@ -200,7 +200,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
                         <BulbOutlined />
                       </div>
-                      可能追问
+                      Possible Follow-up Questions
                     </div>
                     <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
                       <List
