@@ -58,11 +58,11 @@ export default function PressRecordsPage() {
     if (selectedRowKeys.length === 0) return;
     try {
       await predictionService.deleteHistory(selectedRowKeys as number[]);
-      message.success("Batch Delete" + '成功');
+      message.success("Batch Delete" + 'success');
       setSelectedRowKeys([]);
       fetchRecords();
     } catch (e) {
-      message.error('删除失败');
+      message.error('Delete failed');
     }
   };
 
@@ -70,10 +70,10 @@ export default function PressRecordsPage() {
   const handleDelete = async (id: number) => {
     try {
       await predictionService.deleteHistory([id]);
-      message.success('删除成功');
+      message.success('Delete success');
       fetchRecords();
     } catch (e) {
-      message.error('删除失败');
+      message.error('Delete failed');
     }
   };
 
@@ -154,12 +154,12 @@ export default function PressRecordsPage() {
             </Tooltip>
           </Link>
           <Popconfirm
-            title="确定要删除这条记录吗？"
+            title="Are you sure you want to delete this record?"
             onConfirm={() => handleDelete(record.id)}
-            okText="确定"
-            cancelText="取消"
+            okText="yes"
+            cancelText="cancel"
           >
-            <Tooltip title="删除">
+            <Tooltip title="Delete Record">
               <Button
                 type="text"
                 danger

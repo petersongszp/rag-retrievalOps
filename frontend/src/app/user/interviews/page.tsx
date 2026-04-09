@@ -279,13 +279,13 @@ export default function InterviewRecordsPage() {
                           border: 'border-green-100',
                         },
                         aborted: {
-                          text: "已中断",
+                          text: "Interrupted",
                           color: 'text-slate-600',
                           bg: 'bg-slate-100',
                           border: 'border-slate-200',
                         },
                         failed: {
-                          text: "异常结束",
+                          text: "Abnormal Exit",
                           color: 'text-red-600',
                           bg: 'bg-red-50',
                           border: 'border-red-100',
@@ -326,9 +326,9 @@ export default function InterviewRecordsPage() {
                               className="text-lg font-bold text-slate-800 mb-2 line-clamp-1"
                               title={it.title || it.companyName}
                             >
-                              {it.type === '专项面试' && !it.companyName
+                              {it.type === 'specialized interview' && !it.companyName
                                 ? it.title
-                                : `${it.companyName || '未命名公司'}${it.title ? ` - ${it.title}` : ''}`}
+                                : `${it.companyName || 'Unnamed Company'}${it.title ? ` - ${it.title}` : ''}`}
                             </h3>
 
                             <div className="space-y-2 mb-6">
