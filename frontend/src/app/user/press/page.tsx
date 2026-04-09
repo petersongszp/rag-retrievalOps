@@ -33,6 +33,28 @@ export default function PressRecordsPage() {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  const toDeleteIDs = (keys: React.Key[]): number[] => {
+    return keys
+      .map((key) => Number(key))
+      .filter((id) => Number.isInteger(id) && id > 0);
+  };
+
+  const formatCreatedAt = (createdAt: string | number | null | undefined): string => {
+    if (createdAt == null || createdAt === '') return '-';
+
+    if (typeof createdAt === 'number' || /^\d+$/.test(String(createdAt))) {
+      const numeric = Number(createdAt);
+      const ms = numeric < 1e12 ? numeric * 1000 : numeric;
+      const date = new Date(ms);
+      return Number.isNaN(date.getTime()) ? String(createdAt) : date.toLocaleString();
+    }
+
+    const raw = String(createdAt).trim();
+    const normalized = raw.includes(' ') ? raw.replace(' ', 'T') : raw;
+    const date = new Date(normalized);
+    return Number.isNaN(date.getTime()) ? raw : date.toLocaleString();
+  };
+
   // 获取押题记录
   const fetchRecords = async () => {
     setLoading(true);
@@ -55,9 +77,14 @@ export default function PressRecordsPage() {
 
   // 批量删除
   const handleBatchDelete = async () => {
-    if (selectedRowKeys.length === 0) return;
+    const ids = toDeleteIDs(selectedRowKeys);
+    if (ids.length === 0) {
+      message.warning('No valid records selected');
+      return;
+    }
+
     try {
-      await predictionService.deleteHistory(selectedRowKeys as number[]);
+      await predictionService.deleteHistory(ids);
       message.success("Batch Delete" + 'success');
       setSelectedRowKeys([]);
       fetchRecords();
@@ -133,9 +160,9 @@ export default function PressRecordsPage() {
       title: "Time",
       dataIndex: 'created_at',
       key: 'created_at',
-      render: (time: number) => (
+      render: (createdAt: string | number) => (
         <span className="text-slate-400 text-sm">
-          {new Date(time * 1000).toLocaleString()}
+          {formatCreatedAt(createdAt)}
         </span>
       ),
     },

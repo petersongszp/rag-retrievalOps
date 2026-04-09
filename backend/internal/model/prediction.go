@@ -108,3 +108,15 @@ func (d *_Prediction) GetPredictionRecordsByUserID(userID uint, page, pageSize i
 	}
 	return records, total, nil
 }
+
+// DeletePredictionRecordsByUserID 删除指定用户下的押题记录
+func (d *_Prediction) DeletePredictionRecordsByUserID(userID uint, ids []uint64) error {
+	if getDB == nil {
+		panic("getDB function not initialized")
+	}
+	if len(ids) == 0 {
+		return nil
+	}
+
+	return getDB().Where("user_id = ? AND id IN ?", userID, ids).Delete(&PredictionRecord{}).Error
+}
