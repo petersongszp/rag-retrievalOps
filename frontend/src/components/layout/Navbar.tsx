@@ -4,18 +4,18 @@ import {
   Layout,
   Typography,
   Button,
-  Badge,
   Dropdown,
   Modal,
   Tabs,
   Form,
   Input,
   message,
+  Drawer,
 } from 'antd';
 import Link from 'next/link';
-import { BellOutlined, UserOutlined, DownOutlined, TeamOutlined } from '@ant-design/icons';
+import { UserOutlined, DownOutlined, TeamOutlined, MenuOutlined, CloseOutlined } from '@ant-design/icons';
 import type { FC } from 'react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import apiClient from '@/services/api/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -36,6 +36,7 @@ const Navbar: FC = () => {
   const [forgotLoading, setForgotLoading] = useState(false);
   const [githubLoading, setGithubLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   const doLogin = async (values: { email: string; password: string }) => {
     try {
@@ -122,13 +123,13 @@ const Navbar: FC = () => {
       const res: any = await apiClient.get('/user/google/login');
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('获取 Google 登录地址失败');
+        message.error('Failed to get Google login URL');
         setGoogleLoading(false);
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'Google 登录失败');
+      message.error(e?.response?.data?.message || e?.message || 'Google login failed');
       setGoogleLoading(false);
     }
   };
@@ -146,29 +147,22 @@ const Navbar: FC = () => {
 
   return (
     <Header className="sticky top-0 z-50 w-full bg-white/80 backdrop-blur-md border-b border-slate-200/60 transition-all duration-300">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-full flex items-center justify-between">
-        <div className="flex items-center gap-3 cursor-pointer" onClick={() => router.push('/')}>
-          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200">
-            <span className="text-white text-xl font-bold">面</span>
+      <div className="max-w-7xl mx-auto px-2 sm:px-4 lg:px-8 h-full flex items-center justify-between">
+        <div className="flex items-center gap-2 sm:gap-3 cursor-pointer shrink-0" onClick={() => router.push('/')}>
+          <div className="w-8 h-8 sm:w-10 sm:h-10 rounded-lg sm:rounded-xl bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center shadow-lg shadow-blue-200">
+            <span className="text-white text-base sm:text-xl font-bold">面</span>
           </div>
-          <div className="flex flex-col justify-center h-10">
+          <div className="hidden sm:flex flex-col justify-center h-10">
             <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 leading-none mb-0.5 pt-1">
-              面试吧
+              Interview Bar
             </span>
             <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium leading-none scale-90 origin-left">
-              INTERVIEW MASTER
+              INTERVIEW Bar
             </span>
           </div>
         </div>
 
-        <nav className="hidden md:flex items-center gap-8">
-          <Link
-            href="/"
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
-          >
-            {'Home'}
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
-          </Link>
+        <nav className="hidden lg:flex items-center gap-8">
           <Link
             href="/resume"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
@@ -216,30 +210,14 @@ const Navbar: FC = () => {
             }}
             overlayClassName="pt-2"
           >
-            <a className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors flex items-center gap-1 cursor-pointer group">
-              {'Comprehensive Interview'}{' '}
+            <a className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors inline-flex items-center gap-1 cursor-pointer group">
+              <span>{'Comprehensive Interview'}</span>
               <DownOutlined className="text-xs transition-transform group-hover:rotate-180" />
-              <Badge
-                count={'HOT'}
-                color="#fa541c"
-                offset={[10, -8]}
-                className="scale-75 origin-left"
-              />
+              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none text-white bg-gradient-to-r from-orange-500 to-red-500 ml-1">
+                HOT
+              </span>
             </a>
           </Dropdown>
-          <Link
-            href="/interview/multi"
-            className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
-          >
-            {'Multi-Agent Interview'}
-            <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
-            <Badge
-              count={'New'}
-              color="#faad14"
-              offset={[10, -8]}
-              className="scale-75 origin-left"
-            />
-          </Link>
           <Link
             href="/interview/special"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
@@ -257,16 +235,10 @@ const Navbar: FC = () => {
           </Link>
         </nav>
 
-        <div className="flex items-center gap-4">
-          <Button
-            type="text"
-            shape="circle"
-            icon={<BellOutlined className="text-slate-600 text-lg" />}
-            className="hover:bg-slate-100 flex items-center justify-center"
-          />
+        <div className="flex items-center gap-2 sm:gap-4 shrink-0">
           {authed ? (
             <Dropdown
-              trigger={['hover']}
+              trigger={['hover', 'click']}
               menu={{
                 items: [
                   { key: 'center', label: <Link href="/user/center">{'User Center'}</Link> },
@@ -276,7 +248,6 @@ const Navbar: FC = () => {
                   },
                   { key: 'pay', label: <Link href="/user/pay">{'Payment'}</Link> },
                   { key: 'press', label: <Link href="/user/press">{'Prediction Records'}</Link> },
-                  { key: 'notes', label: <Link href="/user/notes">{'Note List'}</Link> },
                   { type: 'divider' },
                   {
                     key: 'logout',
@@ -290,27 +261,111 @@ const Navbar: FC = () => {
                 className: 'w-40',
               }}
             >
-              <Button className="border-slate-200 hover:border-blue-400 hover:text-blue-600 px-4 h-9 rounded-full flex items-center gap-2 transition-all">
+              <Button className="border-slate-200 hover:border-blue-400 hover:text-blue-600 px-2 sm:px-4 h-9 rounded-full flex items-center gap-2 transition-all">
                 <UserOutlined />
-                <span className="max-w-[100px] truncate">
+                <span className="hidden sm:inline max-w-[100px] truncate">
                   {user?.username || user?.email?.split('@')[0] || 'User'}
                 </span>
               </Button>
             </Dropdown>
           ) : (
-            <Button
-              type="primary"
-              onClick={() => {
-                setActiveKey('login');
-                setOpenAuth(true);
-              }}
-              className="bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 h-9 px-6 rounded-full shadow-lg shadow-blue-200 font-medium transition-all hover:scale-105"
-            >
-              {'Login / Register'}
-            </Button>
+            <>
+              <Button
+                type="primary"
+                onClick={() => {
+                  setActiveKey('login');
+                  setOpenAuth(true);
+                }}
+                className="hidden sm:flex bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 h-9 px-6 rounded-full shadow-lg shadow-blue-200 font-medium transition-all hover:scale-105 items-center"
+              >
+                {'Login / Register'}
+              </Button>
+              <Button
+                type="primary"
+                shape="circle"
+                icon={<UserOutlined />}
+                onClick={() => {
+                  setActiveKey('login');
+                  setOpenAuth(true);
+                }}
+                className="sm:hidden bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 shadow-lg shadow-blue-200 transition-all"
+              />
+            </>
           )}
+
+          <Button
+            type="text"
+            icon={<MenuOutlined className="text-slate-600 text-lg" />}
+            className="lg:hidden hover:bg-slate-100 flex items-center justify-center"
+            onClick={() => setDrawerOpen(true)}
+          />
         </div>
       </div>
+
+      <Drawer
+        placement="right"
+        onClose={() => setDrawerOpen(false)}
+        open={drawerOpen}
+        width={280}
+        closeIcon={<CloseOutlined />}
+        title={
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 flex items-center justify-center">
+              <span className="text-white text-base font-bold">面</span>
+            </div>
+            <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
+              Interview Bar
+            </span>
+          </div>
+        }
+      >
+        <nav className="flex flex-col gap-1">
+           <Link
+             href="/resume"
+            onClick={() => setDrawerOpen(false)}
+            className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+          >
+            {'Resume Prediction'}
+          </Link>
+          <div className="px-4 py-2 text-xs text-slate-400 font-medium uppercase tracking-wider">
+            {'Comprehensive Interview'}
+            <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none text-white bg-gradient-to-r from-orange-500 to-red-500 ml-2 align-middle">
+              HOT
+            </span>
+          </div>
+          <Link
+            href="/interview/social"
+            onClick={() => setDrawerOpen(false)}
+            className="block pl-8 pr-4 py-2.5 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors text-sm"
+          >
+            <UserOutlined className="mr-2 text-blue-500" />
+            {'Experienced Interview'}
+          </Link>
+          <Link
+            href="/interview/campus"
+            onClick={() => setDrawerOpen(false)}
+            className="block pl-8 pr-4 py-2.5 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors text-sm"
+          >
+            <TeamOutlined className="mr-2 text-green-500" />
+            {'Campus Interview'}
+          </Link>
+          <Link
+            href="/interview/special"
+            onClick={() => setDrawerOpen(false)}
+            className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+          >
+            {'Specialized Interview'}
+          </Link>
+          <Link
+            href="https://awq7m8b63wy.feishu.cn/wiki/Cl8mwzOayiTtaZknRU2cyoFHndL"
+            target="_blank"
+            onClick={() => setDrawerOpen(false)}
+            className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
+          >
+            {'User Manual'}
+          </Link>
+        </nav>
+      </Drawer>
       <Modal
         open={openAuth}
         onCancel={() => setOpenAuth(false)}
@@ -364,7 +419,7 @@ const Navbar: FC = () => {
                     {'Login'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -391,7 +446,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google 登录
+                        Google
                       </Button>
                       <Button
                         type="default"
@@ -412,7 +467,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub 登录
+                        GitHub
                       </Button>
                     </div>
                   </div>
@@ -457,7 +512,7 @@ const Navbar: FC = () => {
                     {'Register and Login'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -484,7 +539,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google 登录
+                        Google
                       </Button>
                       <Button
                         type="default"
@@ -505,7 +560,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub 登录
+                        GitHub
                       </Button>
                     </div>
                   </div>

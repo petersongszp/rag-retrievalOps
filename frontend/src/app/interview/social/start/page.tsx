@@ -18,7 +18,6 @@ import {
 import {
   AudioOutlined,
   CustomerServiceOutlined,
-  QuestionCircleOutlined,
   SendOutlined,
   StopOutlined,
 } from '@ant-design/icons';
@@ -49,11 +48,13 @@ export default function SocialInterviewStartPage() {
   const [waitingNextQuestion, setWaitingNextQuestion] = useState(false);
   const [conversationHistory, setConversationHistory] = useState<ConversationItem[]>([]);
   const chatContainerRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const answerInputRef = useRef<HTMLTextAreaElement>(null);
   const asrCapability = useASRCapability();
   const speechInput = useSpeechAnswerInput({
     enabled: asrCapability.enabled,
     sessionId,
-    interviewType: '综合面试',
+    interviewType: 'comprehensive',
     questionText,
     onTranscript: (transcript) => {
       setAnswer((prev) => (prev.trim() ? `${prev.trim()}\n${transcript}` : transcript));
@@ -102,9 +103,9 @@ export default function SocialInterviewStartPage() {
     setStarting(true);
     const sanitize = (s: string) => s.replace(/[<>&"'`]/g, '');
     const requestBody = {
-      type: String(params.type || '综合面试'),
-      domain: String(params.domain || '社招简历面试'),
-      difficulty: String(params.difficulty || '简单'),
+      type: String(params.type || 'comprehensive'),
+      domain: String(params.domain || 'experienced'),
+      difficulty: String(params.difficulty || 'simple'),
       position_name: String(params.position_name || ''),
       company_name: sanitize(String(params.company_name || '')),
       resume_id: Number(params.resume_id),
@@ -318,10 +319,18 @@ export default function SocialInterviewStartPage() {
 
   // 自动滚动到底部
   useEffect(() => {
-    if (chatContainerRef.current) {
-      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    const frameId = window.requestAnimationFrame(() => {
+      messagesEndRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    });
+    return () => window.cancelAnimationFrame(frameId);
+  }, [conversationHistory, waitingNextQuestion, starting]);
+
+  // 对话框解锁时自动聚焦输入框
+  useEffect(() => {
+    if (!waitingNextQuestion && !starting && answerInputRef.current) {
+      answerInputRef.current.focus();
     }
-  }, [conversationHistory, waitingNextQuestion]);
+  }, [waitingNextQuestion, starting]);
 
   const mm = String(Math.floor(elapsed / 60)).padStart(2, '0');
   const ss = String(elapsed % 60).padStart(2, '0');
@@ -499,7 +508,7 @@ export default function SocialInterviewStartPage() {
 
       {/* Chat Area */}
       <main className="flex-1 overflow-y-auto relative z-10" ref={chatContainerRef}>
-        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 pb-32">
+        <div className="max-w-4xl mx-auto px-4 py-8 space-y-8 pb-40">
           {conversationHistory.length === 0 && !starting && (
             <div className="flex flex-col items-center justify-center py-20 opacity-0 animate-fade-in-up">
               <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-500 text-2xl mb-4 animate-bounce-subtle">
@@ -590,6 +599,8 @@ export default function SocialInterviewStartPage() {
               </div>
             </div>
           )}
+
+          <div ref={messagesEndRef} aria-hidden="true" className="h-px scroll-mb-44" />
         </div>
       </main>
 
@@ -598,6 +609,7 @@ export default function SocialInterviewStartPage() {
         <div className="max-w-4xl mx-auto px-4">
           <div className="relative bg-white rounded-2xl border border-slate-200 shadow-lg shadow-slate-100/50 transition-all focus-within:shadow-xl focus-within:border-blue-400 focus-within:ring-1 focus-within:ring-blue-100">
             <Input.TextArea
+              ref={answerInputRef}
               value={answer}
               onChange={(e) => setAnswer(e.target.value)}
               placeholder={
@@ -647,35 +659,29 @@ export default function SocialInterviewStartPage() {
                     className="!text-slate-400 !w-9 !h-9"
                   />
                 )}
-                <Button
-                  type="text"
-                  size="small"
-                  icon={<QuestionCircleOutlined className="text-slate-400" />}
-                  className="!text-slate-400"
-                />
-              </div>
-              <div className="flex items-center gap-3">
-                <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
-                <Button
-                  type="primary"
-                  shape="round"
-                  icon={<SendOutlined />}
-                  loading={submitting}
-                  disabled={
-                    !sessionId ||
-                    waitingNextQuestion ||
-                    starting ||
-                    speechInput.isRecording ||
-                    speechInput.isStopping ||
-                    speechInput.isTranscribing ||
-                    !answer.trim()
-                  }
-                  onClick={() => onSubmit()}
-                  className="!bg-blue-500 hover:!bg-blue-600 !shadow-blue-200 !border-0"
-                >
-                  Send
-                </Button>
-              </div>
+              </div>  
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
+                  <Button
+                    type="primary"
+                    shape="round"
+                    icon={<SendOutlined />}
+                    loading={submitting}
+                    disabled={
+                      !sessionId ||
+                      waitingNextQuestion ||
+                      starting ||
+                      speechInput.isRecording ||
+                      speechInput.isStopping ||
+                      speechInput.isTranscribing ||
+                      !answer.trim()
+                    }
+                    onClick={() => onSubmit()}
+                    className="!bg-blue-500 hover:!bg-blue-600 !shadow-blue-200 !border-0"
+                  >
+                    Send
+                  </Button>
+                </div>
             </div>
           </div>
           <div className="mt-2 px-2">

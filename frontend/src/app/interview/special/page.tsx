@@ -20,7 +20,7 @@ export default function SpecialInterviewPage() {
       setStarting(true);
 
       const params = {
-        type: '专项面试',
+        type: 'special',
         domain: values.stack,
         difficulty: values.level,
       };
@@ -70,9 +70,9 @@ export default function SpecialInterviewPage() {
     {
       label: 'CS Fundamentals',
       options: [
-        { value: '操作系统', label: 'Operating Systems' },
-        { value: '计算机网络', label: 'Computer Network' },
-        { value: '数据结构与算法', label: 'Data Structures & Algos' },
+        { value: 'os', label: 'Operating Systems' },
+        { value: 'network', label: 'Computer Network' },
+        { value: 'dsa', label: 'Data Structures & Algos' },
       ],
     },
   ];
@@ -154,7 +154,7 @@ export default function SpecialInterviewPage() {
                   form={form}
                   layout="vertical"
                   size="large"
-                  initialValues={{ stack: stack, level: '简单' }}
+                  initialValues={{ stack: stack, level: 'simple' }}
                   className="flex flex-col gap-4"
                 >
                   <Form.Item
@@ -182,9 +182,9 @@ export default function SpecialInterviewPage() {
                       className="!h-12"
                       variant="filled"
                       options={[
-                        { value: '简单', label: 'Simple' },
-                        { value: '中等', label: 'Normal' },
-                        { value: '复杂', label: 'Hard' },
+                        { value: 'simple', label: 'Simple' },
+                        { value: 'normal', label: 'Normal' },
+                        { value: 'hard', label: 'Hard' },
                       ]}
                     />
                   </Form.Item>

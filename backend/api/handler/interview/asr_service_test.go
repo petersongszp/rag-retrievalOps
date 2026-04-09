@@ -155,9 +155,9 @@ func TestTranscribeInterviewAudioPassesQuestionText(t *testing.T) {
 	h.POST("/api/interview/asr/transcribe", TranscribeInterviewAudio)
 
 	body, contentType := buildMultipartAudioBody(t, map[string]string{
-		"question_text":  "请你介绍一下 go-zero 的服务治理能力",
+		"question_text":  "Please introduce go-zero's service governance capabilities",
 		"session_id":     "session-1",
-		"interview_type": "专项面试",
+		"interview_type": "special",
 		"domain":         "go",
 	})
 	resp := ut.PerformRequest(

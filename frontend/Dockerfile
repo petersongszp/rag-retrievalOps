@@ -1,28 +1,23 @@
-# 多阶段构建 - 第一阶段：构建Next.js应用
+# syntax=docker/dockerfile:1
+
+FROM node:18-alpine AS deps
+WORKDIR /app
+COPY package*.json ./
+RUN --mount=type=cache,target=/root/.npm,id=npm-cache \
+    npm ci --prefer-offline
+
 FROM node:18-alpine AS builder
 
 # 设置工作目录
 WORKDIR /app
-
-# 复制 package.json 和 package-lock.json
-COPY package*.json ./
-
-# 安装依赖
-RUN npm ci
-
-# 设置构建时的环境变量
+COPY --from=deps /app/node_modules ./node_modules
+COPY . .
 ARG NEXT_PUBLIC_API_BASE_URL
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8899/api}
+RUN --mount=type=cache,target=/app/.next/cache,id=next-cache \
+    npm run build
 
-# 复制应用代码
-COPY . .
-
-RUN npm run build
-
-# 多阶段构建 - 第二阶段：运行时镜像
-FROM node:18-alpine
-
-# 安装运行时依赖
+FROM node:18-alpine AS runner
 RUN apk add --no-cache curl
 
 # 设置时区
@@ -42,12 +37,7 @@ WORKDIR /app
 COPY --from=builder /app/.next ./.next
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package*.json ./
-# 可选文件用 RUN + cp 处理
-RUN --mount=type=bind,from=builder,source=/app,target=/builder \
-    cp -n /builder/next.config.js . 2>/dev/null || true
-
-
-# 更改所有权
+# COPY --from=builder /app/public ./public/ 2>/dev/null || true
 RUN chown -R appuser:appuser /app
 # 切换到非root用户
 USER appuser

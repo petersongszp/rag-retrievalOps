@@ -56,7 +56,7 @@ func ForgotPassword(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	response.SuccessWithMessage(ctx, c, "重置邮件已发送，请检查您的邮箱", nil)
+	response.SuccessWithMessage(ctx, c, "Reset email sent. Please check your inbox.", nil)
 }
 
 // ResetPassword .
@@ -74,7 +74,7 @@ func ResetPassword(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	response.SuccessWithMessage(ctx, c, "密码重置成功，请重新登录", nil)
+	response.SuccessWithMessage(ctx, c, "Password reset successfully. Please log in again.", nil)
 }
 
 // ListUserModels .
@@ -517,5 +517,5 @@ func SwitchUserModel(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	response.SuccessWithMessage(ctx, c, "模型切换成功", nil)
+	response.SuccessWithMessage(ctx, c, "Model switched successfully", nil)
 }

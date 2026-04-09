@@ -243,7 +243,7 @@ export default function ResumePressPage() {
                     {"Start Prediction"}
                   </Button>
                   <div className="text-center text-slate-400 text-sm mt-4">
-                    {"First free prediction with 20 questions · Takes about 30 seconds"}
+                    {"First free prediction with 5 questions · Takes about 60 seconds"}
                   </div>
                 </div>
               </Form>
