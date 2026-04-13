@@ -8,6 +8,7 @@ import (
 	"interview-agents/internal/agents/multiagent"
 	"io"
 	"log"
+	"strings"
 
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/callbacks"
@@ -147,6 +148,7 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 	iter := runner.Run(ctx, messages)
 
 	var lastMessage string
+	contentFilter := newThinkContentFilter()
 	// Eino 在一次 Run 中可能对同一轮助手回复产出第二条 MessageStream（内容重复），会导致 SSE chunk 与 structured_message 整段重复
 	streamCompleted := false
 	for {
@@ -198,6 +200,16 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 					msg, err := stream.Recv()
 					if err != nil {
 						if err == io.EOF {
+							if tail := contentFilter.Flush(); tail != "" {
+								streamHadAssistant = true
+								lastMessage += tail
+								if callback != nil {
+									if err := callback(tail); err != nil {
+										monitor.OnError(ctx, runInfo, err)
+										return "", err
+									}
+								}
+							}
 							break
 						}
 						monitor.OnError(ctx, runInfo, err)
@@ -210,10 +222,14 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 					}
 
 					if msg.Content != "" {
+						cleaned := contentFilter.Push(msg.Content)
+						if cleaned == "" {
+							continue
+						}
 						streamHadAssistant = true
-						lastMessage += msg.Content
+						lastMessage += cleaned
 						if callback != nil {
-							if err := callback(msg.Content); err != nil {
+							if err := callback(cleaned); err != nil {
 								monitor.OnError(ctx, runInfo, err)
 								return "", err
 							}
@@ -234,9 +250,14 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 				msg := mo.Message
 				// 修复：仅处理 Assistant 角色
 				if msg.Role == schema.Assistant {
-					lastMessage = msg.Content
+					cleaned := contentFilter.Push(msg.Content)
+					cleaned += contentFilter.Flush()
+					if cleaned == "" {
+						continue
+					}
+					lastMessage = cleaned
 					if callback != nil {
-						if err := callback(msg.Content); err != nil {
+						if err := callback(cleaned); err != nil {
 							monitor.OnError(ctx, runInfo, err)
 							return "", err
 						}
@@ -247,4 +268,96 @@ func runAgentWithIterator(ctx context.Context, agent adk.Agent, prompt string, c
 	}
 
 	return lastMessage, nil
+}
+
+type thinkContentFilter struct {
+	buffer  string
+	inThink bool
+}
+
+var (
+	thinkOpenTags      = []string{"<thinking>", "<think>"}
+	thinkCloseTags     = []string{"</thinking>", "</think>"}
+	maxOpenPrefixKeep  = maxTagLen(thinkOpenTags) - 1
+	maxClosePrefixKeep = maxTagLen(thinkCloseTags) - 1
+)
+
+func newThinkContentFilter() *thinkContentFilter {
+	return &thinkContentFilter{}
+}
+
+func (f *thinkContentFilter) Push(chunk string) string {
+	if chunk == "" {
+		return ""
+	}
+
+	f.buffer += chunk
+	var out strings.Builder
+
+	for {
+		if !f.inThink {
+			idx, tagLen := findEarliestTagIndex(strings.ToLower(f.buffer), thinkOpenTags)
+			if idx == -1 {
+				emitUntil := len(f.buffer) - maxOpenPrefixKeep
+				if emitUntil <= 0 {
+					return out.String()
+				}
+				out.WriteString(f.buffer[:emitUntil])
+				f.buffer = f.buffer[emitUntil:]
+				return out.String()
+			}
+
+			out.WriteString(f.buffer[:idx])
+			f.buffer = f.buffer[idx+tagLen:]
+			f.inThink = true
+			continue
+		}
+
+		idx, tagLen := findEarliestTagIndex(strings.ToLower(f.buffer), thinkCloseTags)
+		if idx == -1 {
+			if len(f.buffer) > maxClosePrefixKeep {
+				f.buffer = f.buffer[len(f.buffer)-maxClosePrefixKeep:]
+			}
+			return out.String()
+		}
+
+		f.buffer = f.buffer[idx+tagLen:]
+		f.inThink = false
+	}
+}
+
+func (f *thinkContentFilter) Flush() string {
+	if f.inThink {
+		f.buffer = ""
+		return ""
+	}
+	out := f.buffer
+	f.buffer = ""
+	return out
+}
+
+func findEarliestTagIndex(contentLower string, tags []string) (int, int) {
+	index := -1
+	length := 0
+	for _, tag := range tags {
+		i := strings.Index(contentLower, tag)
+		if i == -1 {
+			continue
+		}
+		if index == -1 || i < index {
+			index = i
+			length = len(tag)
+		}
+	}
+	return index, length
+}
+
+func maxTagLen(tags []string) int {
+	maxLen := 0
+	for _, tag := range tags {
+		if len(tag) > maxLen {
+			maxLen = len(tag)
+		}
+	}
+	return maxLen
 }
