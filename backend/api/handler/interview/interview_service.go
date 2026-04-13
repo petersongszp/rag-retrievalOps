@@ -4,6 +4,7 @@ package interview
 
 import (
 	"context"
+	"errors"
 	"interview-agents/internal/agents/usecase/evaluation"
 	"interview-agents/internal/model"
 	"io"
@@ -18,6 +19,7 @@ import (
 	interviewservice "interview-agents/internal/service/resume"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"gorm.io/gorm"
 )
 
 // StartInterviewStream 启动面试流程（SSE 模式）
@@ -330,6 +332,10 @@ func GetInterviewEvaluation(ctx context.Context, c *app.RequestContext) {
 		response.Success(ctx, c, existingEvaluation)
 		return
 	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		response.ErrorFromErr(ctx, c, err)
+		return
+	}
 	//如果没获取到面试评估报告则进行评估
 	resp, err := evaluation.GenerateRecordEvaluation(ctx, userId, reportID)
 	if err != nil {
@@ -387,6 +393,10 @@ func GetInterviewAnswerRecord(ctx context.Context, c *app.RequestContext) {
 				}
 			}
 		}
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		response.ErrorFromErr(ctx, c, err)
+		return
 	}
 	//如果数据库中获取失败则调用智能体生成评估
 	reportId := req.ReportID

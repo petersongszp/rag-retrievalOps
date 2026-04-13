@@ -2,6 +2,8 @@ package model
 
 import (
 	"time"
+
+	"gorm.io/gorm/clause"
 )
 
 var AnswerReportDao _AnswerReport
@@ -11,10 +13,10 @@ type (
 	_AnswerReport struct{}
 	AnswerReport  struct {
 		ID        uint64              `json:"id" gorm:"primaryKey;autoIncrement;comment:主键"`
-		UserID    uint                `json:"user_id" gorm:"not null;index:idx_user_id;comment:用户ID"`
-		ReportID  uint64              `json:"report_id" gorm:"not null;index:idx_report_id;comment:关联的面试报告ID"`
+		UserID    uint                `json:"user_id" gorm:"not null;index:idx_user_id;uniqueIndex:uniq_answer_user_report_deleted;comment:用户ID"`
+		ReportID  uint64              `json:"report_id" gorm:"not null;index:idx_report_id;uniqueIndex:uniq_answer_user_report_deleted;comment:关联的面试报告ID"`
 		Records   []*AnswerRecordItem `json:"records" gorm:"type:json;serializer:json;comment:答题记录列表"`
-		Deleted   int                 `json:"deleted" gorm:"default:0;index:idx_deleted;comment:是否删除"`
+		Deleted   int                 `json:"deleted" gorm:"default:0;index:idx_deleted;uniqueIndex:uniq_answer_user_report_deleted;comment:是否删除"`
 		CreatedAt time.Time           `json:"created_at" gorm:"autoCreateTime:milli;comment:创建时间"`
 		UpdatedAt time.Time           `json:"updated_at" gorm:"autoUpdateTime:milli;comment:更新时间"`
 	}
@@ -59,6 +61,21 @@ func (dao *_AnswerReport) CreateAnswerReport(report *AnswerReport) error {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
 	return getDB().Create(report).Error
+}
+
+// UpsertAnswerReport 按 user_id + report_id + deleted 幂等写入答题报告
+func (dao *_AnswerReport) UpsertAnswerReport(report *AnswerReport) error {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	return getDB().Clauses(clause.OnConflict{
+		Columns: []clause.Column{
+			{Name: "user_id"},
+			{Name: "report_id"},
+			{Name: "deleted"},
+		},
+		DoUpdates: clause.AssignmentColumns([]string{"records", "updated_at"}),
+	}).Create(report).Error
 }
 
 // GetAnswerReportByID 根据ID获取答题报告
