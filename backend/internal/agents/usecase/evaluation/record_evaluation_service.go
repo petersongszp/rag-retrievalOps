@@ -1,13 +1,13 @@
 package evaluation
 
 import (
+	"context"
+	"encoding/json"
+	"fmt"
 	"interview-agents/api/model/interview"
 	"interview-agents/internal/agents/evaluation"
 	"interview-agents/internal/agents/pkg"
 	"interview-agents/internal/model"
-	"context"
-	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 
@@ -34,25 +34,20 @@ func GenerateRecordEvaluation(ctx context.Context, userId uint, reportId uint64)
 		Agent: agent,
 	})
 
-	// 构建查询消息
-	query := fmt.Sprintf(`请对用户ID为 %d、报告ID为 %d 的答题记录进行详细评估。
+	// Build an English-only query to avoid multilingual output drift.
+	query := fmt.Sprintf(`Evaluate the interview record for user_id=%d and report_id=%d.
 
-请按照以下步骤进行：
-1. 首先调用 get_mianshi_info 工具获取面试的完整问题和对话记录
-2. 仔细分析候选人的回答内容
-3. 根据回答质量进行综合评估
-4. 生成详细的评估反馈
+Process:
+1. Call get_mianshi_info first to retrieve full interview dialogues.
+2. Analyze candidate answers by quality, completeness, and depth.
+3. Generate dimension-level scores and feedback.
+4. Return final JSON only.
 
-评估应包含：
-- 评分（0-100分）
-- 关键知识点的掌握情况
-- 问题难度评估
-- 回答的优势
-- 回答的不足
-- 改进建议
-- 相关知识点总结
-- 思考过程分析
-- 参考答案或最佳实践`, userId, reportId)
+Output constraints:
+- All generated string values must be in English.
+- Keep score as integer 0-100.
+- Keep dimension names in concise English phrases.
+- Do not include any non-JSON text.`, userId, reportId)
 
 	// 创建用户消息
 	userMsg := &schema.Message{
