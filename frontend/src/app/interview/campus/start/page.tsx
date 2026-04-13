@@ -4,14 +4,10 @@ import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Typography, Button, Input, Avatar, Progress, message } from 'antd';
 import { INTERVIEW_API } from '@/config/api';
-import {
-  AudioOutlined,
-  SendOutlined,
-  CustomerServiceOutlined,
-  StopOutlined,
-} from '@ant-design/icons';
+import { CustomerServiceOutlined } from '@ant-design/icons';
 import { useASRCapability } from '@/hooks/useASRCapability';
 import { useSpeechAnswerInput } from '@/hooks/useSpeechAnswerInput';
+import { InterviewFooterActions } from '@/components/interview/InterviewFooterActions';
 
 const { Title } = Typography;
 
@@ -626,54 +622,25 @@ export default function CampusInterviewStartPage() {
               }}
             />
 
-            <div className="relative z-10 flex justify-between items-center px-2 pb-2 pt-1 border-t border-slate-50">
-              <div className="flex gap-1">
-                {speechInput.isRecording || speechInput.isStopping ? (
-                  <Button
-                    danger
-                    shape="round"
-                    size="small"
-                    icon={<StopOutlined />}
-                    disabled={speechInput.isStopping}
-                    onClick={speechInput.handleMicClick}
-                    className="!h-9 !px-4 !font-medium"
-                  >
-                    {speechInput.isStopping ? 'Stopping...' : 'Stop Rec.'}
-                  </Button>
-                ) : (
-                  <Button
-                    type="text"
-                    size="small"
-                    icon={<AudioOutlined className="text-slate-400" />}
-                    disabled={speechDisabled || asrCapability.loading}
-                    onClick={speechInput.handleMicClick}
-                    className="!text-slate-400 !w-9 !h-9"
-                  />
-                )}
-              </div>  
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
-                  <Button
-                    type="primary"
-                    shape="round"
-                    icon={<SendOutlined />}
-                    loading={submitting}
-                    disabled={
-                      !sessionId ||
-                      waitingNextQuestion ||
-                      starting ||
-                      speechInput.isRecording ||
-                      speechInput.isStopping ||
-                      speechInput.isTranscribing ||
-                      !answer.trim()
-                    }
-                    onClick={() => onSubmit()}
-                    className="!bg-green-500 hover:!bg-green-600 !shadow-green-200 !border-0"
-                  >
-                    Send
-                  </Button>
-                </div>
-            </div>
+            <InterviewFooterActions
+              isRecording={speechInput.isRecording}
+              isStopping={speechInput.isStopping}
+              speechDisabled={speechDisabled}
+              asrLoading={asrCapability.loading}
+              submitting={submitting}
+              sendDisabled={
+                !sessionId ||
+                waitingNextQuestion ||
+                starting ||
+                speechInput.isRecording ||
+                speechInput.isStopping ||
+                speechInput.isTranscribing ||
+                !answer.trim()
+              }
+              onMicClick={speechInput.handleMicClick}
+              onSubmit={() => onSubmit()}
+              sendButtonClassName="!bg-green-500 hover:!bg-green-600 !shadow-green-200 !border-0"
+            />
           </div>
           <div className="mt-2 px-2">
             <p className="text-xs text-slate-400">{speechHint}</p>

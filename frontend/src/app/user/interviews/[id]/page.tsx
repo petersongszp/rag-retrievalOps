@@ -1,3 +1,21 @@
+// This route is intentionally returning a 404 (notFound) at the server level
+// to immediately make the page inaccessible without deleting your original
+// client implementation. The original client component is preserved below
+// and commented out per your request.
+
+import { notFound } from 'next/navigation';
+
+// Server component that always returns 404
+export default function Page() {
+  // Calling notFound() will cause Next.js to render the 404 page (status 404)
+  notFound();
+  return null;
+}
+
+/*
+// Original client component preserved (commented out). Do not delete — kept
+// here so you can restore it later if needed. It was a client component using
+// React hooks and Ant Design UI.
 'use client';
 
 import { useMemo, useState } from 'react';
@@ -164,3 +182,4 @@ export default function InterviewDetailPage() {
     </div>
   );
 }
+*/
