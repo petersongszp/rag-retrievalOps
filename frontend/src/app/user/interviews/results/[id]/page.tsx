@@ -170,7 +170,7 @@ function ScoreGauge({ score }: { score: number }) {
         />
         {arcPath(angle, color)}
         <text x={cx} y={cy - 15} textAnchor="middle" fontSize={14} fill="#8c8c8c">
-          本次面试评分
+          Interview Score
         </text>
         <text x={cx} y={cy + 30} textAnchor="middle" fontSize={48} fontWeight={700} fill={color}>
           {score}
@@ -238,7 +238,7 @@ export default function InterviewResultDetailPage() {
       }
     } catch (e: any) {
       console.error(e);
-      message.error('获取面试详情失败');
+      message.error('Failed to load interview details');
     } finally {
       setLoading(false);
     }
@@ -252,7 +252,7 @@ export default function InterviewResultDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-50">
-        <Spin size="large" tip="正在生成详细分析..." />
+        <Spin size="large" tip="Generating detailed analysis..." />
       </div>
     );
   }
@@ -262,14 +262,16 @@ export default function InterviewResultDetailPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <AntCard className="rounded-3xl shadow-xl border-0 text-center p-10 max-w-md w-full">
           <div className="mb-4 text-6xl">📊</div>
-          <h3 className="text-xl font-bold text-slate-700 mb-2">暂无分析报告</h3>
-          <p className="text-slate-500 mb-6">可能是面试尚未完成，或数据正在处理中。</p>
+          <h3 className="text-xl font-bold text-slate-700 mb-2">No analysis report available</h3>
+          <p className="text-slate-500 mb-6">
+            It may be that the interview has not been completed or the data is being processed.
+          </p>
           <Button
             type="primary"
             onClick={() => window.history.back()}
             className="bg-blue-600 rounded-xl h-10 px-6"
           >
-            返回列表
+            Back to List
           </Button>
         </AntCard>
       </div>
@@ -277,19 +279,19 @@ export default function InterviewResultDetailPage() {
   }
 
   const basic = {
-    candidate: user?.name || '未知用户',
-    resume: '暂无', // 接口暂未返回简历名称
-    type: interviewInfo?.type || '未知',
+    candidate: user?.name || 'Unknown User',
+    resume: 'N/A', // Resume name is not returned by the API yet
+    type: interviewInfo?.type || 'Unknown',
     score: evaluation.score,
-    difficulty: interviewInfo?.difficulty || '未知',
-    company: interviewInfo?.company_name || '未指定',
-    position: interviewInfo?.position_name || '未指定',
+    difficulty: interviewInfo?.difficulty || 'Unknown',
+    company: interviewInfo?.company_name || 'Not specified',
+    position: interviewInfo?.position_name || 'Not specified',
     duration: interviewInfo?.duration
-      ? `${Math.floor(interviewInfo.duration / 60)}分钟${interviewInfo.duration % 60}秒`
-      : '未知',
+      ? `${Math.floor(interviewInfo.duration / 60)}m ${interviewInfo.duration % 60}s`
+      : 'Unknown',
     time: interviewInfo?.created_at
-      ? new Date(interviewInfo.created_at).toLocaleString('zh-CN')
-      : '未知',
+      ? new Date(interviewInfo.created_at).toLocaleString('en-US')
+      : 'Unknown',
   };
 
   return (
@@ -303,15 +305,17 @@ export default function InterviewResultDetailPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
               <TrophyOutlined className="text-yellow-500" />
-              面试结果分析
+              Interview Results Analysis
             </h1>
-            <p className="text-slate-500 mt-2 ml-11">全面复盘您的面试表现，AI 助你更进一步</p>
+            <p className="text-slate-500 mt-2 ml-11">
+              A full review of your interview performance to help you improve with AI.
+            </p>
           </div>
           <Button
             onClick={() => window.history.back()}
             className="rounded-xl border-slate-200 hover:border-blue-400 hover:text-blue-600"
           >
-            返回列表
+            Back to List
           </Button>
         </div>
 
@@ -341,31 +345,34 @@ export default function InterviewResultDetailPage() {
                     <div className="flex items-center gap-2">
                       <EnvironmentOutlined className="text-slate-400" />
                       <span>
-                        公司：<span className="font-medium text-slate-800">{basic.company}</span>
+                        Company: <span className="font-medium text-slate-800">{basic.company}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <UserOutlined className="text-slate-400" />
                       <span>
-                        岗位：<span className="font-medium text-slate-800">{basic.position}</span>
+                        Position:{' '}
+                        <span className="font-medium text-slate-800">{basic.position}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <BarChartOutlined className="text-slate-400" />
                       <span>
-                        难度：<span className="font-medium text-slate-800">{basic.difficulty}</span>
+                        Difficulty:{' '}
+                        <span className="font-medium text-slate-800">{basic.difficulty}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <ClockCircleOutlined className="text-slate-400" />
                       <span>
-                        时长：<span className="font-medium text-slate-800">{basic.duration}</span>
+                        Duration:{' '}
+                        <span className="font-medium text-slate-800">{basic.duration}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2 sm:col-span-2">
                       <CalendarOutlined className="text-slate-400" />
                       <span>
-                        时间：<span className="font-medium text-slate-800">{basic.time}</span>
+                        Time: <span className="font-medium text-slate-800">{basic.time}</span>
                       </span>
                     </div>
                   </div>
@@ -383,13 +390,13 @@ export default function InterviewResultDetailPage() {
                     icon={<DownloadOutlined />}
                     className="bg-blue-600 hover:bg-blue-500 h-10 rounded-xl shadow-lg shadow-blue-200 border-0 w-full"
                   >
-                    下载报告
+                    Download Report
                   </Button>
                   <Button
                     icon={<RobotOutlined />}
                     className="h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 w-full"
                   >
-                    AI 提升建议
+                    AI Improvement Tips
                   </Button>
                 </div>
               </div>
@@ -409,7 +416,7 @@ export default function InterviewResultDetailPage() {
                 <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
                   <CheckCircleOutlined className="text-xl" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 m-0">面试官综合点评</h3>
+                <h3 className="text-xl font-bold text-slate-800 m-0">Interviewer Summary</h3>
               </div>
               <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-50 text-slate-700 leading-relaxed text-lg">
                 {evaluation.comment}
@@ -421,7 +428,9 @@ export default function InterviewResultDetailPage() {
                 <div className="bg-emerald-100 p-2 rounded-lg text-emerald-600">
                   <BarChartOutlined className="text-xl" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 m-0">维度详细分析</h3>
+                <h3 className="text-xl font-bold text-slate-800 m-0">
+                  Detailed Dimension Analysis
+                </h3>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -458,17 +467,17 @@ export default function InterviewResultDetailPage() {
                 <div className="bg-purple-100 p-2 rounded-lg text-purple-600">
                   <BulbOutlined className="text-xl" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 m-0">能力模型雷达</h3>
+                <h3 className="text-xl font-bold text-slate-800 m-0">Capability Radar</h3>
               </div>
               <div className="flex justify-center items-center py-4">
                 {evaluation.dimensions && evaluation.dimensions.length > 0 ? (
                   <RadarChart items={evaluation.dimensions} size={320} />
                 ) : (
-                  <div className="text-slate-400 py-10">暂无维度数据</div>
+                  <div className="text-slate-400 py-10">No dimension data available</div>
                 )}
               </div>
               <div className="text-center text-slate-500 text-sm mt-4">
-                基于本次面试表现生成的五维能力模型
+                A five-dimension capability model generated from this interview.
               </div>
             </div>
           </Col>
@@ -483,7 +492,7 @@ export default function InterviewResultDetailPage() {
             <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
               <ClockCircleOutlined className="text-xl" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800 m-0">答题全记录复盘</h3>
+            <h3 className="text-xl font-bold text-slate-800 m-0">Full Q&A Review</h3>
           </div>
 
           {answerRecords && answerRecords.length > 0 ? (
@@ -508,13 +517,13 @@ export default function InterviewResultDetailPage() {
                       >
                         <div className="mb-4">
                           <span className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded mb-2">
-                            面试官提问
+                            Interviewer Question
                           </span>
                           <p className="text-slate-800 font-medium text-lg">{m.question}</p>
                         </div>
                         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
                           <span className="inline-block bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded mb-2">
-                            你的回答
+                            Your Answer
                           </span>
                           <p className="text-slate-600 leading-relaxed">{m.answer}</p>
                         </div>
@@ -525,21 +534,22 @@ export default function InterviewResultDetailPage() {
                     {rec.comment && (
                       <div className="bg-gradient-to-r from-orange-50 to-rose-50 rounded-2xl p-6 border border-orange-100">
                         <div className="flex items-center gap-2 mb-4 text-orange-700 font-bold">
-                          <RobotOutlined /> AI 深度点评
+                          <RobotOutlined /> AI In-Depth Feedback
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="bg-white/60 rounded-xl p-4">
                             <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
-                              本题得分
+                              Score
                             </div>
                             <div className="text-2xl font-bold text-orange-600">
-                              {rec.comment.score} <span className="text-sm text-slate-400">分</span>
+                              {rec.comment.score}{' '}
+                              <span className="text-sm text-slate-400">pts</span>
                             </div>
                           </div>
                           <div className="bg-white/60 rounded-xl p-4">
                             <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
-                              难度等级
+                              Difficulty
                             </div>
                             <div className="text-lg font-bold text-slate-700">
                               {rec.comment.difficulty}
@@ -549,16 +559,24 @@ export default function InterviewResultDetailPage() {
 
                         <div className="mt-6 space-y-4">
                           {[
-                            { label: '关键点', val: rec.comment.key_points },
-                            { label: '优势', val: rec.comment.strengths, color: 'text-green-700' },
-                            { label: '不足', val: rec.comment.weaknesses, color: 'text-red-600' },
+                            { label: 'Key Points', val: rec.comment.key_points },
                             {
-                              label: '改进建议',
+                              label: 'Strengths',
+                              val: rec.comment.strengths,
+                              color: 'text-green-700',
+                            },
+                            {
+                              label: 'Weaknesses',
+                              val: rec.comment.weaknesses,
+                              color: 'text-red-600',
+                            },
+                            {
+                              label: 'Suggestions',
                               val: rec.comment.suggestion,
                               color: 'text-blue-600',
                             },
-                            { label: '参考思路', val: rec.comment.thinking },
-                            { label: '标准答案', val: rec.comment.reference },
+                            { label: 'Suggested Approach', val: rec.comment.thinking },
+                            { label: 'Reference Answer', val: rec.comment.reference },
                           ].map(
                             (item, idx) =>
                               item.val && (
@@ -587,7 +605,7 @@ export default function InterviewResultDetailPage() {
           ) : (
             <div className="text-center py-12">
               <div className="text-6xl mb-4 opacity-20">📝</div>
-              <div className="text-slate-400">暂无答题记录</div>
+              <div className="text-slate-400">No answer records yet</div>
             </div>
           )}
         </div>
