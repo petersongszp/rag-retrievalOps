@@ -2,6 +2,7 @@ package evaluation
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"interview-agents/internal/agents/evaluation"
 	"interview-agents/internal/agents/pkg"
@@ -12,9 +13,21 @@ import (
 	"github.com/cloudwego/eino/adk"
 	"github.com/cloudwego/eino/schema"
 	"golang.org/x/net/context"
+	"gorm.io/gorm"
 )
 
 func GenerateAnswerRecordEvaluation(ctx context.Context, userId uint, reportId uint64) (*model.AnswerReport, error) {
+	unlock := acquireGenerationLock("topic_evaluation", userId, reportId)
+	defer unlock()
+
+	existing, err := model.AnswerReportDao.GetAnswerReportByUserIDAndReportID(userId, reportId)
+	if err == nil && existing != nil {
+		return existing, nil
+	}
+	if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, err
+	}
+
 	// 添加 300 秒超时（5分钟）- 评估需要调用工具和生成详细内容
 	timeoutCtx, cancel := context.WithTimeout(ctx, 300*time.Second)
 	defer cancel()
@@ -256,9 +269,9 @@ func buildDefaultAnswerReport(userId uint, reportId uint64) *model.AnswerReport 
 }
 
 // saveAnswerReportToDatabase 将答题报告数据保存到数据库
-func saveAnswerReportToDatabase(ctx context.Context, report *model.AnswerReport) error {
+func saveAnswerReportToDatabase(_ context.Context, report *model.AnswerReport) error {
 	// 直接调用 DAO 方法保存到数据库
-	err := model.AnswerReportDao.CreateAnswerReport(report)
+	err := model.AnswerReportDao.UpsertAnswerReport(report)
 	if err != nil {
 		log.Printf("[saveAnswerReportToDatabase] 保存答题报告失败: %v", err)
 		return fmt.Errorf("failed to save answer report: %w", err)
