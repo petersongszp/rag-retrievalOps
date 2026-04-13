@@ -242,11 +242,11 @@ const Navbar: FC = () => {
               menu={{
                 items: [
                   { key: 'center', label: <Link href="/user/center">{'User Center'}</Link> },
+                  { key: 'pay', label: <Link href="/user/pay">{'Payment'}</Link> },
                   {
                     key: 'interviews',
                     label: <Link href="/user/interviews">{'Interview Records'}</Link>,
                   },
-                  { key: 'pay', label: <Link href="/user/pay">{'Payment'}</Link> },
                   { key: 'press', label: <Link href="/user/press">{'Prediction Records'}</Link> },
                   { type: 'divider' },
                   {

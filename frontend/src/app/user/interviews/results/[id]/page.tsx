@@ -1,19 +1,7 @@
 'use client';
 
-import { useEffect, useMemo, useState } from 'react';
-import {
-  Typography,
-  Card as AntCard,
-  Row,
-  Col,
-  List,
-  Tag,
-  Button,
-  Avatar,
-  Spin,
-  message,
-  Divider,
-} from 'antd';
+import { useEffect, useState } from 'react';
+import { Card as AntCard, Row, Col, Tag, Button, Avatar, Spin, message, Divider } from 'antd';
 import { useParams } from 'next/navigation';
 import apiClient from '@/services/api/client';
 import { useAuth } from '@/hooks/useAuth';
@@ -31,7 +19,104 @@ import {
   BulbOutlined,
 } from '@ant-design/icons';
 
-const { Title, Paragraph, Text } = Typography;
+const difficultyMap: Record<string, string> = {
+  easy: 'Easy',
+  medium: 'Medium',
+  hard: 'Hard',
+  '\u7b80\u5355': 'Easy',
+  '\u4e2d\u7b49': 'Medium',
+  '\u56f0\u96be': 'Hard',
+};
+
+const interviewTypeMap: Record<string, string> = {
+  technical: 'Technical',
+  hr: 'HR',
+  behavioral: 'Behavioral',
+  '\u7efc\u5408': 'General',
+  '\u6280\u672f\u9762': 'Technical',
+  '\u884c\u4e3a\u9762': 'Behavioral',
+  'hr\u9762': 'HR',
+};
+
+const dimensionNameMap: Record<string, string> = {
+  '\u6c9f\u901a\u8868\u8fbe': 'Communication',
+  '\u903b\u8f91\u601d\u7ef4': 'Logical Thinking',
+  '\u6280\u672f\u6df1\u5ea6': 'Technical Depth',
+  '\u4e1a\u52a1\u7406\u89e3': 'Business Understanding',
+  '\u5b66\u4e60\u80fd\u529b': 'Learning Agility',
+  '\u95ee\u9898\u89e3\u51b3': 'Problem Solving',
+  '\u56e2\u961f\u534f\u4f5c': 'Team Collaboration',
+};
+
+const toEnglishLabel = (value: string | undefined, mapping: Record<string, string>) => {
+  if (!value) return 'Unknown';
+  return mapping[value] || value;
+};
+
+const formatDuration = (totalSeconds: number | undefined) => {
+  if (!totalSeconds && totalSeconds !== 0) return 'Unknown';
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+  return `${minutes}m ${seconds}s`;
+};
+
+const shortDimensionName = (name: string) => {
+  const translated = dimensionNameMap[name] || name;
+  return translated.length > 18 ? `${translated.slice(0, 15)}...` : translated;
+};
+
+function ExpandableMobileText({
+  content,
+  textClassName,
+  lines = 3,
+  threshold = 120,
+}: {
+  content: unknown;
+  textClassName?: string;
+  lines?: number;
+  threshold?: number;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const value = content == null ? '' : String(content);
+
+  if (!value) return null;
+
+  const shouldClamp = value.length > threshold;
+  const clampClassByLines: Record<number, string> = {
+    2: '[-webkit-line-clamp:2]',
+    3: '[-webkit-line-clamp:3]',
+    4: '[-webkit-line-clamp:4]',
+    5: '[-webkit-line-clamp:5]',
+  };
+  const clampClass = clampClassByLines[lines] || clampClassByLines[3];
+
+  return (
+    <div className="min-w-0">
+      <div
+        className={[
+          textClassName || '',
+          'break-words [overflow-wrap:anywhere]',
+          !expanded && shouldClamp
+            ? `overflow-hidden [display:-webkit-box] [-webkit-box-orient:vertical] ${clampClass} sm:overflow-visible sm:[display:block] sm:[-webkit-line-clamp:unset]`
+            : '',
+        ]
+          .filter(Boolean)
+          .join(' ')}
+      >
+        {value}
+      </div>
+      {shouldClamp && (
+        <button
+          type="button"
+          onClick={() => setExpanded((prev) => !prev)}
+          className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500 sm:hidden"
+        >
+          {expanded ? 'Show less' : 'Show more'}
+        </button>
+      )}
+    </div>
+  );
+}
 
 function RadarChart({
   items,
@@ -55,8 +140,16 @@ function RadarChart({
   const poly = points.map((p) => p.join(',')).join(' ');
 
   return (
-    <div style={{ width: size, height: size }} className="mx-auto relative">
-      <svg width={size} height={size} style={{ overflow: 'visible' }}>
+    <div
+      style={{ width: '100%', maxWidth: size, height: size }}
+      className="mx-auto relative min-w-0"
+    >
+      <svg
+        width="100%"
+        height="100%"
+        viewBox={`0 0 ${size} ${size}`}
+        style={{ overflow: 'visible' }}
+      >
         <defs>
           <radialGradient id="radarGradient" cx="50%" cy="50%" r="50%" fx="50%" fy="50%">
             <stop offset="0%" stopColor="rgba(82,196,26,0.4)" />
@@ -93,7 +186,7 @@ function RadarChart({
         {axis.map((p, i) => {
           // Calculate offset based on angle to push labels away from center
           const angle = (2 * Math.PI * i) / items.length - Math.PI / 2;
-          const labelDist = 20; // Distance from the end of the axis
+          const labelDist = 14; // Distance from the end of the axis
           const lx = p[0] + labelDist * Math.cos(angle);
           const ly = p[1] + labelDist * Math.sin(angle);
 
@@ -116,11 +209,11 @@ function RadarChart({
               y={ly}
               textAnchor={textAnchor}
               dominantBaseline={dominantBaseline}
-              fontSize={12}
+              fontSize={11}
               fontWeight={600}
               fill="#64748b"
             >
-              {items[i].dimension_name}
+              {shortDimensionName(items[i].dimension_name)}
             </text>
           );
         })}
@@ -135,7 +228,6 @@ function ScoreGauge({ score }: { score: number }) {
   const cy = size / 2;
   const r = 100;
   const start = Math.PI;
-  const end = 0;
   const angle = (Math.max(0, Math.min(100, score)) / 100) * Math.PI;
   const arcPath = (ang: number, color: string) => {
     const sx = cx + r * Math.cos(start);
@@ -262,16 +354,16 @@ export default function InterviewResultDetailPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <AntCard className="rounded-3xl shadow-xl border-0 text-center p-10 max-w-md w-full">
           <div className="mb-4 text-6xl">📊</div>
-          <h3 className="text-xl font-bold text-slate-700 mb-2">No analysis report available</h3>
+          <h3 className="text-xl font-bold text-slate-700 mb-2">No analysis report yet</h3>
           <p className="text-slate-500 mb-6">
-            It may be that the interview has not been completed or the data is being processed.
+            The interview may still be in progress, or data is processing.
           </p>
           <Button
             type="primary"
             onClick={() => window.history.back()}
             className="bg-blue-600 rounded-xl h-10 px-6"
           >
-            Back to List
+            Back to list
           </Button>
         </AntCard>
       </div>
@@ -280,15 +372,13 @@ export default function InterviewResultDetailPage() {
 
   const basic = {
     candidate: user?.name || 'Unknown User',
-    resume: 'N/A', // Resume name is not returned by the API yet
-    type: interviewInfo?.type || 'Unknown',
+    resume: 'N/A',
+    type: toEnglishLabel(interviewInfo?.type, interviewTypeMap),
     score: evaluation.score,
-    difficulty: interviewInfo?.difficulty || 'Unknown',
+    difficulty: toEnglishLabel(interviewInfo?.difficulty, difficultyMap),
     company: interviewInfo?.company_name || 'Not specified',
     position: interviewInfo?.position_name || 'Not specified',
-    duration: interviewInfo?.duration
-      ? `${Math.floor(interviewInfo.duration / 60)}m ${interviewInfo.duration % 60}s`
-      : 'Unknown',
+    duration: formatDuration(interviewInfo?.duration),
     time: interviewInfo?.created_at
       ? new Date(interviewInfo.created_at).toLocaleString('en-US')
       : 'Unknown',
@@ -303,19 +393,19 @@ export default function InterviewResultDetailPage() {
       <div className="container mx-auto px-4 relative z-10 pt-8">
         <div className="mb-8 animate-fade-in-up flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
+            <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3 break-words [overflow-wrap:anywhere]">
               <TrophyOutlined className="text-yellow-500" />
               Interview Results Analysis
             </h1>
-            <p className="text-slate-500 mt-2 ml-11">
-              A full review of your interview performance to help you improve with AI.
+            <p className="text-slate-500 mt-2 ml-11 break-words [overflow-wrap:anywhere]">
+              A full review of your interview performance, powered by AI insights.
             </p>
           </div>
           <Button
             onClick={() => window.history.back()}
             className="rounded-xl border-slate-200 hover:border-blue-400 hover:text-blue-600"
           >
-            Back to List
+            Back to list
           </Button>
         </div>
 
@@ -323,19 +413,21 @@ export default function InterviewResultDetailPage() {
         <div className="bg-white rounded-3xl p-8 border border-slate-100 shadow-xl shadow-slate-200/50 animate-fade-in-up mb-8">
           <Row gutter={[48, 24]} align="middle">
             <Col xs={24} lg={14}>
-              <div className="flex items-start gap-6">
+              <div className="flex items-start gap-6 min-w-0">
                 <Avatar
                   size={80}
                   className="bg-blue-100 text-blue-600 font-bold text-2xl border-4 border-white shadow-lg"
                 >
                   {basic.candidate.substring(0, 2).toUpperCase()}
                 </Avatar>
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
-                    <h2 className="text-2xl font-bold text-slate-800 m-0">{basic.candidate}</h2>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-2 min-w-0">
+                    <h2 className="text-2xl font-bold text-slate-800 m-0 break-words [overflow-wrap:anywhere]">
+                      {basic.candidate}
+                    </h2>
                     <Tag
                       color="blue"
-                      className="rounded-full px-3 border-0 bg-blue-50 text-blue-700 font-medium"
+                      className="rounded-full px-3 border-0 bg-blue-50 text-blue-700 font-medium max-w-full break-words [overflow-wrap:anywhere]"
                     >
                       {basic.type}
                     </Tag>
@@ -344,15 +436,20 @@ export default function InterviewResultDetailPage() {
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-8 text-slate-600 mt-4">
                     <div className="flex items-center gap-2">
                       <EnvironmentOutlined className="text-slate-400" />
-                      <span>
-                        Company: <span className="font-medium text-slate-800">{basic.company}</span>
+                      <span className="break-words [overflow-wrap:anywhere] min-w-0">
+                        Company:{' '}
+                        <span className="font-medium text-slate-800 break-words [overflow-wrap:anywhere]">
+                          {basic.company}
+                        </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <UserOutlined className="text-slate-400" />
-                      <span>
-                        Position:{' '}
-                        <span className="font-medium text-slate-800">{basic.position}</span>
+                      <span className="break-words [overflow-wrap:anywhere] min-w-0">
+                        Role:{' '}
+                        <span className="font-medium text-slate-800 break-words [overflow-wrap:anywhere]">
+                          {basic.position}
+                        </span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
@@ -372,7 +469,7 @@ export default function InterviewResultDetailPage() {
                     <div className="flex items-center gap-2 sm:col-span-2">
                       <CalendarOutlined className="text-slate-400" />
                       <span>
-                        Time: <span className="font-medium text-slate-800">{basic.time}</span>
+                        Date: <span className="font-medium text-slate-800">{basic.time}</span>
                       </span>
                     </div>
                   </div>
@@ -416,10 +513,17 @@ export default function InterviewResultDetailPage() {
                 <div className="bg-indigo-100 p-2 rounded-lg text-indigo-600">
                   <CheckCircleOutlined className="text-xl" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 m-0">Interviewer Summary</h3>
+                <h3 className="text-xl font-bold text-slate-800 m-0">
+                  Overall Interviewer Feedback
+                </h3>
               </div>
               <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-50 text-slate-700 leading-relaxed text-lg">
-                {evaluation.comment}
+                <ExpandableMobileText
+                  content={evaluation.comment}
+                  lines={4}
+                  threshold={160}
+                  textClassName="text-slate-700 leading-relaxed text-lg"
+                />
               </div>
 
               <Divider className="my-8" />
@@ -439,18 +543,23 @@ export default function InterviewResultDetailPage() {
                     key={i}
                     className="bg-white border border-slate-200 rounded-xl p-5 hover:shadow-md transition-shadow duration-300"
                   >
-                    <div className="flex justify-between items-center mb-3">
+                    <div className="flex justify-between items-center gap-3 mb-3 min-w-0">
                       <Tag
                         color="cyan"
-                        className="rounded-md px-2 py-0.5 text-sm font-medium m-0 border-0 bg-cyan-50 text-cyan-700"
+                        className="rounded-md px-2 py-0.5 text-sm font-medium m-0 border-0 bg-cyan-50 text-cyan-700 max-w-full break-words [overflow-wrap:anywhere]"
                       >
-                        {d.dimension_name}
+                        {dimensionNameMap[d.dimension_name] || d.dimension_name}
                       </Tag>
                       <span className="font-bold text-slate-800 text-lg">
                         {d.score} <span className="text-xs text-slate-400 font-normal">/ 100</span>
                       </span>
                     </div>
-                    <p className="text-slate-600 text-sm leading-relaxed m-0">{d.evaluation}</p>
+                    <ExpandableMobileText
+                      content={d.evaluation}
+                      lines={3}
+                      threshold={120}
+                      textClassName="text-slate-600 text-sm leading-relaxed m-0"
+                    />
                   </div>
                 ))}
               </div>
@@ -473,7 +582,7 @@ export default function InterviewResultDetailPage() {
                 {evaluation.dimensions && evaluation.dimensions.length > 0 ? (
                   <RadarChart items={evaluation.dimensions} size={320} />
                 ) : (
-                  <div className="text-slate-400 py-10">No dimension data available</div>
+                  <div className="text-slate-400 py-10">No dimension data</div>
                 )}
               </div>
               <div className="text-center text-slate-500 text-sm mt-4">
@@ -503,9 +612,12 @@ export default function InterviewResultDetailPage() {
                     <div className="bg-slate-800 text-white w-8 h-8 rounded-lg flex items-center justify-center font-bold shadow-md">
                       {rec.order}
                     </div>
-                    <h4 className="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors">
-                      {rec.content}
-                    </h4>
+                    <ExpandableMobileText
+                      content={rec.content}
+                      lines={2}
+                      threshold={80}
+                      textClassName="text-lg font-bold text-slate-800 group-hover:text-blue-600 transition-colors"
+                    />
                   </div>
 
                   <div className="border-l-2 border-slate-200 ml-4 pl-8 pb-8 space-y-6">
@@ -519,13 +631,23 @@ export default function InterviewResultDetailPage() {
                           <span className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded mb-2">
                             Interviewer Question
                           </span>
-                          <p className="text-slate-800 font-medium text-lg">{m.question}</p>
+                          <ExpandableMobileText
+                            content={m.question}
+                            lines={3}
+                            threshold={100}
+                            textClassName="text-slate-800 font-medium text-lg"
+                          />
                         </div>
                         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
                           <span className="inline-block bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded mb-2">
                             Your Answer
                           </span>
-                          <p className="text-slate-600 leading-relaxed">{m.answer}</p>
+                          <ExpandableMobileText
+                            content={m.answer}
+                            lines={4}
+                            threshold={140}
+                            textClassName="text-slate-600 leading-relaxed"
+                          />
                         </div>
                       </div>
                     ))}
@@ -534,13 +656,13 @@ export default function InterviewResultDetailPage() {
                     {rec.comment && (
                       <div className="bg-gradient-to-r from-orange-50 to-rose-50 rounded-2xl p-6 border border-orange-100">
                         <div className="flex items-center gap-2 mb-4 text-orange-700 font-bold">
-                          <RobotOutlined /> AI In-Depth Feedback
+                          <RobotOutlined /> AI Deep Review
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="bg-white/60 rounded-xl p-4">
                             <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
-                              Score
+                              Question Score
                             </div>
                             <div className="text-2xl font-bold text-orange-600">
                               {rec.comment.score}{' '}
@@ -552,7 +674,7 @@ export default function InterviewResultDetailPage() {
                               Difficulty
                             </div>
                             <div className="text-lg font-bold text-slate-700">
-                              {rec.comment.difficulty}
+                              {toEnglishLabel(rec.comment.difficulty, difficultyMap)}
                             </div>
                           </div>
                         </div>
@@ -575,7 +697,7 @@ export default function InterviewResultDetailPage() {
                               val: rec.comment.suggestion,
                               color: 'text-blue-600',
                             },
-                            { label: 'Suggested Approach', val: rec.comment.thinking },
+                            { label: 'Recommended Approach', val: rec.comment.thinking },
                             { label: 'Reference Answer', val: rec.comment.reference },
                           ].map(
                             (item, idx) =>
@@ -584,13 +706,18 @@ export default function InterviewResultDetailPage() {
                                   key={idx}
                                   className="flex flex-col sm:flex-row gap-2 sm:gap-4 text-sm"
                                 >
-                                  <div className="min-w-[80px] font-bold text-slate-500 text-right">
+                                  <div className="min-w-[120px] font-bold text-slate-500 sm:text-right">
                                     {item.label}
                                   </div>
                                   <div
                                     className={`flex-1 ${item.color || 'text-slate-700'} leading-relaxed bg-white/40 p-2 rounded-lg`}
                                   >
-                                    {item.val}
+                                    <ExpandableMobileText
+                                      content={item.val}
+                                      lines={4}
+                                      threshold={140}
+                                      textClassName={`${item.color || 'text-slate-700'} leading-relaxed`}
+                                    />
                                   </div>
                                 </div>
                               )
@@ -605,7 +732,7 @@ export default function InterviewResultDetailPage() {
           ) : (
             <div className="text-center py-12">
               <div className="text-6xl mb-4 opacity-20">📝</div>
-              <div className="text-slate-400">No answer records yet</div>
+              <div className="text-slate-400">No answer records</div>
             </div>
           )}
         </div>
