@@ -33,6 +33,19 @@ export default function PressRecordsPage() {
   const [searchText, setSearchText] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
+  const predictionTypeLabelMap: Record<string, string> = {
+    校招: 'Campus',
+    社招: 'Experienced',
+  };
+
+  const difficultyLabelMap: Record<string, string> = {
+    入门: 'Junior',
+    初级: 'Junior',
+    中级: 'Intermediate',
+    进阶: 'Advanced',
+    专家: 'Expert',
+  };
+
   const toDeleteIDs = (keys: React.Key[]): number[] => {
     return keys
       .map((key) => Number(key))
@@ -118,7 +131,7 @@ export default function PressRecordsPage() {
       key: 'prediction_type',
       render: (type: string) => (
         <Tag color={type === '校招' ? 'green' : 'blue'} className="rounded-full px-2 border-0">
-          {type}
+          {predictionTypeLabelMap[type] || type}
         </Tag>
       ),
     },
@@ -134,7 +147,7 @@ export default function PressRecordsPage() {
           进阶: 'purple',
           专家: 'magenta',
         };
-        return <Tag color={colors[level] || 'default'}>{level}</Tag>;
+        return <Tag color={colors[level] || 'default'}>{difficultyLabelMap[level] || level}</Tag>;
       },
     },
     {
