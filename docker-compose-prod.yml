@@ -79,6 +79,8 @@ services:
 
   # 12. 后端 API 服务
   backend:
+    env_file:
+      - .env
     build:
       context: backend
       dockerfile: Dockerfile
