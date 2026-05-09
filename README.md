@@ -378,7 +378,7 @@ xiangmu-image/                 # README 展示截图
 - 报名链接：**https://wangzhongyang.com**
 - 咨询方式：微信扫码咨询，备注 **【训练营】**
 
-                                          ![微信二维码（扫码咨询，备注【训练营】）](./xiangmu-image/wechat-qr.png)
+![微信二维码（扫码咨询，备注【训练营】）](./xiangmu-image/wechat-qr.png)
 
 也欢迎先 `Star` 本仓库，后续会持续更新更多实战模块。
 
