@@ -4,7 +4,7 @@ import sys
 
 # 自动配置你的密钥和接口
 client = OpenAI(
-    api_key="sk-3cADAqxb3Gu9pP3dFehQ9oMmiakBvUVH4d2Pf2fPMbleN4Lf",
+    api_key="YOUR_OPENAI_COMPATIBLE_API_KEY_FROM_PROVIDER_DASHBOARD",
     base_url="https://wududu.edu.kg/v1"
 )
 

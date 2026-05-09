@@ -163,8 +163,8 @@ payment:
     webhook_secret: '${STRIPE_WEBHOOK_SECRET}' # Stripe Webhook 签名密钥
     publishable_key: '${STRIPE_PUBLISHABLE_KEY}' # Stripe Publishable Key（前端使用）
   paypal:
-    client_id: 'AX8uqQ0BYNwm3dB4M-QxqveVQNLpgzQ87UXjrbp15UwtBcD3cyRvkk8J28AlbgDmNZ4wHRSiST8bojdj' # PayPal Client ID
-    client_secret: 'ENt-TR83tPzKCb5LrJsyw382nVGVO5En4ni5RUZ0WfWF52QkII_esdpcPJjJbZtLEhuJlCqTsQ6XothL' # PayPal Client Secret
+    client_id: 'YOUR_PAYPAL_CLIENT_ID_FROM_PAYPAL_DEVELOPER_DASHBOARD' # PayPal Client ID
+    client_secret: 'YOUR_PAYPAL_CLIENT_SECRET_FROM_PAYPAL_DEVELOPER_DASHBOARD' # PayPal Client Secret
     webhook_id: '3YE693123Р282731M' # PayPal Webhook ID（用于验签）
     sandbox: true # true=沙箱环境, false=生产环境
   webhook_timeout: '5m' # Webhook 事件时间窗口（防重放）
