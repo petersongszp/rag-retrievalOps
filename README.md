@@ -1,4 +1,4 @@
-﻿# 面试吧 Interview Bar
+# 面试吧 Interview Bar
 
 一个可直接运行、可二开、可作为求职作品集展示的 AI 面试训练平台。  
 项目围绕真实求职流程设计：**简历上传 -> AI 预测题 -> 模拟面试 -> 结果评估 -> 针对性复盘**。
@@ -378,7 +378,7 @@ xiangmu-image/                 # README 展示截图
 - 报名链接：**https://wangzhongyang.com**
 - 咨询方式：微信扫码咨询，备注 **【训练营】**
 
-![微信二维码（扫码咨询，备注【训练营】）](./xiangmu-image/wechat-qr.png)
+                                          ![微信二维码（扫码咨询，备注【训练营】）](./xiangmu-image/wechat-qr.png)
 
 也欢迎先 `Star` 本仓库，后续会持续更新更多实战模块。
 
