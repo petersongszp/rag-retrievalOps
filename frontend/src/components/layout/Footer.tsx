@@ -13,7 +13,7 @@ const Footer: FC = () => {
   return (
     <AntFooter className="bg-white border-t py-6">
       <div className="container mx-auto px-4 text-center">
-        <Text className="text-gray-600">{"© 2024 Interview Master AI"}</Text>
+        <Text className="text-gray-600">{"© 2024 面试吧 人工智能"}</Text>
       </div>
     </AntFooter>
   );

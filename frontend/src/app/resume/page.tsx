@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
@@ -80,10 +80,10 @@ export default function ResumePressPage() {
       await apiClient.post(PREDICTION_API.START, payload, {
         timeout: 180000, // 3 分钟超时
       });
-      message.success("Started generating...");
+      message.success("开始生成...");
       router.push('/user/press');
     } catch (e: any) {
-      message.error(e?.message || "Submission failed, please try again");
+      message.error(e?.message || "提交失败，请重试");
     } finally {
       setLoading(false);
     }
@@ -99,10 +99,10 @@ export default function ResumePressPage() {
         <div className="mb-10 animate-fade-in-up pt-8">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <RocketOutlined className="text-indigo-600" />
-            {"Resume Prediction"}
+            {"简历押题"}
           </h1>
           <p className="text-slate-500 mt-2 ml-11 max-w-2xl">
-            {"Predict interview questions based on your resume and job intention, helping you prepare with precision."}
+            {"根据你的简历和求职意向预测面试问题，帮助你更精准地准备面试。"}
           </p>
         </div>
 
@@ -115,10 +115,10 @@ export default function ResumePressPage() {
               <div className="bg-indigo-50/50 rounded-2xl p-5 mb-8 border border-indigo-100 flex items-start gap-3">
                 <CheckCircleOutlined className="text-indigo-600 mt-1" />
                 <div className="text-sm text-indigo-900">
-                  <div className="font-bold mb-1">{"Friendly Reminder"}</div>
+                  <div className="font-bold mb-1">{"温馨提示"}</div>
                   <ul className="list-disc pl-4 space-y-1 text-indigo-800/80">
-                    <li>{"Predictions will be generated based on your resume, providing at least 20 questions."}</li>
-                    <li>{"Changing resume content will affect predictions, history will be kept."}</li>
+                    <li>{"系统将基于你的简历生成押题内容，至少提供 20 道问题。"}</li>
+                    <li>{"修改简历内容会影响押题结果，历史记录会保留。"}</li>
                   </ul>
                 </div>
               </div>
@@ -129,48 +129,48 @@ export default function ResumePressPage() {
                 onFinish={onFinish}
                 initialValues={{
                   language: 'Java',
-                  job: "Java Backend Developer",
+                  job: "Java 后端开发工程师",
                   level: '进阶',
                   prediction_type: '校招',
                 }}
                 className="flex flex-col gap-4"
               >
                 <Form.Item
-                  label={<span className="font-bold text-slate-700">{"Select Resume"}</span>}
+                  label={<span className="font-bold text-slate-700">{"选择简历"}</span>}
                   name="resume_id"
-                  rules={[{ required: true, message: "Please select a resume" }]}
+                  rules={[{ required: true, message: "请选择简历" }]}
                 >
                   <Select
                     size="large"
                     variant="filled"
                     className="!h-12"
                     options={resumes.map((r) => ({ value: r.id, label: r.file_name }))}
-                    placeholder={resumes.length === 0 ? "Loading..." : "Please select a resume"}
+                    placeholder={resumes.length === 0 ? "加载中..." : "请选择简历"}
                     popupMatchSelectWidth={false}
                   />
                 </Form.Item>
 
                 <Form.Item
-                  label={<span className="font-bold text-slate-700">{"Interview Type"}</span>}
+                  label={<span className="font-bold text-slate-700">{"面试类型"}</span>}
                   name="prediction_type"
-                  rules={[{ required: true, message: "Select interview type" }]}
+                  rules={[{ required: true, message: "请选择面试类型" }]}
                 >
                   <Select
                     size="large"
                     variant="filled"
                     className="!h-12"
                     options={[
-                      { value: '校招', label: "Campus" },
-                      { value: '社招', label: "Experienced" },
+                      { value: '校招', label: "校招" },
+                      { value: '社招', label: "社招" },
                     ]}
                   />
                 </Form.Item>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{"Programming Language"}</span>}
+                    label={<span className="font-bold text-slate-700">{"编程语言"}</span>}
                     name="language"
-                    rules={[{ required: true, message: "Select language" }]}
+                    rules={[{ required: true, message: "请选择编程语言" }]}
                   >
                     <Select
                       size="large"
@@ -181,52 +181,52 @@ export default function ResumePressPage() {
                         { value: 'Golang', label: 'Golang' },
                         { value: 'Python', label: 'Python' },
                         { value: 'C++', label: 'C++' },
-                        { value: 'Frontend', label: "Frontend (JS/TS)" },
+                        { value: 'Frontend', label: "前端 (JS/TS)" },
                       ]}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{"Job Intention"}</span>}
+                    label={<span className="font-bold text-slate-700">{"求职岗位"}</span>}
                     name="job"
-                    rules={[{ required: true, message: "e.g., Java Backend Developer" }]}
+                    rules={[{ required: true, message: "例如：Java 后端开发工程师" }]}
                   >
                     <Input
                       size="large"
                       variant="filled"
                       className="!h-12 !bg-slate-50 hover:!bg-slate-100 focus:!bg-white border-transparent hover:border-indigo-300 focus:border-indigo-500"
-                      placeholder={"e.g., Java Backend Developer"}
+                      placeholder={"例如：Java 后端开发工程师"}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{"Difficulty Level"}</span>}
+                    label={<span className="font-bold text-slate-700">{"难度级别"}</span>}
                     name="level"
-                    rules={[{ required: true, message: "Select difficulty" }]}
+                    rules={[{ required: true, message: "请选择难度级别" }]}
                   >
                     <Select
                       size="large"
                       variant="filled"
                       className="!h-12"
                       options={[
-                        { value: '入门', label: "Junior" },
-                        { value: '中级', label: "Intermediate" },
-                        { value: '进阶', label: "Advanced" },
-                        { value: '专家', label: "Expert" },
+                        { value: '入门', label: "入门" },
+                        { value: '中级', label: "中级" },
+                        { value: '进阶', label: "进阶" },
+                        { value: '专家', label: "专家" },
                       ]}
                     />
                   </Form.Item>
 
                   <Form.Item
-                    label={<span className="font-bold text-slate-700">{"Target Company"}</span>}
+                    label={<span className="font-bold text-slate-700">{"目标公司"}</span>}
                     name="company_name"
-                    rules={[{ required: true, message: "e.g., ByteDance" }]}
+                    rules={[{ required: true, message: "例如：字节跳动" }]}
                   >
                     <Input
                       size="large"
                       variant="filled"
                       className="!h-12 !bg-slate-50 hover:!bg-slate-100 focus:!bg-white border-transparent hover:border-indigo-300 focus:border-indigo-500"
-                      placeholder={"e.g., ByteDance"}
+                      placeholder={"例如：字节跳动"}
                     />
                   </Form.Item>
                 </div>
@@ -240,10 +240,10 @@ export default function ResumePressPage() {
                     icon={<ThunderboltOutlined />}
                     className="w-full h-14 text-lg font-bold rounded-xl bg-indigo-600 hover:bg-indigo-500 shadow-lg shadow-indigo-200"
                   >
-                    {"Start Prediction"}
+                    {"开始押题"}
                   </Button>
                   <div className="text-center text-slate-400 text-sm mt-4">
-                    {"First free prediction with 5 questions · Takes about 60 seconds"}
+                    {"首次免费押题含 5 道题，约 60 秒完成"}
                   </div>
                 </div>
               </Form>
@@ -254,22 +254,22 @@ export default function ResumePressPage() {
             <div className="flex flex-col gap-6 sticky top-8">
               {[
                 {
-                  title: "Quick Positioning",
-                  desc: "Deeply analyze resume items, generate corresponding Q&A list.",
+                  title: "快速定位",
+                  desc: "深度分析简历要点，生成对应问答清单。",
                   icon: <FileTextOutlined className="text-2xl text-blue-500" />,
                   bg: 'bg-blue-50',
                   border: 'border-blue-100',
                 },
                 {
-                  title: "Quick Analysis",
-                  desc: "Combine job requirements and project experience for follow-up paths.",
+                  title: "快速分析",
+                  desc: "结合岗位要求与项目经历，提供追问思路。",
                   icon: <ThunderboltOutlined className="text-2xl text-amber-500" />,
                   bg: 'bg-amber-50',
                   border: 'border-amber-100',
                 },
                 {
-                  title: "Direct Learning",
-                  desc: "Paired with reference answers and extended reading.",
+                  title: "直接学习",
+                  desc: "配套参考答案与延伸阅读，边练边学。",
                   icon: <ReadOutlined className="text-2xl text-emerald-500" />,
                   bg: 'bg-emerald-50',
                   border: 'border-emerald-100',
@@ -294,15 +294,15 @@ export default function ResumePressPage() {
       </div>
       <Modal
         open={showNoResumeModal}
-        title={"Friendly Reminder"}
+        title={"温馨提示"}
         footer={null}
         onCancel={() => setShowNoResumeModal(false)}
         centered
       >
         <div className="text-center py-6">
-          <div className="mb-4 text-slate-600 text-lg">{"No resume detected, cannot start interview."}</div>
+          <div className="mb-4 text-slate-600 text-lg">{"未检测到简历，无法开始面试。"}</div>
           <div className="mb-8 text-slate-500">
-            {"Please go to personal center to upload your resume, AI will generate questions based on it."}
+            {"请前往个人中心上传简历，AI 会根据你的简历生成题目。"}
           </div>
           <Button
             type="primary"
@@ -310,10 +310,11 @@ export default function ResumePressPage() {
             onClick={() => router.push('/user/center')}
             className="w-full bg-indigo-600 hover:bg-indigo-500"
           >
-            {"Go to Upload Resume"}
+            {"去上传简历"}
           </Button>
         </div>
       </Modal>
     </div>
   );
 }
+

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useMemo, useState } from 'react';
 import {
@@ -23,16 +23,16 @@ import { INTERVIEW_API } from '@/config/api';
 const { Title } = Typography;
 
 const QUOTES = [
-  'Interviewing is a two-way street. Stay confident and show your best self.',
-  'Every interview is a chance to grow, regardless of the outcome.',
-  'Trust your preparation — you are better than you think.',
-  'Stay calm. The best opportunities often come when you least expect them.',
-  'Failure is temporary. Keep going, success is just around the corner.',
-  'Prepare well, stay positive — you\'ve got this!',
-  'Behind every offer are countless efforts and attempts.',
-  'Interviewers are future colleagues too. Chat like friends.',
-  'Hard work never betrays those who persevere.',
-  'Stay calm and composed — your potential is limitless.',
+  '面试是双向选择，保持自信，展现最好的自己。',
+  '无论结果如何，每一次面试都是成长机会。',
+  '相信你的准备，你比自己想象中更优秀。',
+  '保持冷静，最好的机会往往在不经意时出现。',
+  '失败只是暂时的，坚持下去，成功就在前方。',
+  '准备充分，保持积极，你一定可以！',
+  '每一份 offer 背后，都是无数次努力与尝试。',
+  '面试官也可能是未来同事，像朋友一样交流。',
+  '努力不会辜负坚持的人。',
+  '沉着冷静，你的潜力没有上限。',
 ];
 
 export default function InterviewRecordsPage() {
@@ -76,7 +76,7 @@ export default function InterviewRecordsPage() {
       }));
       setList(items);
     } catch (e: any) {
-      message.error(e?.response?.data?.message || 'Load failed');
+      message.error(e?.response?.data?.message || '加载失败');
     } finally {
       setLoading(false);
     }
@@ -136,8 +136,8 @@ export default function InterviewRecordsPage() {
 
       <div className="container mx-auto px-4 relative z-10">
         <div className="mb-8 animate-fade-in-up">
-          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{"Interview Records"}</h1>
-          <p className="text-slate-500 mt-2">{"View your history, evaluation reports and feedback"}</p>
+          <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight">{"面试记录"}</h1>
+          <p className="text-slate-500 mt-2">{'查看你的历史记录、评估报告与反馈'}</p>
         </div>
 
         <AntCard
@@ -154,13 +154,13 @@ export default function InterviewRecordsPage() {
                       <div className="text-4xl font-extrabold text-slate-800 mb-1">
                         {totalCount}
                       </div>
-                      <div className="text-sm text-slate-500 font-medium">{"Total Interviews"}</div>
+                      <div className="text-sm text-slate-500 font-medium">{'总面试数'}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-4xl font-extrabold text-blue-600 mb-1">
                         {completedCount}
                       </div>
-                      <div className="text-sm text-slate-500 font-medium">{"Completed"}</div>
+                      <div className="text-sm text-slate-500 font-medium">{'已完成'}</div>
                     </div>
                   </div>
                 </div>
@@ -173,7 +173,7 @@ export default function InterviewRecordsPage() {
                       icon={<ReloadOutlined />}
                       onClick={refreshQuote}
                       className="text-slate-400 hover:text-blue-600 bg-white/50 hover:bg-white rounded-full"
-                      title="New quote"
+                      title="换一句"
                     />
                   </div>
                   <div className="flex items-start gap-5">
@@ -182,9 +182,9 @@ export default function InterviewRecordsPage() {
                     </div>
                     <div className="flex-1 pt-1">
                       <h3 className="text-lg font-bold text-slate-800 mb-2 flex items-center gap-2">
-                        {"Daily Quote"}
+                        {'每日一句'}
                         <span className="text-xs font-normal text-slate-400 bg-slate-100 px-2 py-0.5 rounded-full">
-                          {"Motivation"}
+                          {'激励'}
                         </span>
                       </h3>
                       <p className="text-slate-600 text-base leading-relaxed italic relative">
@@ -207,16 +207,16 @@ export default function InterviewRecordsPage() {
         <div className="animate-fade-in-up" style={{ animationDelay: '0.2s' }}>
           <div className="flex items-center justify-between mb-6 bg-white p-4 rounded-2xl border border-slate-100 shadow-sm">
             <div className="flex items-center gap-4">
-              <span className="text-slate-600 font-medium">{"Filter Records:"}</span>
+              <span className="text-slate-600 font-medium">{'筛选记录：'}</span>
               <Select
                 value={filter}
                 onChange={setFilter}
                 style={{ width: 180 }}
                 options={[
-                  { value: 'all', label: "All Types" },
-                  { value: 'comprehensive', label: "Comprehensive" },
-                  { value: 'experienced', label: "Experienced" },
-                  { value: 'campus', label: "Campus" },
+                  { value: 'all', label: '全部类型' },
+                  { value: 'comprehensive', label: '综合面试' },
+                  { value: 'experienced', label: '社招' },
+                  { value: 'campus', label: '校招' },
                 ]}
                 className="font-medium"
                 size="large"
@@ -232,19 +232,19 @@ export default function InterviewRecordsPage() {
                   imageStyle={{ height: 160 }}
                   description={
                     <div className="flex flex-col items-center">
-                      <div className="text-slate-500 text-lg mb-4">{"No related interview records found"}</div>
+                      <div className="text-slate-500 text-lg mb-4">{'未找到相关面试记录'}</div>
                       <div className="flex gap-4">
                         <Link href="/interview/social">
                           <Button
                             type="primary"
                             className="bg-blue-600 h-10 px-6 rounded-full shadow-blue-200"
                           >
-                            {"Experienced Interview"}
+                            {"社招简历面试"}
                           </Button>
                         </Link>
                         <Link href="/interview/campus">
                           <Button className="h-10 px-6 rounded-full border-slate-200 text-slate-600">
-                            {"Campus Interview"}
+                            {"校招简历面试"}
                           </Button>
                         </Link>
                       </div>
@@ -261,31 +261,31 @@ export default function InterviewRecordsPage() {
                         { text: string; color: string; bg: string; border: string }
                       > = {
                         pending: {
-                          text: "Pending",
+                          text: '待开始',
                           color: 'text-blue-600',
                           bg: 'bg-blue-50',
                           border: 'border-blue-100',
                         },
                         in_progress: {
-                          text: "In Progress",
+                          text: '进行中',
                           color: 'text-orange-600',
                           bg: 'bg-orange-50',
                           border: 'border-orange-100',
                         },
                         completed: {
-                          text: "Completed",
+                          text: '已完成',
                           color: 'text-green-600',
                           bg: 'bg-green-50',
                           border: 'border-green-100',
                         },
                         aborted: {
-                          text: "Interrupted",
+                          text: '已中断',
                           color: 'text-slate-600',
                           bg: 'bg-slate-100',
                           border: 'border-slate-200',
                         },
                         failed: {
-                          text: "Abnormal Exit",
+                          text: '异常退出',
                           color: 'text-red-600',
                           bg: 'bg-red-50',
                           border: 'border-red-100',
@@ -328,22 +328,22 @@ export default function InterviewRecordsPage() {
                             >
                               {it.type === 'specialized interview' && !it.companyName
                                 ? it.title
-                                : `${it.companyName || 'Unnamed Company'}${it.title ? ` - ${it.title}` : ''}`}
+                                : `${it.companyName || '未命名公司'}${it.title ? ` - ${it.title}` : ''}`}
                             </h3>
 
                             <div className="space-y-2 mb-6">
                               <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">{"Interview Type"}</span>
+                                <span className="text-slate-500">{'面试类型'}</span>
                                 <span className="font-medium text-slate-700">{it.type || '-'}</span>
                               </div>
                               <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">{"Domain/Direction"}</span>
+                                <span className="text-slate-500">{'领域/方向'}</span>
                                 <span className="font-medium text-slate-700">
                                   {it.domain || '-'}
                                 </span>
                               </div>
                               <div className="flex items-center justify-between text-sm">
-                                <span className="text-slate-500">{"Difficulty"}</span>
+                                <span className="text-slate-500">{'难度'}</span>
                                 <span className="font-medium text-slate-700">
                                   {it.difficulty || '-'}
                                 </span>
@@ -356,7 +356,7 @@ export default function InterviewRecordsPage() {
                                 ghost
                                 className="w-full h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 font-medium"
                               >
-                                {"View Details & Feedback"}
+                                {'查看详情与反馈'}
                               </Button>
                             </Link>
                           </div>
@@ -375,7 +375,7 @@ export default function InterviewRecordsPage() {
                         onChange={handlePageChange}
                         showSizeChanger={false}
                         showTotal={(total) => (
-                          <span className="text-slate-500">Total {total} records</span>
+                          <span className="text-slate-500">共 {total} 条记录</span>
                         )}
                         className="bg-white px-4 py-2 rounded-full shadow-sm border border-slate-100"
                       />
@@ -390,3 +390,4 @@ export default function InterviewRecordsPage() {
     </div>
   );
 }
+

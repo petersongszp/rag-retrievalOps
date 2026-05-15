@@ -7,8 +7,8 @@ import Footer from '@/components/layout/Footer';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'Interview Bar - AI Interview Platform',
-  description: 'Top Tech AI Interview Training Platform',
+  title: '面试吧 - 人工智能面试训练平台',
+  description: '面向技术岗位的人工智能面试训练平台',
 };
 
 export default function RootLayout({
@@ -17,7 +17,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="zh-CN">
       <body className={inter.className}>
         <Navbar />
         <main className="min-h-screen py-8">{children}</main>

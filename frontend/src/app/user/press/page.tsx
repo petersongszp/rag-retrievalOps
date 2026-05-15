@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useState, useEffect } from 'react';
 import {
@@ -34,16 +34,16 @@ export default function PressRecordsPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const predictionTypeLabelMap: Record<string, string> = {
-    校招: 'Campus',
-    社招: 'Experienced',
+    校招: '校招',
+    社招: '社招',
   };
 
   const difficultyLabelMap: Record<string, string> = {
-    入门: 'Junior',
-    初级: 'Junior',
-    中级: 'Intermediate',
-    进阶: 'Advanced',
-    专家: 'Expert',
+    入门: '入门',
+    初级: '入门',
+    中级: '中级',
+    进阶: '进阶',
+    专家: '专家',
   };
 
   const toDeleteIDs = (keys: React.Key[]): number[] => {
@@ -78,7 +78,7 @@ export default function PressRecordsPage() {
       }
     } catch (e) {
       console.error(e);
-      message.error("Failed to load records");
+      message.error("加载记录失败");
     } finally {
       setLoading(false);
     }
@@ -92,17 +92,17 @@ export default function PressRecordsPage() {
   const handleBatchDelete = async () => {
     const ids = toDeleteIDs(selectedRowKeys);
     if (ids.length === 0) {
-      message.warning('No valid records selected');
+      message.warning('未选择有效记录');
       return;
     }
 
     try {
       await predictionService.deleteHistory(ids);
-      message.success("Batch Delete" + 'success');
+      message.success('批量删除成功');
       setSelectedRowKeys([]);
       fetchRecords();
     } catch (e) {
-      message.error('Delete failed');
+      message.error('删除失败');
     }
   };
 
@@ -110,10 +110,10 @@ export default function PressRecordsPage() {
   const handleDelete = async (id: number) => {
     try {
       await predictionService.deleteHistory([id]);
-      message.success('Delete success');
+      message.success('删除成功');
       fetchRecords();
     } catch (e) {
-      message.error('Delete failed');
+      message.error('删除失败');
     }
   };
 
@@ -126,7 +126,7 @@ export default function PressRecordsPage() {
       render: (text: any) => <span className="text-slate-400">#{text}</span>,
     },
     {
-      title: "Type",
+      title: "类型",
       dataIndex: 'prediction_type',
       key: 'prediction_type',
       render: (type: string) => (
@@ -136,7 +136,7 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: "Level",
+      title: "难度",
       dataIndex: 'difficulty',
       key: 'difficulty',
       render: (level: string) => {
@@ -151,7 +151,7 @@ export default function PressRecordsPage() {
       },
     },
     {
-      title: "Company",
+      title: "公司",
       dataIndex: 'company',
       key: 'company',
       render: (text: string) => (
@@ -159,18 +159,18 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: "Position",
+      title: "岗位",
       dataIndex: 'job_title',
       key: 'job_title',
       render: (text: string) => <span className="text-slate-600">{text}</span>,
     },
     {
-      title: "Language",
+      title: "语言",
       dataIndex: 'language',
       key: 'language',
     },
     {
-      title: "Time",
+      title: "时间",
       dataIndex: 'created_at',
       key: 'created_at',
       render: (createdAt: string | number) => (
@@ -180,12 +180,12 @@ export default function PressRecordsPage() {
       ),
     },
     {
-      title: "Action",
+      title: "操作",
       key: 'action',
       render: (_: any, record: PredictionRecordItem) => (
         <Space size="small">
           <Link href={`/user/press/${record.id}`}>
-            <Tooltip title={"View Details"}>
+            <Tooltip title={"查看详情"}>
               <Button
                 type="text"
                 icon={<EyeOutlined />}
@@ -194,12 +194,12 @@ export default function PressRecordsPage() {
             </Tooltip>
           </Link>
           <Popconfirm
-            title="Are you sure you want to delete this record?"
+            title="确定要删除这条记录吗？"
             onConfirm={() => handleDelete(record.id)}
-            okText="yes"
-            cancelText="cancel"
+            okText="确定"
+            cancelText="取消"
           >
-            <Tooltip title="Delete Record">
+            <Tooltip title="删除记录">
               <Button
                 type="text"
                 danger
@@ -237,9 +237,9 @@ export default function PressRecordsPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <RocketOutlined className="text-indigo-600" />
-            {"Prediction Records"}
+            {"押题记录"}
           </h1>
-          <p className="text-slate-500 mt-2">{"Review your history and track prediction accuracy"}</p>
+          <p className="text-slate-500 mt-2">{"查看历史记录并追踪押题效果"}</p>
         </div>
 
         <div className="bg-white rounded-3xl p-6 border border-slate-100 shadow-xl shadow-slate-200/50 animate-fade-in-up" style={{ animationDelay: '0.1s' }}>
@@ -250,13 +250,13 @@ export default function PressRecordsPage() {
                 style={{ width: 120 }}
                 onChange={setStatusFilter}
                 options={[
-                  { value: 'all', label: "All Status" },
+                  { value: 'all', label: "全部状态" },
                 ]}
                 variant="filled"
                 size="large"
               />
               <Input
-                placeholder={"Search company..."}
+                placeholder={"搜索公司..."}
                 prefix={<SearchOutlined className="text-slate-400" />}
                 value={searchText}
                 onChange={(e) => setSearchText(e.target.value)}
@@ -268,7 +268,7 @@ export default function PressRecordsPage() {
             <Space>
               {selectedRowKeys.length > 0 && (
                 <span className="text-slate-500 text-sm bg-slate-50 px-3 py-1.5 rounded-lg border border-slate-100">
-                  {selectedRowKeys.length} selected
+                  已选择 {selectedRowKeys.length} 条
                 </span>
               )}
               {selectedRowKeys.length > 0 && (
@@ -278,7 +278,7 @@ export default function PressRecordsPage() {
                   onClick={handleBatchDelete}
                   className="rounded-xl"
                 >
-                  {"Batch Delete"}
+                  {"批量删除"}
                 </Button>
               )}
               <Button
@@ -286,7 +286,7 @@ export default function PressRecordsPage() {
                 onClick={fetchRecords}
                 className="rounded-xl hover:text-indigo-600 hover:border-indigo-200"
               >
-                {"Refresh"}
+                {"刷新"}
               </Button>
             </Space>
           </div>
@@ -300,7 +300,7 @@ export default function PressRecordsPage() {
             pagination={{
               pageSize: 10,
               showSizeChanger: true,
-              showTotal: (total) => <span className="text-slate-400">Total {total} items</span>,
+              showTotal: (total) => <span className="text-slate-400">共 {total} 条</span>,
             }}
             className="modern-table"
           />
@@ -309,3 +309,4 @@ export default function PressRecordsPage() {
     </div>
   );
 }
+

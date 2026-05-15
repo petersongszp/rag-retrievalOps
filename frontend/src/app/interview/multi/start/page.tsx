@@ -63,16 +63,16 @@ export default function MultiAgentInterviewStartPage() {
     speechInput.isStopping;
   const speechHint =
     !asrCapability.loading && !asrCapability.enabled
-      ? 'Speech recognition unavailable'
+      ? '语音识别不可用'
       : speechInput.status === 'recording'
-        ? 'Recording, click stop button to end'
+        ? '正在录音，点击停止按钮结束'
         : speechInput.status === 'stopping'
-          ? 'Stopping recording, please wait...'
+          ? '正在停止录音，请稍候...'
           : speechInput.status === 'transcribing'
-            ? 'Transcribing, please wait...'
+            ? '正在转写，请稍候...'
             : speechInput.status === 'error'
-              ? 'Speech recognition failed, try again'
-              : 'Voice input supported, results will fill the input box';
+              ? '语音识别失败，请重试'
+              : '支持语音输入，结果将填入输入框';
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
@@ -89,7 +89,7 @@ export default function MultiAgentInterviewStartPage() {
       }
     }
     if (!params) {
-      message.error('Missing parameters, please reconfigure');
+      message.error('缺少参数，请重新配置');
       router.push('/interview/multi');
       return;
     }
@@ -102,7 +102,7 @@ export default function MultiAgentInterviewStartPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          message.error('Please login first');
+          message.error('请先登录');
           setStarting(false);
           return;
         }
@@ -293,7 +293,7 @@ export default function MultiAgentInterviewStartPage() {
               setWaitingNextQuestion(false);
               setStarting(false);
             } else if (payload?.type === 'end' || payload?.type === 'complete') {
-              message.success('Interview completed, redirecting to records...');
+              message.success('面试已完成，正在跳转到记录页...');
               setStarting(false);
               setWaitingNextQuestion(false);
               // 延迟跳转，让用户看到提示消息
@@ -305,7 +305,7 @@ export default function MultiAgentInterviewStartPage() {
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          message.error('Failed to connect to interview server');
+          message.error('连接面试服务器失败');
         }
         setStarting(false);
       }
@@ -375,9 +375,9 @@ export default function MultiAgentInterviewStartPage() {
         body: JSON.stringify({ session_id: sessionId, answer: currentAnswer }),
       });
 
-      if (!res.ok) throw new Error('Submission failed');
+      if (!res.ok) throw new Error('提交失败');
     } catch (error) {
-      message.error('答案Submission failed');
+      message.error('答案提交失败');
       setWaitingNextQuestion(false);
     } finally {
       setSubmitting(false);
@@ -389,12 +389,12 @@ export default function MultiAgentInterviewStartPage() {
     if (!sessionId || !answer.trim() || submitting) return;
 
     const interviewerMap = {
-      tech: 'Tech Interviewer',
-      project: 'Project Interviewer',
-      main: 'Lead Interviewer',
+      tech: '技术面试官',
+      project: '项目面试官',
+      main: '主面试官',
     };
 
-    const switchRequest = `I would like to discuss this with ${interviewerMap[interviewerType]}: ${answer}`;
+    const switchRequest = `我想和${interviewerMap[interviewerType]}继续交流：${answer}`;
 
     setSubmitting(true);
     const currentAnswer = switchRequest;
@@ -416,9 +416,9 @@ export default function MultiAgentInterviewStartPage() {
         body: JSON.stringify({ session_id: sessionId, answer: currentAnswer }),
       });
 
-      if (!res.ok) throw new Error('Submission failed');
+      if (!res.ok) throw new Error('提交失败');
     } catch (error) {
-      message.error('Failed to switch interviewer');
+      message.error('切换面试官失败');
       setWaitingNextQuestion(false);
     } finally {
       setSubmitting(false);
@@ -442,10 +442,10 @@ export default function MultiAgentInterviewStartPage() {
             </div>
             <div>
               <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">
-                Multi-Agent Mock Interview (Eino)
+                多智能体模拟面试（Eino）
               </h1>
               <p className="text-[10px] text-slate-400 m-0 uppercase tracking-widest font-semibold mt-0.5">
-                Expert Panel Interview
+                专家组联合面试
               </p>
             </div>
           </div>
@@ -457,7 +457,7 @@ export default function MultiAgentInterviewStartPage() {
               </span>
               <div className="w-px h-3 bg-slate-200" />
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-slate-400 font-bold uppercase">Progress</span>
+                <span className="text-[10px] text-slate-400 font-bold uppercase">进度</span>
                 <div className="w-20 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-orange-500 transition-all duration-500"
@@ -473,7 +473,7 @@ export default function MultiAgentInterviewStartPage() {
               className="!rounded-full !px-4 hover:!bg-red-50 border-red-200 font-medium"
               onClick={() => onSubmit('quit')}
             >
-              Exit Early
+              结束面试
             </Button>
           </div>
         </div>
@@ -485,7 +485,7 @@ export default function MultiAgentInterviewStartPage() {
             <div className="flex flex-col items-center justify-center py-20 text-center animate-pulse">
               <RobotOutlined style={{ fontSize: '40px', color: '#cbd5e1' }} />
               <p className="text-slate-400 text-sm mt-4 font-medium">
-                Interviewer panel is preparing the first question...
+                面试官组正在准备第一题...
               </p>
             </div>
           )}
@@ -497,7 +497,7 @@ export default function MultiAgentInterviewStartPage() {
               .filter((i) => i.type === 'question').length;
 
             // 优先使用 roleConfig，回退到内容检测
-            let speaker = 'Lead Interviewer';
+            let speaker = '主面试官';
             let speakerColor = 'text-orange-500';
             let speakerBorder = 'border-orange-200';
             let avatarSeed = 'interviewer-main-v2';
@@ -560,7 +560,7 @@ export default function MultiAgentInterviewStartPage() {
 
                   {!isQuestion && (
                     <span className="text-[10px] text-slate-400 mt-2 mr-1 font-bold uppercase tracking-tighter">
-                      Candidate ·{' '}
+                      候选人 ·{' '}
                       {new Date(item.timestamp).toLocaleTimeString([], {
                         hour: '2-digit',
                         minute: '2-digit',
@@ -595,7 +595,7 @@ export default function MultiAgentInterviewStartPage() {
                   />
                 </div>
                 <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">
-                  {starting ? 'Interview panel coming online...' : 'Interviewers are conferring...'}
+                  {starting ? '面试官组正在上线...' : '面试官们正在讨论...'}
                 </span>
               </div>
             </div>
@@ -611,7 +611,7 @@ export default function MultiAgentInterviewStartPage() {
           {sessionId && !waitingNextQuestion && !starting && answer.trim() && (
             <div className="mb-3 flex items-center gap-2 animate-fade-in-up">
               <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">
-                Quick Switch:
+                快速切换：
               </span>
               <Button
                 size="small"
@@ -619,7 +619,7 @@ export default function MultiAgentInterviewStartPage() {
                 className="!rounded-full !text-xs !border-orange-200 !text-orange-600 hover:!bg-orange-50"
                 onClick={() => switchInterviewer('main')}
               >
-                Lead Interviewer
+                主面试官
               </Button>
               <Button
                 size="small"
@@ -627,7 +627,7 @@ export default function MultiAgentInterviewStartPage() {
                 className="!rounded-full !text-xs !border-blue-200 !text-blue-600 hover:!bg-blue-50"
                 onClick={() => switchInterviewer('tech')}
               >
-                Tech Interviewer
+                技术面试官
               </Button>
               <Button
                 size="small"
@@ -635,7 +635,7 @@ export default function MultiAgentInterviewStartPage() {
                 className="!rounded-full !text-xs !border-emerald-200 !text-emerald-600 hover:!bg-emerald-50"
                 onClick={() => switchInterviewer('project')}
               >
-                Project Interviewer
+                项目面试官
               </Button>
             </div>
           )}
@@ -649,14 +649,14 @@ export default function MultiAgentInterviewStartPage() {
                 onChange={(e) => setAnswer(e.target.value)}
                 placeholder={
                   speechInput.status === 'recording'
-                    ? 'Recording, click stop button to end...'
+                    ? '正在录音，点击停止按钮结束...'
                     : speechInput.status === 'stopping'
-                      ? 'Stopping recording, please wait...'
+                      ? '正在停止录音，请稍候...'
                       : speechInput.status === 'transcribing'
-                        ? 'Transcribing, please wait...'
+                        ? '正在转写，请稍候...'
                         : waitingNextQuestion
-                          ? 'Interviewers are discussing...'
-                          : 'Please enter your answer, press Enter to send...'
+                          ? '面试官们正在讨论...'
+                          : '请输入你的回答，按 Enter 发送...'
                 }
                 disabled={waitingNextQuestion || starting}
                 readOnly={speechInput.isRecording || speechInput.isStopping}
@@ -682,7 +682,7 @@ export default function MultiAgentInterviewStartPage() {
                       onClick={speechInput.handleMicClick}
                       className="!h-9 !px-4 !font-medium"
                     >
-                      {speechInput.isStopping ? 'Stopping...' : 'Stop Rec.'}
+                      {speechInput.isStopping ? '停止中...' : '停止录音'}
                     </Button>
                   ) : (
                     <Button
@@ -707,7 +707,7 @@ export default function MultiAgentInterviewStartPage() {
                 </div>
                 <div className="flex items-center gap-3">
                   <span className="text-[10px] font-bold text-slate-300 hidden sm:inline-block tracking-widest uppercase">
-                    Shift + Enter for new line
+                    按 Shift + Enter 换行
                   </span>
                   <Button
                     type="primary"
@@ -726,7 +726,7 @@ export default function MultiAgentInterviewStartPage() {
                     onClick={() => onSubmit()}
                     className="!bg-orange-500 hover:!bg-orange-600 !shadow-orange-100 !border-0 font-bold px-6"
                   >
-                    Send Answer
+                    发送回答
                   </Button>
                 </div>
               </div>

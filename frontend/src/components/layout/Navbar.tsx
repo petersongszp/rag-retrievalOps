@@ -44,7 +44,7 @@ const Navbar: FC = () => {
       const data = res?.data || res;
       const token = data?.token || data?.accessToken;
       if (!token) {
-        message.error('Login Failed' + '：' + 'Please enter your email'); // Using placeholder as generic error or keep generic
+        message.error('登录失败' + '：' + '请输入邮箱'); // Using placeholder as generic error or keep generic
         return;
       }
       localStorage.setItem('token', token);
@@ -59,9 +59,9 @@ const Navbar: FC = () => {
         login({ id: '0', email: values.email, name: values.email, username: values.email });
       }
       setOpenAuth(false);
-      message.success('Login Successful');
+      message.success('登录成功');
     } catch (e: any) {
-      message.error(e?.response?.data?.message || 'Login Failed');
+      message.error(e?.response?.data?.message || '登录失败');
     }
   };
 
@@ -71,7 +71,7 @@ const Navbar: FC = () => {
       const token = data?.token;
       const userData = data?.user;
       if (!token || !userData) {
-        message.error('Registration Failed');
+        message.error('注册失败');
         return;
       }
       localStorage.setItem('token', token);
@@ -82,9 +82,9 @@ const Navbar: FC = () => {
       login(userData);
       setOpenAuth(false);
       setGuideModalOpen(true);
-      message.success('Registration Successful');
+      message.success('注册成功');
     } catch (e: any) {
-      message.error(e?.response?.data?.message || 'Registration Failed');
+      message.error(e?.response?.data?.message || '注册失败');
     }
   };
 
@@ -92,10 +92,10 @@ const Navbar: FC = () => {
     setForgotLoading(true);
     try {
       await apiClient.post('/user/password/forgot', values);
-      message.success('Reset link has been sent to your email, please check.');
+      message.success('重置链接已发送到您的邮箱，请查收');
       setActiveKey('login');
     } catch (e: any) {
-      message.error(e?.response?.data?.message || 'Failed to send.');
+      message.error(e?.response?.data?.message || '发送失败');
     } finally {
       setForgotLoading(false);
     }
@@ -107,12 +107,12 @@ const Navbar: FC = () => {
       const res: any = await apiClient.get(USER_API.GITHUB_LOGIN);
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('Failed to get GitHub login URL.');
+        message.error('获取代码托管平台登录地址失败');
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'GitHub login failed.');
+      message.error(e?.response?.data?.message || e?.message || '代码托管平台登录失败');
       setGithubLoading(false);
     }
   };
@@ -123,13 +123,13 @@ const Navbar: FC = () => {
       const res: any = await apiClient.get('/user/google/login');
       const loginUrl = res?.login_url || res?.data?.login_url;
       if (!loginUrl) {
-        message.error('Failed to get Google login URL');
+        message.error('获取谷歌登录地址失败');
         setGoogleLoading(false);
         return;
       }
       window.location.href = loginUrl;
     } catch (e: any) {
-      message.error(e?.response?.data?.message || e?.message || 'Google login failed');
+      message.error(e?.response?.data?.message || e?.message || '谷歌登录失败');
       setGoogleLoading(false);
     }
   };
@@ -141,7 +141,7 @@ const Navbar: FC = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     authLogout();
-    message.success('Logout');
+    message.success('退出登录');
     router.push('/');
   };
 
@@ -154,10 +154,10 @@ const Navbar: FC = () => {
           </div>
           <div className="hidden sm:flex flex-col justify-center h-10">
             <span className="text-lg font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600 leading-none mb-0.5 pt-1">
-              Interview Bar
+              面试吧
             </span>
             <span className="text-[10px] text-slate-500 tracking-wider uppercase font-medium leading-none scale-90 origin-left">
-              INTERVIEW Bar
+              人工智能面试训练平台
             </span>
           </div>
         </div>
@@ -167,7 +167,7 @@ const Navbar: FC = () => {
             href="/resume"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {'Resume Prediction'}
+            {'简历押题'}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Dropdown
@@ -181,9 +181,9 @@ const Navbar: FC = () => {
                         <UserOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">{'Experienced Interview'}</span>
+                        <span className="font-medium">{'社招简历面试'}</span>
                         <span className="text-xs text-slate-400">
-                          {'Deep interview for experienced professionals'}
+                          {'针对社招人员的深度面试'}
                         </span>
                       </div>
                     </Link>
@@ -197,9 +197,9 @@ const Navbar: FC = () => {
                         <TeamOutlined />
                       </div>
                       <div className="flex flex-col">
-                        <span className="font-medium">{'Campus Interview'}</span>
+                        <span className="font-medium">{'校招简历面试'}</span>
                         <span className="text-xs text-slate-400">
-                          {'Basic interview for fresh graduates'}
+                          {'针对应届生的基础面试'}
                         </span>
                       </div>
                     </Link>
@@ -211,10 +211,10 @@ const Navbar: FC = () => {
             overlayClassName="pt-2"
           >
             <a className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors inline-flex items-center gap-1 cursor-pointer group">
-              <span>{'Comprehensive Interview'}</span>
+              <span>{'综合面试'}</span>
               <DownOutlined className="text-xs transition-transform group-hover:rotate-180" />
               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none text-white bg-gradient-to-r from-orange-500 to-red-500 ml-1">
-                HOT
+                热门
               </span>
             </a>
           </Dropdown>
@@ -222,7 +222,7 @@ const Navbar: FC = () => {
             href="/interview/special"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {'Specialized Interview'}
+            {'专项面试'}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
           <Link
@@ -230,7 +230,7 @@ const Navbar: FC = () => {
             target="_blank"
             className="text-sm font-medium text-slate-600 hover:text-blue-600 transition-colors relative group"
           >
-            {'User Manual'}
+            {'使用手册'}
             <span className="absolute -bottom-1 left-0 w-0 h-0.5 bg-blue-600 transition-all group-hover:w-full" />
           </Link>
         </nav>
@@ -241,19 +241,19 @@ const Navbar: FC = () => {
               trigger={['hover', 'click']}
               menu={{
                 items: [
-                  { key: 'center', label: <Link href="/user/center">{'User Center'}</Link> },
-                  { key: 'pay', label: <Link href="/user/pay">{'Payment'}</Link> },
+                  { key: 'center', label: <Link href="/user/center">{'个人中心'}</Link> },
+                  { key: 'pay', label: <Link href="/user/pay">{'支付'}</Link> },
                   {
                     key: 'interviews',
-                    label: <Link href="/user/interviews">{'Interview Records'}</Link>,
+                    label: <Link href="/user/interviews">{'面试记录'}</Link>,
                   },
-                  { key: 'press', label: <Link href="/user/press">{'Prediction Records'}</Link> },
+                  { key: 'press', label: <Link href="/user/press">{'押题记录'}</Link> },
                   { type: 'divider' },
                   {
                     key: 'logout',
                     label: (
                       <a onClick={logout} className="text-red-500">
-                        {'Logout'}
+                        {'退出登录'}
                       </a>
                     ),
                   },
@@ -264,7 +264,7 @@ const Navbar: FC = () => {
               <Button className="border-slate-200 hover:border-blue-400 hover:text-blue-600 px-2 sm:px-4 h-9 rounded-full flex items-center gap-2 transition-all">
                 <UserOutlined />
                 <span className="hidden sm:inline max-w-[100px] truncate">
-                  {user?.username || user?.email?.split('@')[0] || 'User'}
+                  {user?.username || user?.email?.split('@')[0] || '用户'}
                 </span>
               </Button>
             </Dropdown>
@@ -278,7 +278,7 @@ const Navbar: FC = () => {
                 }}
                 className="hidden sm:flex bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 border-0 h-9 px-6 rounded-full shadow-lg shadow-blue-200 font-medium transition-all hover:scale-105 items-center"
               >
-                {'Login / Register'}
+                {'登录 / 注册'}
               </Button>
               <Button
                 type="primary"
@@ -314,7 +314,7 @@ const Navbar: FC = () => {
               <span className="text-white text-base font-bold">面</span>
             </div>
             <span className="font-bold bg-clip-text text-transparent bg-gradient-to-r from-slate-800 to-slate-600">
-              Interview Bar
+              面试吧
             </span>
           </div>
         }
@@ -325,12 +325,12 @@ const Navbar: FC = () => {
             onClick={() => setDrawerOpen(false)}
             className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
           >
-            {'Resume Prediction'}
+            {'简历押题'}
           </Link>
           <div className="px-4 py-2 text-xs text-slate-400 font-medium uppercase tracking-wider">
-            {'Comprehensive Interview'}
+            {'综合面试'}
             <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-bold leading-none text-white bg-gradient-to-r from-orange-500 to-red-500 ml-2 align-middle">
-              HOT
+              热门
             </span>
           </div>
           <Link
@@ -339,7 +339,7 @@ const Navbar: FC = () => {
             className="block pl-8 pr-4 py-2.5 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors text-sm"
           >
             <UserOutlined className="mr-2 text-blue-500" />
-            {'Experienced Interview'}
+            {'社招简历面试'}
           </Link>
           <Link
             href="/interview/campus"
@@ -347,14 +347,14 @@ const Navbar: FC = () => {
             className="block pl-8 pr-4 py-2.5 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors text-sm"
           >
             <TeamOutlined className="mr-2 text-green-500" />
-            {'Campus Interview'}
+            {'校招简历面试'}
           </Link>
           <Link
             href="/interview/special"
             onClick={() => setDrawerOpen(false)}
             className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
           >
-            {'Specialized Interview'}
+            {'专项面试'}
           </Link>
           <Link
             href="https://awq7m8b63wy.feishu.cn/wiki/Cl8mwzOayiTtaZknRU2cyoFHndL"
@@ -362,7 +362,7 @@ const Navbar: FC = () => {
             onClick={() => setDrawerOpen(false)}
             className="block px-4 py-3 rounded-lg text-slate-600 hover:bg-blue-50 hover:text-blue-600 transition-colors font-medium"
           >
-            {'User Manual'}
+            {'使用手册'}
           </Link>
         </nav>
       </Drawer>
@@ -370,7 +370,7 @@ const Navbar: FC = () => {
         open={openAuth}
         onCancel={() => setOpenAuth(false)}
         footer={null}
-        title={'Account Login / Register'}
+        title={'账号登录 / 注册'}
         destroyOnClose
       >
         <Tabs
@@ -379,7 +379,7 @@ const Navbar: FC = () => {
           items={[
             {
               key: 'login',
-              label: 'Login',
+              label: '登录',
               children: (
                 <Form
                   form={loginForm}
@@ -388,21 +388,21 @@ const Navbar: FC = () => {
                   initialValues={{ email: '', password: '' }}
                 >
                   <Form.Item
-                    label={'Email'}
+                    label={'邮箱'}
                     name="email"
                     rules={[
-                      { required: true, message: 'Please enter your email' },
-                      { type: 'email', message: 'Invalid email' },
+                      { required: true, message: '请输入邮箱' },
+                      { type: 'email', message: '邮箱格式错误' },
                     ]}
                   >
-                    <Input placeholder={'Please enter your email'} />
+                    <Input placeholder={'请输入邮箱'} />
                   </Form.Item>
                   <Form.Item
-                    label={'Password'}
+                    label={'密码'}
                     name="password"
-                    rules={[{ required: true, message: 'Please enter your password' }]}
+                    rules={[{ required: true, message: '请输入密码' }]}
                   >
-                    <Input.Password placeholder={'Please enter your password'} />
+                    <Input.Password placeholder={'请输入密码'} />
                   </Form.Item>
                   <div className="flex justify-end mb-4">
                     <a
@@ -412,14 +412,14 @@ const Navbar: FC = () => {
                         setActiveKey('forgot');
                       }}
                     >
-                      {'Forgot password?'}
+                      {'忘记密码？'}
                     </a>
                   </div>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    {'Login'}
+                    {'登录'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -446,7 +446,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google
+                        第三方账号登录（谷歌）
                       </Button>
                       <Button
                         type="default"
@@ -467,7 +467,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub
+                        第三方账号登录（代码托管平台）
                       </Button>
                     </div>
                   </div>
@@ -476,7 +476,7 @@ const Navbar: FC = () => {
             },
             {
               key: 'register',
-              label: 'Register',
+              label: '注册',
               children: (
                 <Form
                   form={registerForm}
@@ -485,34 +485,34 @@ const Navbar: FC = () => {
                   initialValues={{ username: '', email: '', password: '' }}
                 >
                   <Form.Item
-                    label={'Username'}
+                    label={'用户名'}
                     name="username"
-                    rules={[{ required: true, message: 'Please enter your username' }]}
+                    rules={[{ required: true, message: '请输入用户名' }]}
                   >
-                    <Input placeholder={'Please enter your username'} />
+                    <Input placeholder={'请输入用户名'} />
                   </Form.Item>
                   <Form.Item
-                    label={'Email'}
+                    label={'邮箱'}
                     name="email"
                     rules={[
-                      { required: true, message: 'Please enter your email' },
-                      { type: 'email', message: 'Invalid email' },
+                      { required: true, message: '请输入邮箱' },
+                      { type: 'email', message: '邮箱格式错误' },
                     ]}
                   >
-                    <Input placeholder={'Please enter your email'} />
+                    <Input placeholder={'请输入邮箱'} />
                   </Form.Item>
                   <Form.Item
-                    label={'Password'}
+                    label={'密码'}
                     name="password"
-                    rules={[{ required: true, message: 'Please enter your password' }]}
+                    rules={[{ required: true, message: '请输入密码' }]}
                   >
-                    <Input.Password placeholder={'Please enter your password'} />
+                    <Input.Password placeholder={'请输入密码'} />
                   </Form.Item>
                   <Button type="primary" htmlType="submit" className="w-full">
-                    {'Register and Login'}
+                    {'注册并登录'}
                   </Button>
                   <div className="mt-4 pt-4 border-t border-slate-100">
-                    <div className="text-center text-xs text-slate-400 mb-2">Or sign in with</div>
+                    <div className="text-center text-xs text-slate-400 mb-2">或使用第三方登录</div>
                     <div className="flex flex-col gap-2">
                       <Button
                         type="default"
@@ -539,7 +539,7 @@ const Navbar: FC = () => {
                             d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
                           />
                         </svg>
-                        Google
+                        第三方账号登录（谷歌）
                       </Button>
                       <Button
                         type="default"
@@ -560,7 +560,7 @@ const Navbar: FC = () => {
                             clipRule="evenodd"
                           />
                         </svg>
-                        GitHub
+                        第三方账号登录（代码托管平台）
                       </Button>
                     </div>
                   </div>
@@ -569,7 +569,7 @@ const Navbar: FC = () => {
             },
             {
               key: 'forgot',
-              label: 'Forgot Password',
+              label: '找回密码',
               children: (
                 <Form
                   form={forgotPasswordForm}
@@ -578,14 +578,14 @@ const Navbar: FC = () => {
                   initialValues={{ email: '' }}
                 >
                   <Form.Item
-                    label={'Email'}
+                    label={'邮箱'}
                     name="email"
                     rules={[
-                      { required: true, message: 'Please enter your email' },
-                      { type: 'email', message: 'Invalid email' },
+                      { required: true, message: '请输入邮箱' },
+                      { type: 'email', message: '邮箱格式错误' },
                     ]}
                   >
-                    <Input placeholder={'Please enter your email'} />
+                    <Input placeholder={'请输入邮箱'} />
                   </Form.Item>
                   <Button
                     type="primary"
@@ -593,7 +593,7 @@ const Navbar: FC = () => {
                     loading={forgotLoading}
                     className="w-full mb-4"
                   >
-                    {'Send Reset Link'}
+                    {'发送重置链接'}
                   </Button>
                   <div className="text-center">
                     <a
@@ -603,7 +603,7 @@ const Navbar: FC = () => {
                         setActiveKey('login');
                       }}
                     >
-                      {'Back to Login'}
+                      {'返回登录'}
                     </a>
                   </div>
                 </Form>
@@ -617,16 +617,16 @@ const Navbar: FC = () => {
         open={guideModalOpen}
         onCancel={() => setGuideModalOpen(false)}
         footer={null}
-        title={'Welcome to Interview Master'}
+        title={'欢迎加入面试吧'}
         centered
         width={600}
       >
         <div className="py-6 px-4">
           <div className="mb-8 text-center">
-            <Title level={4}>{'Upload your resume to let AI customize your interview plan'}</Title>
+            <Title level={4}>{'上传简历让人工智能为你定制面试计划'}</Title>
             <Typography.Text type="secondary">
               {
-                'Go to personal center to upload resume, AI will generate targeted questions based on your resume.'
+                '前往个人中心上传简历，人工智能将根据你的简历生成针对性问题。'
               }
             </Typography.Text>
           </div>
@@ -641,7 +641,7 @@ const Navbar: FC = () => {
               }}
               className="w-full md:w-auto px-8"
             >
-              {'Upload Resume Now'}
+              {'立即上传简历'}
             </Button>
           </div>
         </div>

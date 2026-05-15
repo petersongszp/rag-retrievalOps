@@ -24,7 +24,7 @@ export function InterviewFooterActions({
   onMicClick,
   onSubmit,
   sendButtonClassName,
-  sendLabel = 'Send',
+  sendLabel = '发送',
 }: InterviewFooterActionsProps) {
   return (
     <div className="relative z-10 flex justify-between items-center px-2 pb-2 pt-1 border-t border-slate-50">
@@ -39,7 +39,7 @@ export function InterviewFooterActions({
             onClick={onMicClick}
             className="!h-9 !px-4 !font-medium"
           >
-            {isStopping ? 'Stopping...' : 'Stop Rec.'}
+            {isStopping ? '停止中...' : '停止录音'}
           </Button>
         ) : (
           <Button
@@ -53,7 +53,7 @@ export function InterviewFooterActions({
         )}
       </div>
       <div className="flex items-center gap-3">
-        <span className="text-xs text-slate-300 hidden sm:inline-block">Enter to Send</span>
+        <span className="text-xs text-slate-300 hidden sm:inline-block">回车发送</span>
         <Button
           type="primary"
           shape="round"

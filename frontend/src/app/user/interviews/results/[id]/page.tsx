@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useEffect, useState } from 'react';
 import { Card as AntCard, Row, Col, Tag, Button, Avatar, Spin, message, Divider } from 'antd';
@@ -20,41 +20,41 @@ import {
 } from '@ant-design/icons';
 
 const difficultyMap: Record<string, string> = {
-  easy: 'Easy',
-  medium: 'Medium',
-  hard: 'Hard',
-  '\u7b80\u5355': 'Easy',
-  '\u4e2d\u7b49': 'Medium',
-  '\u56f0\u96be': 'Hard',
+  easy: '简单',
+  medium: '中等',
+  hard: '困难',
+  '\u7b80\u5355': '简单',
+  '\u4e2d\u7b49': '中等',
+  '\u56f0\u96be': '困难',
 };
 
 const interviewTypeMap: Record<string, string> = {
-  technical: 'Technical',
+  technical: '技术面',
   hr: 'HR',
-  behavioral: 'Behavioral',
-  '\u7efc\u5408': 'General',
-  '\u6280\u672f\u9762': 'Technical',
-  '\u884c\u4e3a\u9762': 'Behavioral',
+  behavioral: '行为面',
+  '\u7efc\u5408': '综合面试',
+  '\u6280\u672f\u9762': '技术面',
+  '\u884c\u4e3a\u9762': '行为面',
   'hr\u9762': 'HR',
 };
 
 const dimensionNameMap: Record<string, string> = {
-  '\u6c9f\u901a\u8868\u8fbe': 'Communication',
-  '\u903b\u8f91\u601d\u7ef4': 'Logical Thinking',
-  '\u6280\u672f\u6df1\u5ea6': 'Technical Depth',
-  '\u4e1a\u52a1\u7406\u89e3': 'Business Understanding',
-  '\u5b66\u4e60\u80fd\u529b': 'Learning Agility',
-  '\u95ee\u9898\u89e3\u51b3': 'Problem Solving',
-  '\u56e2\u961f\u534f\u4f5c': 'Team Collaboration',
+  '\u6c9f\u901a\u8868\u8fbe': '沟通表达',
+  '\u903b\u8f91\u601d\u7ef4': '逻辑思维',
+  '\u6280\u672f\u6df1\u5ea6': '技术深度',
+  '\u4e1a\u52a1\u7406\u89e3': '业务理解',
+  '\u5b66\u4e60\u80fd\u529b': '学习能力',
+  '\u95ee\u9898\u89e3\u51b3': '问题解决',
+  '\u56e2\u961f\u534f\u4f5c': '团队协作',
 };
 
 const toEnglishLabel = (value: string | undefined, mapping: Record<string, string>) => {
-  if (!value) return 'Unknown';
+  if (!value) return '未知';
   return mapping[value] || value;
 };
 
 const formatDuration = (totalSeconds: number | undefined) => {
-  if (!totalSeconds && totalSeconds !== 0) return 'Unknown';
+  if (!totalSeconds && totalSeconds !== 0) return '未知';
   const minutes = Math.floor(totalSeconds / 60);
   const seconds = totalSeconds % 60;
   return `${minutes}m ${seconds}s`;
@@ -111,7 +111,7 @@ function ExpandableMobileText({
           onClick={() => setExpanded((prev) => !prev)}
           className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-500 sm:hidden"
         >
-          {expanded ? 'Show less' : 'Show more'}
+          {expanded ? '收起' : '展开'}
         </button>
       )}
     </div>
@@ -262,7 +262,7 @@ function ScoreGauge({ score }: { score: number }) {
         />
         {arcPath(angle, color)}
         <text x={cx} y={cy - 15} textAnchor="middle" fontSize={14} fill="#8c8c8c">
-          Interview Score
+          面试得分
         </text>
         <text x={cx} y={cy + 30} textAnchor="middle" fontSize={48} fontWeight={700} fill={color}>
           {score}
@@ -299,7 +299,7 @@ export default function InterviewResultDetailPage() {
             });
           }
         } catch (e) {
-          console.error('Failed to fetch user profile', e);
+          console.error('获取用户信息失败', e);
         }
       }
 
@@ -330,7 +330,7 @@ export default function InterviewResultDetailPage() {
       }
     } catch (e: any) {
       console.error(e);
-      message.error('Failed to load interview details');
+      message.error('加载面试详情失败');
     } finally {
       setLoading(false);
     }
@@ -344,7 +344,7 @@ export default function InterviewResultDetailPage() {
   if (loading) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-slate-50">
-        <Spin size="large" tip="Generating detailed analysis..." />
+        <Spin size="large" tip="正在生成详细分析..." />
       </div>
     );
   }
@@ -354,16 +354,16 @@ export default function InterviewResultDetailPage() {
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
         <AntCard className="rounded-3xl shadow-xl border-0 text-center p-10 max-w-md w-full">
           <div className="mb-4 text-6xl">📊</div>
-          <h3 className="text-xl font-bold text-slate-700 mb-2">No analysis report yet</h3>
+          <h3 className="text-xl font-bold text-slate-700 mb-2">暂无分析报告</h3>
           <p className="text-slate-500 mb-6">
-            The interview may still be in progress, or data is processing.
+            面试可能仍在进行中，或数据正在处理中。
           </p>
           <Button
             type="primary"
             onClick={() => window.history.back()}
             className="bg-blue-600 rounded-xl h-10 px-6"
           >
-            Back to list
+            返回列表
           </Button>
         </AntCard>
       </div>
@@ -371,17 +371,17 @@ export default function InterviewResultDetailPage() {
   }
 
   const basic = {
-    candidate: user?.name || 'Unknown User',
+    candidate: user?.name || '未知用户',
     resume: 'N/A',
     type: toEnglishLabel(interviewInfo?.type, interviewTypeMap),
     score: evaluation.score,
     difficulty: toEnglishLabel(interviewInfo?.difficulty, difficultyMap),
-    company: interviewInfo?.company_name || 'Not specified',
-    position: interviewInfo?.position_name || 'Not specified',
+    company: interviewInfo?.company_name || '未填写',
+    position: interviewInfo?.position_name || '未填写',
     duration: formatDuration(interviewInfo?.duration),
     time: interviewInfo?.created_at
       ? new Date(interviewInfo.created_at).toLocaleString('en-US')
-      : 'Unknown',
+      : '未知',
   };
 
   return (
@@ -395,17 +395,17 @@ export default function InterviewResultDetailPage() {
           <div>
             <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3 break-words [overflow-wrap:anywhere]">
               <TrophyOutlined className="text-yellow-500" />
-              Interview Results Analysis
+              面试结果分析
             </h1>
             <p className="text-slate-500 mt-2 ml-11 break-words [overflow-wrap:anywhere]">
-              A full review of your interview performance, powered by AI insights.
+              基于 AI 洞察，对你的面试表现进行全方位复盘。
             </p>
           </div>
           <Button
             onClick={() => window.history.back()}
             className="rounded-xl border-slate-200 hover:border-blue-400 hover:text-blue-600"
           >
-            Back to list
+            返回列表
           </Button>
         </div>
 
@@ -437,7 +437,7 @@ export default function InterviewResultDetailPage() {
                     <div className="flex items-center gap-2">
                       <EnvironmentOutlined className="text-slate-400" />
                       <span className="break-words [overflow-wrap:anywhere] min-w-0">
-                        Company:{' '}
+                        公司：{' '}
                         <span className="font-medium text-slate-800 break-words [overflow-wrap:anywhere]">
                           {basic.company}
                         </span>
@@ -446,7 +446,7 @@ export default function InterviewResultDetailPage() {
                     <div className="flex items-center gap-2">
                       <UserOutlined className="text-slate-400" />
                       <span className="break-words [overflow-wrap:anywhere] min-w-0">
-                        Role:{' '}
+                        岗位：{' '}
                         <span className="font-medium text-slate-800 break-words [overflow-wrap:anywhere]">
                           {basic.position}
                         </span>
@@ -455,21 +455,21 @@ export default function InterviewResultDetailPage() {
                     <div className="flex items-center gap-2">
                       <BarChartOutlined className="text-slate-400" />
                       <span>
-                        Difficulty:{' '}
+                        难度：{' '}
                         <span className="font-medium text-slate-800">{basic.difficulty}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2">
                       <ClockCircleOutlined className="text-slate-400" />
                       <span>
-                        Duration:{' '}
+                        时长：{' '}
                         <span className="font-medium text-slate-800">{basic.duration}</span>
                       </span>
                     </div>
                     <div className="flex items-center gap-2 sm:col-span-2">
                       <CalendarOutlined className="text-slate-400" />
                       <span>
-                        Date: <span className="font-medium text-slate-800">{basic.time}</span>
+                        日期：<span className="font-medium text-slate-800">{basic.time}</span>
                       </span>
                     </div>
                   </div>
@@ -487,13 +487,13 @@ export default function InterviewResultDetailPage() {
                     icon={<DownloadOutlined />}
                     className="bg-blue-600 hover:bg-blue-500 h-10 rounded-xl shadow-lg shadow-blue-200 border-0 w-full"
                   >
-                    Download Report
+                    下载报告
                   </Button>
                   <Button
                     icon={<RobotOutlined />}
                     className="h-10 rounded-xl border-blue-200 text-blue-600 hover:bg-blue-50 hover:border-blue-300 w-full"
                   >
-                    AI Improvement Tips
+                    AI 改进建议
                   </Button>
                 </div>
               </div>
@@ -514,7 +514,7 @@ export default function InterviewResultDetailPage() {
                   <CheckCircleOutlined className="text-xl" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-800 m-0">
-                  Overall Interviewer Feedback
+                  面试官综合反馈
                 </h3>
               </div>
               <div className="bg-indigo-50/50 p-6 rounded-2xl border border-indigo-50 text-slate-700 leading-relaxed text-lg">
@@ -533,7 +533,7 @@ export default function InterviewResultDetailPage() {
                   <BarChartOutlined className="text-xl" />
                 </div>
                 <h3 className="text-xl font-bold text-slate-800 m-0">
-                  Detailed Dimension Analysis
+                  维度详细分析
                 </h3>
               </div>
 
@@ -576,17 +576,17 @@ export default function InterviewResultDetailPage() {
                 <div className="bg-purple-100 p-2 rounded-lg text-purple-600">
                   <BulbOutlined className="text-xl" />
                 </div>
-                <h3 className="text-xl font-bold text-slate-800 m-0">Capability Radar</h3>
+                <h3 className="text-xl font-bold text-slate-800 m-0">能力雷达图</h3>
               </div>
               <div className="flex justify-center items-center py-4">
                 {evaluation.dimensions && evaluation.dimensions.length > 0 ? (
                   <RadarChart items={evaluation.dimensions} size={320} />
                 ) : (
-                  <div className="text-slate-400 py-10">No dimension data</div>
+                  <div className="text-slate-400 py-10">暂无维度数据</div>
                 )}
               </div>
               <div className="text-center text-slate-500 text-sm mt-4">
-                A five-dimension capability model generated from this interview.
+                基于本次面试生成的五维能力模型。
               </div>
             </div>
           </Col>
@@ -601,7 +601,7 @@ export default function InterviewResultDetailPage() {
             <div className="bg-orange-100 p-2 rounded-lg text-orange-600">
               <ClockCircleOutlined className="text-xl" />
             </div>
-            <h3 className="text-xl font-bold text-slate-800 m-0">Full Q&A Review</h3>
+            <h3 className="text-xl font-bold text-slate-800 m-0">完整问答复盘</h3>
           </div>
 
           {answerRecords && answerRecords.length > 0 ? (
@@ -629,7 +629,7 @@ export default function InterviewResultDetailPage() {
                       >
                         <div className="mb-4">
                           <span className="inline-block bg-blue-100 text-blue-700 text-xs font-bold px-2 py-1 rounded mb-2">
-                            Interviewer Question
+                            面试官提问
                           </span>
                           <ExpandableMobileText
                             content={m.question}
@@ -640,7 +640,7 @@ export default function InterviewResultDetailPage() {
                         </div>
                         <div className="bg-white rounded-xl p-4 border border-slate-100 shadow-sm">
                           <span className="inline-block bg-green-100 text-green-700 text-xs font-bold px-2 py-1 rounded mb-2">
-                            Your Answer
+                            你的回答
                           </span>
                           <ExpandableMobileText
                             content={m.answer}
@@ -656,22 +656,22 @@ export default function InterviewResultDetailPage() {
                     {rec.comment && (
                       <div className="bg-gradient-to-r from-orange-50 to-rose-50 rounded-2xl p-6 border border-orange-100">
                         <div className="flex items-center gap-2 mb-4 text-orange-700 font-bold">
-                          <RobotOutlined /> AI Deep Review
+                          <RobotOutlined /> AI 深度点评
                         </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                           <div className="bg-white/60 rounded-xl p-4">
                             <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
-                              Question Score
+                              单题得分
                             </div>
                             <div className="text-2xl font-bold text-orange-600">
                               {rec.comment.score}{' '}
-                              <span className="text-sm text-slate-400">pts</span>
+                              <span className="text-sm text-slate-400">分</span>
                             </div>
                           </div>
                           <div className="bg-white/60 rounded-xl p-4">
                             <div className="text-xs text-slate-400 uppercase tracking-wider font-bold mb-1">
-                              Difficulty
+                              难度
                             </div>
                             <div className="text-lg font-bold text-slate-700">
                               {toEnglishLabel(rec.comment.difficulty, difficultyMap)}
@@ -681,24 +681,24 @@ export default function InterviewResultDetailPage() {
 
                         <div className="mt-6 space-y-4">
                           {[
-                            { label: 'Key Points', val: rec.comment.key_points },
+                            { label: '要点', val: rec.comment.key_points },
                             {
-                              label: 'Strengths',
+                              label: '优势',
                               val: rec.comment.strengths,
                               color: 'text-green-700',
                             },
                             {
-                              label: 'Weaknesses',
+                              label: '不足',
                               val: rec.comment.weaknesses,
                               color: 'text-red-600',
                             },
                             {
-                              label: 'Suggestions',
+                              label: '建议',
                               val: rec.comment.suggestion,
                               color: 'text-blue-600',
                             },
-                            { label: 'Recommended Approach', val: rec.comment.thinking },
-                            { label: 'Reference Answer', val: rec.comment.reference },
+                            { label: '推荐思路', val: rec.comment.thinking },
+                            { label: '参考答案', val: rec.comment.reference },
                           ].map(
                             (item, idx) =>
                               item.val && (
@@ -732,7 +732,7 @@ export default function InterviewResultDetailPage() {
           ) : (
             <div className="text-center py-12">
               <div className="text-6xl mb-4 opacity-20">📝</div>
-              <div className="text-slate-400">No answer records</div>
+              <div className="text-slate-400">暂无答题记录</div>
             </div>
           )}
         </div>
@@ -740,3 +740,4 @@ export default function InterviewResultDetailPage() {
     </div>
   );
 }
+

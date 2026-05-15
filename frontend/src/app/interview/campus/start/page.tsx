@@ -53,16 +53,16 @@ export default function CampusInterviewStartPage() {
     speechInput.isStopping;
   const speechHint =
     !asrCapability.loading && !asrCapability.enabled
-      ? 'Speech recognition unavailable'
+      ? '语音识别不可用'
       : speechInput.status === 'recording'
-        ? 'Recording, click stop button to end'
+        ? '正在录音，点击停止按钮结束'
         : speechInput.status === 'stopping'
-          ? 'Stopping recording, please wait...'
+          ? '正在停止录音，请稍候...'
           : speechInput.status === 'transcribing'
-            ? 'Transcribing, please wait...'
+            ? '正在转写，请稍候...'
             : speechInput.status === 'error'
-              ? 'Speech recognition failed, try again'
-              : 'Voice input supported, results will fill the input box';
+              ? '语音识别失败，请重试'
+              : '支持语音输入，结果将填入输入框';
 
   useEffect(() => {
     const timer = setInterval(() => setElapsed((prev) => prev + 1), 1000);
@@ -79,7 +79,7 @@ export default function CampusInterviewStartPage() {
       }
     }
     if (!params || !params.resume_id) {
-      message.error('Missing interview parameters or resume, please re-enter from the form page');
+      message.error('缺少面试参数或简历，请从表单页重新进入');
       return;
     }
     setStarting(true);
@@ -100,7 +100,7 @@ export default function CampusInterviewStartPage() {
       try {
         const token = localStorage.getItem('token');
         if (!token) {
-          message.error('Please login first to start the interview');
+          message.error('请先登录后再开始面试');
           setStarting(false);
           return;
         }
@@ -159,11 +159,11 @@ export default function CampusInterviewStartPage() {
 
         if (!response.ok) {
           if (response.status === 401) {
-            message.error('Login expired, please login again');
+            message.error('登录已过期，请重新登录');
           } else if (response.status === 404) {
             console.error('[面试启动] 404错误 - 接口不存在');
             message.error({
-              content: 'API returned 404, please check routes',
+              content: '接口返回 404，请检查路由配置',
               duration: 10,
             });
           } else {
@@ -174,7 +174,7 @@ export default function CampusInterviewStartPage() {
         }
 
         if (!response.body) {
-          message.error('Unable to read response stream');
+          message.error('无法读取响应流');
           setStarting(false);
           return;
         }
@@ -273,7 +273,7 @@ export default function CampusInterviewStartPage() {
                   });
                 } else if (payload?.type === 'end' || payload?.type === 'complete') {
                   console.log('[面试结束]', payload);
-                  message.success('Interview completed, redirecting to records...');
+                  message.success('面试已完成，正在跳转到记录页...');
                   setStarting(false);
                   setWaitingNextQuestion(false);
                   // 延迟跳转，让用户看到提示消息
@@ -289,7 +289,7 @@ export default function CampusInterviewStartPage() {
         }
       } catch (error: any) {
         if (error.name !== 'AbortError') {
-          message.error('Interview start failed: Network error');
+          message.error('面试启动失败：网络错误');
           console.error('启动面试错误:', error);
         }
         setStarting(false);
@@ -326,7 +326,7 @@ export default function CampusInterviewStartPage() {
 
   const onSubmit = async (act?: 'next' | 'quit') => {
     if (!sessionId) {
-      message.warning('Session expired, please restart interview');
+      message.warning('会话已过期，请重新开始面试');
       return;
     }
 
@@ -358,14 +358,14 @@ export default function CampusInterviewStartPage() {
       try {
         abortControllerRef.current?.abort();
       } catch {}
-      message.success('Interview ended, redirecting...');
+      message.success('已结束面试，正在跳转...');
       router.push('/user/interviews');
       return;
     }
 
     // 验证答案不为空
     if (!answer.trim()) {
-      message.warning('Please enter an answer before submitting');
+      message.warning('请先输入答案再提交');
       return;
     }
 
@@ -389,7 +389,7 @@ export default function CampusInterviewStartPage() {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        message.error('Login expired, please login again');
+        message.error('登录已过期，请重新登录');
         setSubmitting(false);
         setWaitingNextQuestion(false);
         return;
@@ -422,17 +422,17 @@ export default function CampusInterviewStartPage() {
       if (!response.ok) {
         const errorText = await response.text();
         console.error('[提交答案] 错误响应:', errorText);
-        message.error('Answer submission failed, please try again');
+        message.error('答案提交失败，请重试');
         setWaitingNextQuestion(false);
         return;
       }
 
       // 提交成功，等待SSE流推送下一题
       console.log('[提交答案] 提交成功，等待SSE推送下一题');
-      message.success('Answer submitted, generating next question...');
+      message.success('答案已提交，正在生成下一题...');
     } catch (error: any) {
       console.error('[提交答案] 异常:', error);
-      message.error('Answer submission failed: Network error');
+      message.error('答案提交失败：网络错误');
       setWaitingNextQuestion(false);
     } finally {
       setSubmitting(false);
@@ -454,9 +454,9 @@ export default function CampusInterviewStartPage() {
             </div>
             <div>
               <h1 className="text-base font-bold text-slate-800 m-0 leading-tight">
-                General Interview
+                综合面试
               </h1>
-              <p className="text-xs text-slate-500 m-0">Campus Recruitment Resume Interview</p>
+              <p className="text-xs text-slate-500 m-0">校招简历面试</p>
             </div>
           </div>
 
@@ -470,7 +470,7 @@ export default function CampusInterviewStartPage() {
               </div>
               <div className="w-px h-3 bg-slate-200" />
               <div className="flex items-center gap-1.5">
-                <span className="text-xs text-slate-500">Progress {percent}%</span>
+                <span className="text-xs text-slate-500">进度 {percent}%</span>
                 <div className="w-16 h-1.5 bg-slate-200 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-green-500 transition-all duration-500"
@@ -487,7 +487,7 @@ export default function CampusInterviewStartPage() {
               className="!rounded-full !px-4 hover:!bg-red-50 border-red-200"
               onClick={() => onSubmit('quit')}
             >
-              End Interview
+              结束面试
             </Button>
           </div>
         </div>
@@ -501,7 +501,7 @@ export default function CampusInterviewStartPage() {
               <div className="w-16 h-16 bg-green-50 rounded-2xl flex items-center justify-center text-green-500 text-2xl mb-4 animate-bounce-subtle">
                 <CustomerServiceOutlined />
               </div>
-              <p className="text-slate-400 text-sm">Analyzing resume and generating questions...</p>
+              <p className="text-slate-400 text-sm">正在分析简历并生成问题...</p>
             </div>
           )}
 
@@ -581,7 +581,7 @@ export default function CampusInterviewStartPage() {
                   />
                 </div>
                 <span className="text-sm text-slate-400 ml-2">
-                  {starting ? 'Generating first question...' : 'Thinking of the next question...'}
+                  {starting ? '正在生成第一题...' : '正在思考下一题...'}
                 </span>
               </div>
             </div>
@@ -601,14 +601,14 @@ export default function CampusInterviewStartPage() {
               onChange={(e) => setAnswer(e.target.value)}
               placeholder={
                 speechInput.status === 'recording'
-                  ? 'Recording, click stop button to end...'
+                  ? '正在录音，点击停止按钮结束...'
                   : speechInput.status === 'stopping'
-                    ? 'Stopping recording, please wait...'
+                    ? '正在停止录音，请稍候...'
                     : speechInput.status === 'transcribing'
-                      ? 'Transcribing, please wait...'
+                      ? '正在转写，请稍候...'
                       : waitingNextQuestion
-                        ? 'Interviewer is asking...'
-                        : 'Please enter your answer...'
+                        ? '面试官正在出题...'
+                        : '请输入你的回答...'
               }
               disabled={waitingNextQuestion || starting}
               readOnly={speechInput.isRecording || speechInput.isStopping}

@@ -1,4 +1,4 @@
-'use client';
+﻿'use client';
 
 import { useMemo, useState, useEffect } from 'react';
 import { Typography, Row, Col, Card as AntCard, List, Tag, Space, Spin, message } from 'antd';
@@ -25,7 +25,7 @@ export default function PressDetailPage() {
         const res = await predictionService.getPredictionDetail(id);
         setQuestions(res.questions || []);
       } catch (error) {
-        console.error('Failed to fetch prediction detail:', error);
+        console.error('获取押题详情失败:', error);
         message.error('获取押题详情失败');
       } finally {
         setLoading(false);
@@ -54,7 +54,7 @@ export default function PressDetailPage() {
   if (loading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
-        <Spin size="large" tip="loading..." />
+        <Spin size="large" tip="加载中..." />
       </div>
     );
   }
@@ -62,7 +62,7 @@ export default function PressDetailPage() {
   if (!current) {
     return (
       <div className="min-h-screen flex items-center justify-center text-slate-500">
-        No relevant records found
+        未找到相关记录
       </div>
     );
   }
@@ -77,9 +77,9 @@ export default function PressDetailPage() {
         <div className="mb-8 animate-fade-in-up">
           <h1 className="text-3xl font-extrabold text-slate-900 tracking-tight flex items-center gap-3">
             <BookOutlined className="text-blue-600" />
-            Resume Prediction Details
+            简历押题详情
           </h1>
-          <p className="text-slate-500 mt-2 ml-11">Check out the precise interview questions and detailed explanations generated for you</p>
+          <p className="text-slate-500 mt-2 ml-11">查看为你生成的精准面试题与详细解析</p>
         </div>
 
         <Row
@@ -95,7 +95,7 @@ export default function PressDetailPage() {
               <div className="p-5 border-b border-slate-100 bg-slate-50/50 rounded-t-2xl">
                 <Space align="center" className="font-bold text-slate-700">
                   <BookOutlined className="text-blue-500" />
-                  <span>Question List</span>
+                  <span>题目列表</span>
                 </Space>
               </div>
               <div className="max-h-[calc(100vh-300px)] overflow-y-auto custom-scrollbar">
@@ -140,13 +140,13 @@ export default function PressDetailPage() {
                       color="blue"
                       className="px-3 py-1 rounded-full border-0 bg-blue-50 text-blue-600 font-medium"
                     >
-                      Overall Thinking
+                      整体思路
                     </Tag>
                     <Tag
                       color="green"
                       className="px-3 py-1 rounded-full border-0 bg-green-50 text-green-600 font-medium"
                     >
-                      Reference Answer
+                      参考答案
                     </Tag>
                     {/* <Tag className="px-3 py-1 rounded-full border-slate-200 text-slate-500 hover:text-blue-600 cursor-pointer transition-colors">
                       收藏单题
@@ -157,13 +157,13 @@ export default function PressDetailPage() {
                 <div className="w-full h-px bg-slate-100" />
 
                 <div className="space-y-8">
-                  {/* Key Focus Section - New */}
+                  {/* 核心考点 */}
                   <section>
                      <div className="flex items-center gap-2 mb-4 text-lg font-bold text-slate-800">
                       <div className="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center text-purple-600">
                         <StarOutlined />
                       </div>
-                      Key Focus
+                      核心考点
                     </div>
                      <div className="bg-purple-50/50 rounded-xl p-4 border border-purple-100 text-slate-700">
                         {current.focus}
@@ -175,7 +175,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center text-green-600">
                         <CheckCircleOutlined />
                       </div>
-                      Answer Thinking
+                      答题思路
                     </div>
                     {/* Changed from structured idea array to text block for thinking_path */}
                      <div className="bg-slate-50 rounded-xl p-6 border border-slate-100 text-slate-700 leading-relaxed whitespace-pre-wrap">
@@ -188,7 +188,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-indigo-100 flex items-center justify-center text-indigo-600">
                         <BookOutlined />
                       </div>
-                      Reference Answer
+                      参考答案
                     </div>
                     <div className="bg-gradient-to-br from-slate-50 to-white rounded-xl p-6 border border-slate-100 text-slate-700 leading-loose whitespace-pre-wrap">
                       {current.reference_answer}
@@ -200,7 +200,7 @@ export default function PressDetailPage() {
                       <div className="w-8 h-8 rounded-lg bg-orange-100 flex items-center justify-center text-orange-600">
                         <BulbOutlined />
                       </div>
-                      Possible Follow-up Questions
+                      可能追问
                     </div>
                     <div className="bg-white rounded-xl border border-slate-100 overflow-hidden">
                       <List
@@ -225,3 +225,4 @@ export default function PressDetailPage() {
     </div>
   );
 }
+
