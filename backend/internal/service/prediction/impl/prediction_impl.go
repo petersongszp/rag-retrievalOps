@@ -214,42 +214,42 @@ func (s *PredictionServiceImpl) Predict(ctx context.Context, req *predictionIDL.
 }
 
 func (s *PredictionServiceImpl) buildRequirements(req *predictionIDL.PredictRequest) string {
-	requirements := fmt.Sprintf(`Question generation requirements:
-- Type: %s
-- Output language: English
-- Job title: %s
-- Difficulty: %s
+	requirements := fmt.Sprintf(`题目生成要求：
+- 类型：%s
+- 输出语言：中文
+- 职位：%s
+- 难度：%s
 `, req.PredictionType, req.JobTitle, req.Difficulty)
 
 	if req.CompanyName != nil {
-		requirements += fmt.Sprintf("- Target company: %s\n", *req.CompanyName)
+		requirements += fmt.Sprintf("- 目标公司：%s\n", *req.CompanyName)
 	}
-	requirements += "- Return all generated content in English.\n"
+	requirements += "- 所有生成内容请使用中文。\n"
 
 	return requirements
 }
 
 func (s *PredictionServiceImpl) buildSplitPrompt(resumeContent string, req *predictionIDL.PredictRequest) string {
-	return fmt.Sprintf(`Resume content:
+	return fmt.Sprintf(`简历内容：
 %s
 
-Please split the resume above into %d direction modules.
-Each direction module should support independent interview question generation.
+请将上述简历拆分为%d个方向模块。
+每个方向模块应支持独立的面试题目生成。
 
 %s
 
-Important: Return JSON values in English only.`, resumeContent, predictionAgent.DirectionCount, s.buildRequirements(req))
+重要：JSON中的值请使用中文填写。`, resumeContent, predictionAgent.DirectionCount, s.buildRequirements(req))
 }
 
 func (s *PredictionServiceImpl) buildDirectionPrompt(module predictionAgent.DirectionModule, requirements string) string {
 	return fmt.Sprintf(`Direction: %s
 
-Direction module content:
+方向模块内容：
 %s
 
 %s
-Please generate exactly %d interview question(s) for this direction.
-Return all content in English.`, module.Direction, module.Content, requirements, predictionAgent.QuestionsPerDirection)
+请为该方向生成恰好%d道面试题目。
+所有内容请使用中文。`, module.Direction, module.Content, requirements, predictionAgent.QuestionsPerDirection)
 }
 
 func runAgentAndCollectContent(ctx context.Context, agent adk.Agent, prompt string) (string, error) {

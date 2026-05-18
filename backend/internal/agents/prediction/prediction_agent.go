@@ -48,24 +48,24 @@ func NewResumeSplitAgent(userId uint) (adk.Agent, error) {
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "ResumeDirectionSplitAgent",
-		Description: "Split resume content into independent prediction directions",
-		Instruction: `You are a senior interview strategy analyst. Split the input resume into 5 independent direction modules for question generation.
+		Description: "将简历内容拆分为独立的押题方向",
+		Instruction: `你是一位资深面试策略分析师。将输入的简历拆分为5个独立的方向模块，用于后续生成面试题目。
 
-[Important Requirements]
-1. Return JSON only. Do not use markdown code fences and do not add explanations.
-		2. Return exactly 5 directions, and direction names must be unique.
-3. Each direction must include a concise resume summary that is highly relevant to that direction.
-4. Directions should cover core technical skills, project experience, fundamentals, and system design/performance optimization.
-5. All values in the JSON output must be written in English.
+[重要要求]
+1. 仅返回JSON。不要使用markdown代码块，不要添加解释。
+2. 必须返回恰好5个方向，方向名称不得重复。
+3. 每个方向必须包含与该方向高度相关的简洁简历摘要。
+4. 方向应覆盖核心技术技能、项目经验、基础知识和系统设计/性能优化。
+5. JSON输出中的所有值请使用中文填写。
 
-[JSON Template]
+[JSON模板]
 {
 	"directions": [
     {
-		  "direction": "Direction name",
-		  "content": "Key resume summary for this direction"
+		  "direction": "方向名称",
+		  "content": "该方向的关键简历摘要"
     },
-		... (total 5)
+		... (共5个)
   ]
 }
 `,
@@ -88,27 +88,27 @@ func NewDirectionalPredictionAgent(userId uint, direction string) (adk.Agent, er
 
 	agent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "DirectionalPredictionAgent_" + direction,
-		Description: "Generate interview prediction questions for a specific direction",
-		Instruction: `You are a senior interviewer and technical expert. Based on the given single direction module and requirements, generate 1 interview question for that direction.
+		Description: "为特定方向生成面试押题",
+		Instruction: `你是一位资深面试官和技术专家。根据给定的单个方向模块和要求，为该方向生成1道面试押题。
 
-		[Important Requirements]
-		1. Generate exactly 1 question. Fewer or more are not allowed.
-		2. Return valid JSON only. Do not use markdown and do not add explanations.
-		3. Questions must stay tightly aligned with the input direction module.
-		4. All fields in the JSON output must be written in English.
+		[重要要求]
+		1. 必须生成恰好1道题，不能多也不能少。
+		2. 仅返回有效的JSON，不要使用markdown，不要添加解释。
+		3. 题目必须与输入的方向模块紧密对齐。
+		4. JSON输出中的所有字段请使用中文填写。
 
-		[JSON Template]
+		[JSON模板]
 		{
 		  "questions": [
 			{
-			  "question": "Question text",
-			  "content": "[Key Assessment] Assessment topic",
-			  "focus": "What this question evaluates",
-			  "thinking_path": "Suggested answering approach",
-			  "reference_answer": "Reference answer",
-			  "follow_up": "Possible follow-up question(s)"
+			  "question": "题目文本",
+			  "content": "[核心考察] 考察主题",
+			  "focus": "本题评估什么",
+			  "thinking_path": "建议答题思路",
+			  "reference_answer": "参考答案",
+			  "follow_up": "可能的追问"
 			},
-			... (total 1)
+			... (共1个)
 		  ]
 		}
 		`,
