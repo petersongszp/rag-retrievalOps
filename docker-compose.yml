@@ -132,6 +132,21 @@
     networks:
       - app-network
 
+  # 6. Attu (Milvus GUI)
+  attu:
+    image: zilliz/attu:v2.3.4
+    container_name: milvus-attu
+    restart: always
+    ports:
+      - '8000:3000'
+    depends_on:
+      milvus:
+        condition: service_healthy
+    environment:
+      MILVUS_URL: milvus:19530
+    networks:
+      - app-network
+
   # 12. Backend API service
   backend:
     env_file:
