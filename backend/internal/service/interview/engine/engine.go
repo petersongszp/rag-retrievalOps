@@ -79,38 +79,38 @@ func (e *InterviewEngine) RunInterviewLoop(ctx context.Context, session *Intervi
 		// 构建提示词
 		var prompt string
 		if questionIndex == 1 {
-			prompt = fmt.Sprintf(`Please act as the lead interviewer and start this interview based on the resume and difficulty level.
+			prompt = fmt.Sprintf(`请作为主面试官，根据简历和难度等级开始这场面试。
 
-		Resume ID: %d
-		Difficulty: %s
+		简历ID：%d
+		难度：%s
 
-		Requirements:
-		1. Briefly greet the candidate and introduce the interview panel, then ask the first technical question
-		2. Include an interviewer identity prefix (for example, "I am the main interviewer:")
-		3. Keep the output in English only
+		要求：
+		1. 简短问候候选人并介绍面试团，然后提出第一个技术问题
+		2. 包含面试官身份前缀（例如，"我是主面试官："）
+		3. 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
 `, session.ResumeId, session.Difficulty)
 		} else {
 			// 后续问题：包含最近2道题的历史上下文
 			historyText := ""
 			for i, h := range recentHistory {
-				historyText += fmt.Sprintf("Question %d: %s\nAnswer %d: %s\n\n", i+1, h.Question, i+1, h.Answer)
+				historyText += fmt.Sprintf("问题%d：%s\n回答%d：%s\n\n", i+1, h.Question, i+1, h.Answer)
 			}
 
-			prompt = fmt.Sprintf(`Based on the resume ID, difficulty, and recent Q&A history, continue the interview.
-If you (the main interviewer) decide this turn should be handled by the technical interviewer or project interviewer, call the corresponding tool to generate the next question.
+			prompt = fmt.Sprintf(`根据简历ID、难度和最近的问答历史，继续面试。
+如果你（主面试官）认为本轮应由技术面试官或项目面试官负责，请调用相应的工具生成下一个问题。
 
-		Resume ID: %d
-		Difficulty: %s
+		简历ID：%d
+		难度：%s
 
-		Recent Q&A history (latest %d question(s)):
+		最近的问答历史（最近%d个问题）：
 %s
 
-		Requirements:
-		1. Use the candidate's previous answers to move to the next stage or deepen the current topic
-		2. Avoid repeating previously asked questions
-		3. Increase depth progressively
-		4. Include an interviewer identity prefix (for example, "I am the main interviewer:" or another interviewer prefix)
-		5. Keep the output in English only
+		要求：
+		1. 根据候选人之前的回答进入下一阶段或深入当前话题
+		2. 避免重复之前问过的问题
+		3. 逐步提升深度
+		4. 包含面试官身份前缀（例如，"我是主面试官："或其他面试官前缀）
+		5. 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
 `, session.ResumeId, session.Difficulty, len(recentHistory), historyText)
 		}
 

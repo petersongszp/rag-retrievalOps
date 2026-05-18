@@ -44,20 +44,20 @@ func GenerateAnswerRecordEvaluation(ctx context.Context, userId uint, reportId u
 		Agent: agent,
 	})
 
-	// Build an English-only query to keep generated report fields in English.
-	query := fmt.Sprintf(`Evaluate the interview for user_id=%d and report_id=%d at topic level.
+	// 构建中文查询以生成中文评估报告。
+	query := fmt.Sprintf(`请评估user_id=%d和report_id=%d的面试记录，按话题级别进行评估。
 
-Process:
-1. Call get_mianshi_info first to get complete interview dialogues.
-2. Evaluate each topic in chronological order.
-3. Produce detailed per-topic feedback with score and evidence.
+流程：
+1. 首先调用get_mianshi_info获取完整面试对话。
+2. 按时间顺序评估每个话题。
+3. 为每个话题生成详细的反馈，包含评分和依据。
 
-Output constraints:
-- Return JSON only in the required records schema.
-- All generated string values must be in English.
-- difficulty must be one of easy, medium, hard.
-- score must be integer 0-100.
-- Include all related follow-up dialogues under the same topic record.`, userId, reportId)
+输出约束：
+- 仅按要求的records格式返回JSON。
+- 所有生成的字符串值请使用与面试记录相同的语言（中文面试用中文，英文面试用英文）。
+- difficulty必须为easy、medium、hard之一。
+- score必须为0-100的整数。
+- 将所有相关的追问对话归入同一话题记录下。`, userId, reportId)
 
 	// 创建用户消息
 	userMsg := &schema.Message{
