@@ -2,6 +2,7 @@ package config
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"regexp"
@@ -24,6 +25,7 @@ type Config struct {
 	GoogleSearch     GoogleConfig       `yaml:"google_search"`
 	OpenAI           OpenAIConfig       `yaml:"openai"`
 	LLM              LLMConfig          `yaml:"llm"`
+	RAG              RAGConfig          `yaml:"rag"`
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
@@ -194,6 +196,11 @@ type LLMConfig struct {
 	ProviderName string `yaml:"provider_name"`
 }
 
+// RAGConfig RAG 能力总开关
+type RAGConfig struct {
+	Enabled bool `yaml:"enabled"`
+}
+
 // RateLimitModelConfig 单个模型的限流配置
 type RateLimitModelConfig struct {
 	RPM int `yaml:"rpm"` // 每分钟最大请求数
@@ -230,6 +237,38 @@ func LoadConfig(configPath string) (*Config, error) {
 	Global = cfg
 	log.Println("配置加载成功")
 	return &cfg, nil
+}
+
+// ValidateRAGPrerequisites 校验 RAG 启用时的最小必填项
+func (c *Config) ValidateRAGPrerequisites() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if !c.RAG.Enabled {
+		return nil
+	}
+
+	if strings.TrimSpace(c.Milvus.Address) == "" {
+		return fmt.Errorf("rag enabled but Milvus.Address is empty")
+	}
+	if strings.TrimSpace(c.Milvus.CollectionName) == "" {
+		return fmt.Errorf("rag enabled but Milvus.CollectionName is empty")
+	}
+	if strings.TrimSpace(c.Embedding.Model) == "" {
+		return fmt.Errorf("rag enabled but Embedding.Model is empty")
+	}
+	if strings.TrimSpace(c.Embedding.BaseURL) == "" {
+		return fmt.Errorf("rag enabled but Embedding.BaseURL is empty")
+	}
+	if strings.TrimSpace(c.Embedding.APIKey) == "" &&
+		(strings.TrimSpace(c.Embedding.AccessKey) == "" || strings.TrimSpace(c.Embedding.SecretKey) == "") {
+		return fmt.Errorf("rag enabled but Embedding credential is missing: provide APIKey or AccessKey+SecretKey")
+	}
+	if c.Embedding.Dimensions <= 0 {
+		return fmt.Errorf("rag enabled but Embedding.Dimensions must be > 0")
+	}
+
+	return nil
 }
 
 // expandEnvInBytes 对字节切片中的 ${VAR_NAME} / $VAR_NAME 做环境变量替换
