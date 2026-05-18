@@ -77,6 +77,9 @@ func migrateDatabase() error {
 		&model.Subscription{},
 		&model.PaymentEvent{},
 		&model.PaymentCallback{},
+		&model.KBKnowledgeBase{},
+		&model.KBDocument{},
+		&model.KBIngestJob{},
 	)
 }
 
