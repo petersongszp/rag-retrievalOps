@@ -10,6 +10,7 @@ import (
 	"interview-agents/internal/agents/llm"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
+	"interview-agents/internal/milvus"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/looptrace"
 	paymentpkg "interview-agents/internal/payment"
@@ -34,11 +35,15 @@ import (
 
 func main() {
 	// 1. 加载 .env 文件（如果存在）
-	if err := godotenv.Load(); err != nil {
-		log.Printf("Warning: Could not load .env file: %v", err)
+	envPath := findEnvFile()
+	if envPath == "" {
+		log.Println("Warning: Could not locate .env file")
+		log.Println("Application will use system environment variables or config.yaml defaults")
+	} else if err := godotenv.Load(envPath); err != nil {
+		log.Printf("Warning: Could not load .env file at %s: %v", envPath, err)
 		log.Println("Application will use system environment variables or config.yaml defaults")
 	} else {
-		log.Println("Successfully loaded .env file")
+		log.Printf("Successfully loaded .env file: %s", envPath)
 	}
 
 	// 2. 加载配置文件
@@ -48,12 +53,16 @@ func main() {
 	if err != nil {
 		log.Fatalf("Failed to load configuration: %v", err)
 	}
+	if err := cfg.ValidateRAGPrerequisites(); err != nil {
+		log.Fatalf("Invalid RAG configuration: %v", err)
+	}
 
 	// 3. 展开配置中的环境变量引用（${VAR_NAME}）
 	// 已在 LoadConfig 中自动完成（对 YAML 原文做环境变量替换后再反序列化）
 	log.Println("Environment variables expanded in configuration")
 	log.Printf("DEBUG LLM_API_KEY from env: %q", os.Getenv("LLM_API_KEY"))
 	log.Printf("DEBUG cfg.LLM.APIKey after expand: %q", cfg.LLM.APIKey)
+	log.Printf("RAG feature enabled: %t", cfg.RAG.Enabled)
 
 	// 4. 初始化数据库
 	log.Println("Initializing database connection...")
@@ -95,18 +104,22 @@ func main() {
 		log.Printf("[11.2.3] Token quota enabled: %d per user per day", cfg.Eino.TokenQuotaPerUserPerDay)
 	}
 
-	//7. 初始化 Milvus Manager（向量数据库、Embedding、检索等服务）
-	//log.Println("Initializing Milvus Manager...")
-	//ctx := context.Background()
-	//milvusManager, err := milvus.InitMilvusManager(ctx, cfg)
-	//if err != nil {
-	//	log.Fatalf("Failed to initialize Milvus Manager: %v", err)
-	//}
-	//// 进行健康检查
-	//if err := milvusManager.HealthCheck(ctx); err != nil {
-	//	log.Printf("Warning: Milvus health check failed: %v", err)
-	//}
-	//log.Println("Milvus Manager initialized successfully")
+	// 7. Initialize Milvus manager when RAG is enabled (fail-fast on error)
+	var milvusManager *milvus.MilvusManager
+	if cfg.RAG.Enabled {
+		log.Println("[RAG:L0] Initializing Milvus Manager...")
+		milvusCtx := context.Background()
+		milvusManager, err = milvus.InitMilvusManager(milvusCtx, cfg)
+		if err != nil {
+			log.Fatalf("[RAG:L0] Failed to initialize Milvus Manager: %v", err)
+		}
+		if err := milvusManager.HealthCheck(milvusCtx); err != nil {
+			log.Fatalf("[RAG:L0] Milvus health check failed (fail-fast): %v", err)
+		}
+		log.Println("[RAG:L0] Milvus Manager initialized and health check passed")
+	} else {
+		log.Println("[RAG:L0] RAG is disabled, skip Milvus initialization")
+	}
 
 	// 8. 初始化消息队列（使用 Redis Stream）
 	log.Println("Initializing Redis Stream message queue...")
@@ -246,12 +259,12 @@ func main() {
 
 	looptrace.Close(context.Background())
 
-	// 关闭 Milvus Manager
-	//if milvusManager != nil {
-	//	if err := milvusManager.Close(); err != nil {
-	//		log.Printf("Warning: Failed to close Milvus Manager: %v", err)
-	//	}
-	//}
+	// Close Milvus manager
+	if milvusManager != nil {
+		if err := milvusManager.Close(); err != nil {
+			log.Printf("Warning: Failed to close Milvus Manager: %v", err)
+		}
+	}
 
 	// 创建一个带有超时的上下文，用于关闭
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -306,4 +319,31 @@ func findConfigFile() string {
 	// 最后的兜底
 	log.Println("Warning: Could not find config.yaml, defaulting to 'config.yaml'")
 	return "config.yaml"
+}
+
+// findEnvFile 查找 .env 路径
+func findEnvFile() string {
+	if wd, err := os.Getwd(); err == nil {
+		candidates := []string{
+			filepath.Join(wd, ".env"),             // root 运行
+			filepath.Join(wd, "..", ".env"),       // backend 运行
+			filepath.Join(wd, "..", "..", ".env"), // backend/cmd/server 运行
+		}
+		for _, p := range candidates {
+			if _, err := os.Stat(p); err == nil {
+				return p
+			}
+		}
+	}
+
+	_, currentFile, _, ok := runtime.Caller(0)
+	if ok {
+		// currentFile: backend/cmd/server/main.go
+		projectRoot := filepath.Clean(filepath.Join(filepath.Dir(currentFile), "..", "..", ".."))
+		envPath := filepath.Join(projectRoot, ".env")
+		if _, err := os.Stat(envPath); err == nil {
+			return envPath
+		}
+	}
+	return ""
 }

@@ -76,6 +76,10 @@ llm:
   model_name: '${LLM_MODEL_NAME}'
   provider_name: '${LLM_PROVIDER_NAME}'
 
+# RAG 基础开关（L0）
+rag:
+  enabled: true
+
 # Embedding 服务配置
 Embedding:
   # 认证配置（APIKey 或 AccessKey/SecretKey 二选一）
