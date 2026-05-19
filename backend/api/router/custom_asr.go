@@ -13,4 +13,6 @@ func RegisterCustomRoutes(r *server.Hertz) {
 
 	prediction := r.Group("/api/prediction")
 	prediction.POST("/delete", interview.DeletePredictionRecords)
+
+	registerKnowledgeBaseRoutes(r)
 }
