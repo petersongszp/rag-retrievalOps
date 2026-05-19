@@ -18,6 +18,13 @@ func BuildFilterExpr(opts *RetrieveOptions) string {
 
 	var conditions []string
 
+	if opts.UserID > 0 {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"user_id\"] == %d", opts.UserID))
+	}
+	if opts.KBID > 0 {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_id\"] == %d", opts.KBID))
+	}
+
 	// 语言类型过滤
 	if opts.Language != "" {
 		// JSON 字段过滤：使用 Milvus JSON 字段访问语法 metadata['language']

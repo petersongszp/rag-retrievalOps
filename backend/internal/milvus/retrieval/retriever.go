@@ -170,3 +170,32 @@ func (s *RetrieverService) RetrieveWithDatabaseAndCollection(
 func (s *RetrieverService) GetConfig() *milvus.RetrieverConfig {
 	return s.config
 }
+
+func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, userID uint, kbID uint64, topK int, collection string) ([]*schema.Document, error) {
+	if query == "" {
+		return nil, fmt.Errorf("query is empty")
+	}
+	if userID == 0 {
+		return nil, fmt.Errorf("user_id is required for knowledge retrieval")
+	}
+	if kbID == 0 {
+		return nil, fmt.Errorf("kb_id is required for knowledge retrieval")
+	}
+	if topK <= 0 {
+		topK = 5
+	}
+	if topK > 20 {
+		topK = 20
+	}
+	if collection == "" {
+		collection = s.config.Collection
+	}
+	opts := &RetrieveOptions{
+		UserID:     userID,
+		KBID:       kbID,
+		TopK:       topK,
+		Collection: collection,
+	}
+	expr := BuildFilterExpr(opts)
+	return SearchWithExpr(ctx, s.client, s.config, query, expr, opts)
+}

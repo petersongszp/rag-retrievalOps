@@ -245,7 +245,7 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 		return finalErr
 	}
 	// 步骤10：填充分块的元数据（关键：给每个文本块加标识，方便后续检索）
-	now := time.Now().UTC().Format(time.RFC3339)
+	baseMeta := milvus.NewKBDocumentMetadata(payload.UserID, payload.KBID, payload.DocumentID, docRecord.FileName)
 	totalChunks := len(chunks)
 	for i, chunk := range chunks {
 		if chunk == nil {
@@ -257,13 +257,11 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 		if chunk.MetaData == nil {
 			chunk.MetaData = map[string]interface{}{}
 		}
-		chunk.MetaData["user_id"] = payload.UserID
-		chunk.MetaData["kb_id"] = payload.KBID
-		chunk.MetaData["document_id"] = payload.DocumentID
-		chunk.MetaData["chunk_index"] = i
-		chunk.MetaData["total_chunks"] = totalChunks
-		chunk.MetaData["file_name"] = docRecord.FileName
-		chunk.MetaData["created_at"] = now
+		baseMeta.ChunkIndex = i
+		baseMeta.TotalChunks = totalChunks
+		for k, v := range baseMeta.ToMap() {
+			chunk.MetaData[k] = v
+		}
 	}
 	// 步骤11：将分块存入向量数据库(Milvus)
 	if _, err := manager.GetIndexerService().Store(ctx, chunks); err != nil {

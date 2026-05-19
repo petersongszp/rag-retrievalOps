@@ -32,4 +32,6 @@ type RetrieveOptions struct {
 	Database string
 	// 集合名称（可选，如果指定则使用指定的集合）
 	Collection string
+	UserID uint
+	KBID   uint64
 }

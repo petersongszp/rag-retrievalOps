@@ -28,34 +28,30 @@ const (
 // DocumentMetadata 文档元数据结构
 // 用于存储到 Milvus 的 metadata 字段中
 type DocumentMetadata struct {
-	// 语言类型：golang, java, 中间件
 	Language DocumentLanguage `json:"language"`
 
-	// 文档分类
 	Category DocumentCategory `json:"category"`
 
-	// 文件路径（原始文件路径）
 	FilePath string `json:"file_path"`
 
-	// 文件名
 	FileName string `json:"file_name"`
 
-	// 文档标题（从 Markdown 中提取或文件名）
 	Title string `json:"title"`
 
-	// 来源（如：官方文档、教程、博客等）
 	Source string `json:"source,omitempty"`
 
-	// 块索引（如果文档被分割，这是第几个块，从 0 开始）
+	UserID uint `json:"user_id"`
+
+	KBID uint64 `json:"kb_id"`
+
+	DocumentID uint64 `json:"document_id"`
+
 	ChunkIndex int `json:"chunk_index,omitempty"`
 
-	// 总块数（如果文档被分割）
 	TotalChunks int `json:"total_chunks,omitempty"`
 
-	// 创建时间
 	CreatedAt string `json:"created_at"`
 
-	// 额外的自定义字段
 	Extra map[string]interface{} `json:"extra,omitempty"`
 }
 
@@ -76,6 +72,19 @@ func NewDocumentMetadata(filePath string, language DocumentLanguage, category Do
 	}
 }
 
+func NewKBDocumentMetadata(userID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
+	return &DocumentMetadata{
+		UserID:      userID,
+		KBID:        kbID,
+		DocumentID:  documentID,
+		FileName:    fileName,
+		ChunkIndex:  0,
+		TotalChunks: 0,
+		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
+		Extra:       make(map[string]interface{}),
+	}
+}
+
 // ToMap 将 DocumentMetadata 转换为 map[string]interface{}，用于 schema.Document.MetaData
 func (m *DocumentMetadata) ToMap() map[string]interface{} {
 	result := map[string]interface{}{
@@ -91,6 +100,18 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 		result["source"] = m.Source
 	}
 
+	if m.UserID > 0 {
+		result["user_id"] = m.UserID
+	}
+
+	if m.KBID > 0 {
+		result["kb_id"] = m.KBID
+	}
+
+	if m.DocumentID > 0 {
+		result["document_id"] = m.DocumentID
+	}
+
 	if m.ChunkIndex >= 0 {
 		result["chunk_index"] = m.ChunkIndex
 	}
@@ -99,7 +120,6 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 		result["total_chunks"] = m.TotalChunks
 	}
 
-	// 合并额外的字段
 	for k, v := range m.Extra {
 		result[k] = v
 	}

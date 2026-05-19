@@ -388,6 +388,18 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	if config.Global.RAG.Enabled {
+		if manager, err := milvus.GetMilvusManager(); err == nil {
+			collection := config.Global.Milvus.GetCollection("knowledge")
+			if collection == "" {
+				collection = config.Global.Milvus.CollectionName
+			}
+			if err := manager.DeleteDocumentVectors(ctx, collection, documentID); err != nil {
+				log.Printf("[KB Delete] failed to delete vectors from Milvus: document_id=%d collection=%s err=%v", documentID, collection, err)
+			}
+		}
+	}
+
 	response.Success(ctx, c, map[string]interface{}{
 		"document_id": documentID,
 		"deleted":     true,
@@ -441,11 +453,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	expr := fmt.Sprintf("metadata[\"user_id\"] == %d && metadata[\"kb_id\"] == %d", userID, req.KBID)
 
 	start := time.Now()
-	docs, err := retriever.RetrieveWithDatabaseAndCollection(ctx, req.Query, config.Global.Milvus.DatabaseName, collection, &milvus.RetrieveOptions{
-		Expr:       expr,
-		TopK:       topK,
-		Collection: collection,
-	})
+	docs, err := retriever.RetrieveKnowledge(ctx, req.Query, userID, req.KBID, topK, collection)
 	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", err))
@@ -463,7 +471,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			continue
 		}
 		storedDoc, err := model.KBDocumentDao.GetByID(documentID)
-		if err != nil || storedDoc.UserID != userID || storedDoc.KbID != req.KBID {
+		if err != nil || storedDoc.UserID != userID || storedDoc.KbID != req.KBID || storedDoc.Deleted != 0 {
 			continue
 		}
 
