@@ -11,6 +11,13 @@
 本文档风格与现有路线文档保持一致：
 目标 -> 路线 -> 模块任务 -> 验收门禁 -> 下一步入口。
 
+统一口径说明：
+
+1. `统一检索结果契约` 固定指：`content/score/citation/source`。
+2. `source` 在 Phase 0 最小包含：`route/collection`。
+3. `Collection 一致性校验` 固定指：导入 Collection、查询 Collection、当前 active Collection 三者一致。
+4. `结构化检索日志` 固定至少包含：`query/user_id/kb_id/expr/topk/rewrite/routes/final_count/duration_ms`。
+
 ---
 
 ## 2. Phase 0 范围边界
@@ -20,6 +27,8 @@
 1. 知识库创建、文档上传、异步入库、检索命中、删除回收。
 2. 入库任务状态可追踪：`pending/processing/completed/failed`。
 3. 检索结果返回最小引用元数据。
+4. 检索路径统一返回稳定的 `score/citation/source` 字段。
+5. 关键配置错误可在启动阶段被发现，而不是运行中隐性失败。
 
 ## 2.2 本阶段明确不做
 
@@ -72,11 +81,16 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 2. 启动时执行健康检查并输出日志。
 3. 初始化失败策略（Phase 0 建议 fail-fast，直接失败）。
 4. 补充配置检查（Milvus/Embedding 必填项）。
+5. 增加 Collection 一致性校验：
+   - 当前配置的 CollectionName 非空
+   - 查询使用 Collection 与导入使用 Collection 一致
+   - Collection 不存在时启动直接报错
 
 ### 验收
 
 1. 服务启动日志明确显示 Milvus 初始化成功。
 2. Milvus 不可用时服务按预期失败，不出现半可用状态。
+3. Collection 配错时可在启动日志中直接定位。
 
 ---
 
@@ -117,6 +131,11 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 9. `error_msg`
 10. `deleted` index
 11. `created_at/updated_at`
+
+补充要求：
+
+1. `file_hash` 用于重复上传识别与幂等保护。
+2. 同一 `kb_id + file_hash` 的重复上传，至少要支持“拒绝重复”或“复用已有结果”二选一。
 
 `kb_ingest_job`
 1. `id` PK
@@ -174,11 +193,15 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
    - `chunk_id`
    - `file_name`
    - `chunk_index`
+4. `source`：
+   - `route`（Phase 0 固定为 `dense`）
+   - `collection`
 
 ### 验收
 
 1. 全部 API 可通过 Postman/curl 调通。
 2. 统一响应格式与现有 `response.Success/Error` 一致。
+3. 检索接口所有结果都稳定带 `score/citation/source`。
 
 ---
 
@@ -214,6 +237,11 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 5. 向量入库
 6. 回写 chunk_count 和状态
 
+补充要求：
+
+1. 消费日志采用结构化字段，至少包含 `job_id/document_id/kb_id/user_id/status/error_msg/duration_ms`。
+2. 对解析失败、embedding 失败、Milvus 写入失败做错误分类，便于 Phase 1 接重试与补偿。
+
 ### 验收
 
 1. 上传后能看到 job 状态变化。
@@ -242,11 +270,18 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 3. `top_k` 保护：
    - 默认 5
    - 最大 20
+4. 检索执行路径统一：
+   - 所有检索请求走同一检索方法
+   - 保证 `score` 注入逻辑不因分支不同而丢失
+5. 检索返回结果标准化：
+   - `content/score/citation/source`
+   - 后续 Phase 2 可无缝扩展 `route/rerank_score`
 
 ### 验收
 
 1. 同文档关键词可检索命中。
 2. 跨用户/跨 kb_id 无法命中（隔离生效）。
+3. 任意检索路径下 `score` 字段不为空。
 
 ---
 
@@ -287,12 +322,16 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 5. 删除文档后检索不命中。
 6. 非法文件类型拒绝上传。
 7. 大文件超限被拒绝。
+8. 重复上传同一文件时，`file_hash` 去重策略按预期生效。
+9. Collection 配错时服务启动失败且报错可读。
+10. 检索结果稳定包含 `score/citation/source`。
 
 ### 回归测试清单
 
 1. 简历上传链路不受影响。
 2. 面试主流程接口不受影响。
 3. 服务重启后数据与状态一致。
+4. 原有 Milvus 检索链路未因统一检索入口而出现结果回退。
 
 ### 回滚预案（Phase 0）
 
@@ -327,6 +366,12 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 3. 后端C：L3 + L4（消费、入库、检索）
 4. 前端：L5（页面与轮询）
 5. QA/联调：L6（测试、验收记录）
+
+补充协作约束：
+
+1. 后端A 与后端C 需先冻结 `kb_document` 与 chunk metadata 契约，再并行开发。
+2. 后端B 与前端在联调前先冻结检索响应结构，至少确认 `score/citation/source` 字段命名。
+3. QA 在 Phase 0 就要把“重复上传”“Collection 配错”“score 缺失”纳入固定回归项。
 
 ---
 
