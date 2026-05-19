@@ -76,6 +76,8 @@ func (q *RedisQueue) Subscribe(ctx context.Context, handler MessageHandler) erro
 	channels := []string{
 		fmt.Sprintf("interview:messages:%s", MessageTypeEvaluationReport),
 		fmt.Sprintf("interview:messages:%s", MessageTypeTopicEvaluation),
+		fmt.Sprintf("interview:messages:%s", MessageTypeResumeParse),
+		fmt.Sprintf("interview:messages:%s", MessageTypeKnowledgeIngest),
 	}
 
 	log.Printf("[RedisQueue] Subscribing to channels: %v", channels)

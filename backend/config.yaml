@@ -112,7 +112,7 @@ Milvus:
   Collections:
     feishu: 'feishu_docs_20251126' # 飞书文档集合
     interview: 'interview_questions' # 面试题库集合
-    knowledge: 'knowledge_base' # 知识库集合
+    knowledge: 'documents' # 知识库集合
 
   # 检索配置
   TopK: 5 # 返回的最相似文档数量

@@ -121,6 +121,7 @@ func (q *RedisStreamQueue) Subscribe(ctx context.Context, handler MessageHandler
 		fmt.Sprintf("interview:stream:%s", MessageTypeEvaluationReport),
 		fmt.Sprintf("interview:stream:%s", MessageTypeTopicEvaluation),
 		fmt.Sprintf("interview:stream:%s", MessageTypeResumeParse),
+		fmt.Sprintf("interview:stream:%s", MessageTypeKnowledgeIngest),
 	}
 
 	log.Printf("[RedisStream] Consumer %s subscribing to streams: %v", q.consumerName, streams)
