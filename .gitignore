@@ -14,4 +14,4 @@ doc/营销/
 # 忽略学习文档
 backend/studyDocs/
 # 忽略 TRAE 生成的文档
-.trae/documents/
+.trae
