@@ -99,6 +99,22 @@ func (s *IndexerService) GetIndexer() *milvus.Indexer {
 }
 
 // GetConfig 获取配置
+func (s *IndexerService) DeleteByExpr(ctx context.Context, collection string, expr string) error {
+	if s.config == nil || s.config.Client == nil {
+		return fmt.Errorf("milvus client is nil")
+	}
+	if collection == "" {
+		return fmt.Errorf("collection name is empty")
+	}
+	if expr == "" {
+		return fmt.Errorf("delete expression is empty")
+	}
+	if err := s.config.Client.Delete(ctx, collection, "", expr); err != nil {
+		return fmt.Errorf("failed to delete vectors from collection %s: %w", collection, err)
+	}
+	return nil
+}
+
 func (s *IndexerService) GetConfig() *milvus.IndexerConfig {
 	return s.config
 }

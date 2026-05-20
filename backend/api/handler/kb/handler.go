@@ -584,6 +584,18 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	if config.Global.RAG.Enabled {
+		if manager, err := milvus.GetMilvusManager(); err == nil {
+			collection := config.Global.Milvus.GetCollection("knowledge")
+			if collection == "" {
+				collection = config.Global.Milvus.CollectionName
+			}
+			if err := manager.DeleteDocumentVectors(ctx, collection, documentID); err != nil {
+				log.Printf("[KB Delete] failed to delete vectors from Milvus: document_id=%d collection=%s err=%v", documentID, collection, err)
+			}
+		}
+	}
+
 	response.Success(ctx, c, map[string]interface{}{
 		"document_id": documentID,
 		"deleted":     true,
@@ -669,17 +681,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	if collection == "" {
 		collection = config.Global.Milvus.CollectionName
 	}
+	activeGlobalKBID := uint64(0)
+	if len(kbIDs) > 0 {
+		activeGlobalKBID = kbIDs[0]
+	}
 	expr := buildKBFilterExpr(kbIDs)
 	retrieveTimeout := resolveRetrieveTimeout()
 	retrieveCtx, cancel := context.WithTimeout(ctx, retrieveTimeout)
 	defer cancel()
 
 	start := time.Now()
-	docs, err := retriever.RetrieveWithDatabaseAndCollection(retrieveCtx, req.Query, config.Global.Milvus.DatabaseName, collection, &milvus.RetrieveOptions{
-		Expr:       expr,
-		TopK:       topK,
-		Collection: collection,
-	})
+	docs, err := retriever.RetrieveKnowledge(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(err, retrieveCtx)

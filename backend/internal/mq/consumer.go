@@ -289,7 +289,7 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
 
-	now := time.Now().UTC().Format(time.RFC3339)
+	baseMeta := milvus.NewKBDocumentMetadata(payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
 	totalChunks := len(chunks)
 	for i, chunk := range chunks {
 		if chunk == nil {
@@ -301,15 +301,11 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		if chunk.MetaData == nil {
 			chunk.MetaData = map[string]interface{}{}
 		}
-		chunk.MetaData["user_id"] = payload.UserID
-		chunk.MetaData["operator_admin_id"] = payload.OperatorAdminID
-		chunk.MetaData["kb_scope"] = "global"
-		chunk.MetaData["kb_id"] = payload.KBID
-		chunk.MetaData["document_id"] = payload.DocumentID
-		chunk.MetaData["chunk_index"] = i
-		chunk.MetaData["total_chunks"] = totalChunks
-		chunk.MetaData["file_name"] = docRecord.FileName
-		chunk.MetaData["created_at"] = now
+		baseMeta.ChunkIndex = i
+		baseMeta.TotalChunks = totalChunks
+		for k, v := range baseMeta.ToMap() {
+			chunk.MetaData[k] = v
+		}
 	}
 
 	if _, err := manager.GetIndexerService().Store(ctx, chunks); err != nil {

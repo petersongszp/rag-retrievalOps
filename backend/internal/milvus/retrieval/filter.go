@@ -18,6 +18,13 @@ func BuildFilterExpr(opts *RetrieveOptions) string {
 
 	var conditions []string
 
+	if opts.KBScope != "" {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_scope\"] == '%s'", opts.KBScope))
+	}
+	if opts.ActiveGlobalKBID > 0 {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_id\"] == %d", opts.ActiveGlobalKBID))
+	}
+
 	// 语言类型过滤
 	if opts.Language != "" {
 		// JSON 字段过滤：使用 Milvus JSON 字段访问语法 metadata['language']

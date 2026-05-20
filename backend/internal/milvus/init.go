@@ -243,3 +243,11 @@ func (m *MilvusManager) HealthCheck(ctx context.Context) error {
 	log.Printf("Milvus health check passed, collections count: %d", len(collections))
 	return nil
 }
+
+func (m *MilvusManager) DeleteDocumentVectors(ctx context.Context, collection string, documentID uint64) error {
+	if m.IndexerService == nil {
+		return fmt.Errorf("indexer service is nil")
+	}
+	expr := fmt.Sprintf("metadata[\"document_id\"] == %d", documentID)
+	return m.IndexerService.DeleteByExpr(ctx, collection, expr)
+}
