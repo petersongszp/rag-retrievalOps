@@ -61,6 +61,40 @@ func (d *_KBKnowledgeBase) GetByUserIDAndName(userID uint, name string) (*KBKnow
 	return &kb, nil
 }
 
+func (d *_KBKnowledgeBase) GetByName(name string) (*KBKnowledgeBase, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var kb KBKnowledgeBase
+	err := getDB().Where("name = ?", name).First(&kb).Error
+	if err != nil {
+		return nil, err
+	}
+	return &kb, nil
+}
+
+func (d *_KBKnowledgeBase) List(page, pageSize int) ([]*KBKnowledgeBase, int64, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var list []*KBKnowledgeBase
+	var total int64
+
+	query := getDB().Model(&KBKnowledgeBase{})
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+
+	err := query.Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at DESC").
+		Find(&list).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
 func (d *_KBKnowledgeBase) ListByUserID(userID uint, page, pageSize int) ([]*KBKnowledgeBase, int64, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
@@ -81,6 +115,22 @@ func (d *_KBKnowledgeBase) ListByUserID(userID uint, page, pageSize int) ([]*KBK
 		return nil, 0, err
 	}
 	return list, total, nil
+}
+
+func (d *_KBKnowledgeBase) ListIDsByStatus(status KBKnowledgeBaseStatus) ([]uint64, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+
+	ids := make([]uint64, 0)
+	query := getDB().Model(&KBKnowledgeBase{})
+	if status != "" {
+		query = query.Where("status = ?", status)
+	}
+	if err := query.Pluck("id", &ids).Error; err != nil {
+		return nil, err
+	}
+	return ids, nil
 }
 
 func (d *_KBKnowledgeBase) UpdateByID(id uint64, updates map[string]interface{}) error {

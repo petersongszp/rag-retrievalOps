@@ -2,17 +2,21 @@ package config
 
 import (
 	"bytes"
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 
 	"gopkg.in/yaml.v3"
 )
 
-// Config 应用程序配置结构
+// Config 搴旂敤绋嬪簭閰嶇疆缁撴瀯
 type Config struct {
 	Host             string             `yaml:"host"`
 	Port             int                `yaml:"port"`
@@ -29,31 +33,32 @@ type Config struct {
 	Embedding        EmbeddingConfig    `yaml:"Embedding"`
 	Milvus           MilvusConfig       `yaml:"Milvus"`
 	DocumentSplitter SplitterConfig     `yaml:"DocumentSplitter"`
-	Wechat           WechatConfig       `yaml:"wechat"`       // 微信配置
-	GitHub           GitHubConfig       `yaml:"github"`       // GitHub OAuth 配置
-	GoogleOAuth      GoogleOAuthConfig  `yaml:"google_oauth"` // Google OAuth 配置（邮箱登录）
-	Feishu           FeishuConfig       `yaml:"feishu"`       // 飞书配置
-	Email            EmailConfig        `yaml:"email"`        // 邮件配置
-	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 限流配置
-	Payment          PaymentConfig      `yaml:"payment"`      // 支付配置
+	Wechat           WechatConfig       `yaml:"wechat"`       // 寰俊閰嶇疆
+	GitHub           GitHubConfig       `yaml:"github"`       // GitHub OAuth 閰嶇疆
+	GoogleOAuth      GoogleOAuthConfig  `yaml:"google_oauth"` // Google OAuth 閰嶇疆锛堥偖绠辩櫥褰曪級
+	Feishu           FeishuConfig       `yaml:"feishu"`       // 椋炰功閰嶇疆
+	Email            EmailConfig        `yaml:"email"`        // 閭欢閰嶇疆
+	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 闄愭祦閰嶇疆
+	Payment          PaymentConfig      `yaml:"payment"`      // 鏀粯閰嶇疆
+	ConfigVersion    string             `yaml:"-"`
 }
 
-// PaymentConfig 支付配置
+// PaymentConfig 鏀粯閰嶇疆
 type PaymentConfig struct {
 	Stripe            StripeConfig `yaml:"stripe"`
 	PayPal            PayPalConfig `yaml:"paypal"`
-	WebhookTimeout    string       `yaml:"webhook_timeout"`     // webhook 事件时间窗口，如 "5m"
-	AllowedReturnURLs []string     `yaml:"allowed_return_urls"` // success/cancel URL 白名单
+	WebhookTimeout    string       `yaml:"webhook_timeout"`     // webhook 浜嬩欢鏃堕棿绐楀彛锛屽 "5m"
+	AllowedReturnURLs []string     `yaml:"allowed_return_urls"` // success/cancel URL 鐧藉悕鍗?
 }
 
-// StripeConfig Stripe 配置
+// StripeConfig Stripe 閰嶇疆
 type StripeConfig struct {
 	SecretKey      string `yaml:"secret_key"`
 	WebhookSecret  string `yaml:"webhook_secret"`
 	PublishableKey string `yaml:"publishable_key"`
 }
 
-// PayPalConfig PayPal 配置
+// PayPalConfig PayPal 閰嶇疆
 type PayPalConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
@@ -61,21 +66,21 @@ type PayPalConfig struct {
 	Sandbox      bool   `yaml:"sandbox"`
 }
 
-// GitHubConfig GitHub OAuth 配置
+// GitHubConfig GitHub OAuth 閰嶇疆
 type GitHubConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
 }
 
-// GoogleOAuthConfig Google OAuth 配置（邮箱登录）
+// GoogleOAuthConfig Google OAuth 閰嶇疆锛堥偖绠辩櫥褰曪級
 type GoogleOAuthConfig struct {
 	ClientID     string `yaml:"client_id"`
 	ClientSecret string `yaml:"client_secret"`
 	RedirectURL  string `yaml:"redirect_url"`
 }
 
-// EmailConfig 邮件配置
+// EmailConfig 閭欢閰嶇疆
 type EmailConfig struct {
 	SMTPHost  string `yaml:"smtp_host"`
 	SMTPPort  int    `yaml:"smtp_port"`
@@ -84,20 +89,20 @@ type EmailConfig struct {
 	FromEmail string `yaml:"from_email"`
 }
 
-// WechatConfig 微信配置
+// WechatConfig 寰俊閰嶇疆
 type WechatConfig struct {
 	AppID       string `yaml:"app_id"`
 	AppSecret   string `yaml:"app_secret"`
 	RedirectURL string `yaml:"redirect_url"`
 }
 
-// FeishuConfig 飞书配置
+// FeishuConfig 椋炰功閰嶇疆
 type FeishuConfig struct {
-	WebhookURL string `yaml:"webhook_url"` // 飞书机器人 Webhook URL
-	Enabled    bool   `yaml:"enabled"`     // 是否启用飞书告警
+	WebhookURL string `yaml:"webhook_url"` // 椋炰功鏈哄櫒浜?Webhook URL
+	Enabled    bool   `yaml:"enabled"`     // 鏄惁鍚敤椋炰功鍛婅
 }
 
-// CORSConfig CORS配置
+// CORSConfig CORS閰嶇疆
 type CORSConfig struct {
 	AllowOrigins     []string `yaml:"allow_origins"`
 	AllowMethods     []string `yaml:"allow_methods"`
@@ -106,7 +111,7 @@ type CORSConfig struct {
 	AllowCredentials bool     `yaml:"allow_credentials"`
 }
 
-// DatabaseConfig 数据库配置
+// DatabaseConfig 鏁版嵁搴撻厤缃?
 type DatabaseConfig struct {
 	Driver          string `yaml:"driver"`
 	DSN             string `yaml:"dsn"`
@@ -115,7 +120,7 @@ type DatabaseConfig struct {
 	ConnMaxLifetime string `yaml:"conn_max_lifetime"`
 }
 
-// RedisConfig Redis配置
+// RedisConfig Redis閰嶇疆
 type RedisConfig struct {
 	Addr         string `yaml:"addr"`
 	Password     string `yaml:"password"`
@@ -127,27 +132,27 @@ type RedisConfig struct {
 	MinIdleConns int    `yaml:"min_idle_conns"`
 }
 
-// HertzConfig Hertz框架配置（含 11.1 高并发相关）
+// HertzConfig Hertz妗嗘灦閰嶇疆锛堝惈 11.1 楂樺苟鍙戠浉鍏筹級
 type HertzConfig struct {
 	LogLevel     string          `yaml:"log_level"`
 	LogPath      string          `yaml:"log_path"`
 	ReadTimeout  string          `yaml:"read_timeout"`
 	WriteTimeout string          `yaml:"write_timeout"`
 	IdleTimeout  string          `yaml:"idle_timeout"`
-	KeepAlive    bool            `yaml:"keep_alive"` // 11.1.1 连接池：是否开启 KeepAlive
-	GOMAXPROCS   int             `yaml:"gomaxprocs"` // 11.1.2 协程模型：P 数量，0 表示不设置（使用默认）
-	RateLimit    RateLimitConfig `yaml:"rate_limit"` // 11.1.3 限流：支持分布式 Redis 限流
+	KeepAlive    bool            `yaml:"keep_alive"` // 11.1.1 杩炴帴姹狅細鏄惁寮€鍚?KeepAlive
+	GOMAXPROCS   int             `yaml:"gomaxprocs"` // 11.1.2 鍗忕▼妯″瀷锛歅 鏁伴噺锛? 琛ㄧず涓嶈缃紙浣跨敤榛樿锛?
+	RateLimit    RateLimitConfig `yaml:"rate_limit"` // 11.1.3 闄愭祦锛氭敮鎸佸垎甯冨紡 Redis 闄愭祦
 }
 
-// RateLimitConfig 限流配置
+// RateLimitConfig 闄愭祦閰嶇疆
 type RateLimitConfig struct {
-	RPS            int    `yaml:"rps"`              // 每秒请求数
-	Burst          int    `yaml:"burst"`            // 突发容量
-	UseRedis       bool   `yaml:"use_redis"`        // 是否使用 Redis 分布式限流
-	RedisKeyPrefix string `yaml:"redis_key_prefix"` // Redis 键前缀，空则用 "rl:"
+	RPS            int    `yaml:"rps"`              // 姣忕璇锋眰鏁?
+	Burst          int    `yaml:"burst"`            // 绐佸彂瀹归噺
+	UseRedis       bool   `yaml:"use_redis"`        // 鏄惁浣跨敤 Redis 鍒嗗竷寮忛檺娴?
+	RedisKeyPrefix string `yaml:"redis_key_prefix"` // Redis 閿墠缂€锛岀┖鍒欑敤 "rl:"
 }
 
-// EinoConfig Eino框架配置
+// EinoConfig Eino妗嗘灦閰嶇疆
 type EinoConfig struct {
 	Model       string  `yaml:"model"`
 	APIKey      string  `yaml:"api_key"`
@@ -156,11 +161,11 @@ type EinoConfig struct {
 	Temperature float64 `yaml:"temperature"`
 	RetryCount  int     `yaml:"retry_count"`
 	RetryDelay  string  `yaml:"retry_delay"`
-	// 11.2.3 推理成本控制：每用户每日 Token 配额（含 Reasoning Model R1/o3 等），0 表示不限制
+	// 11.2.3 鎺ㄧ悊鎴愭湰鎺у埗锛氭瘡鐢ㄦ埛姣忔棩 Token 閰嶉锛堝惈 Reasoning Model R1/o3 绛夛級锛? 琛ㄧず涓嶉檺鍒?
 	TokenQuotaPerUserPerDay int `yaml:"token_quota_per_user_per_day"`
 }
 
-// InterviewConfig 面试系统配置
+// InterviewConfig 闈㈣瘯绯荤粺閰嶇疆
 type InterviewConfig struct {
 	MaxDuration     string `yaml:"max_duration"`
 	QuestionTimeout string `yaml:"question_timeout"`
@@ -168,27 +173,27 @@ type InterviewConfig struct {
 	MinQuestions    int    `yaml:"min_questions"`
 }
 
-// SecurityConfig 安全性配置
+// SecurityConfig 瀹夊叏鎬ч厤缃?
 type SecurityConfig struct {
 	JWTSecret     string     `yaml:"jwt_secret"`
 	JWTExpiration string     `yaml:"jwt_expiration"`
 	CORS          CORSConfig `yaml:"cors"`
 }
 
-// GoogleConfig Google搜索配置
+// GoogleConfig Google鎼滅储閰嶇疆
 type GoogleConfig struct {
 	APIKey         string `yaml:"api_key"`
 	SearchEngineID string `yaml:"search_engine_id"`
 }
 
-// OpenAIConfig OpenAI配置
+// OpenAIConfig OpenAI閰嶇疆
 type OpenAIConfig struct {
 	APIKey    string `yaml:"api_key"`
 	ModelName string `yaml:"model_name"`
 	BaseURL   string `yaml:"base_url"`
 }
 
-// LLMConfig LLM 大模型配置（全局统一使用）
+// LLMConfig LLM 澶фā鍨嬮厤缃紙鍏ㄥ眬缁熶竴浣跨敤锛?
 type LLMConfig struct {
 	APIKey       string `yaml:"api_key"`
 	BaseURL      string `yaml:"base_url"`
@@ -196,31 +201,47 @@ type LLMConfig struct {
 	ProviderName string `yaml:"provider_name"`
 }
 
-// RAGConfig RAG 能力总开关
+// RAGConfig RAG 鑳藉姏鎬诲紑鍏?
 type RAGConfig struct {
-	Enabled bool `yaml:"enabled"`
+	Enabled      bool            `yaml:"enabled"`
+	Environment  string          `yaml:"environment"`
+	FeatureFlags RAGFeatureFlags `yaml:"feature_flags"`
+	Thresholds   RAGThresholds   `yaml:"thresholds"`
 }
 
-// RateLimitModelConfig 单个模型的限流配置
+type RAGFeatureFlags struct {
+	EnableProdGuard     bool `yaml:"enable_prod_guard"`
+	EnableIngestRetry   bool `yaml:"enable_ingest_retry"`
+	EnableRetrieveAudit bool `yaml:"enable_retrieve_audit"`
+}
+
+type RAGThresholds struct {
+	MaxRetryCount     int `yaml:"max_retry_count"`
+	RetryBackoffMS    int `yaml:"retry_backoff_ms"`
+	RetrieveTimeoutMS int `yaml:"retrieve_timeout_ms"`
+	UserQPSLimit      int `yaml:"user_qps_limit"`
+}
+
+// RateLimitModelConfig 鍗曚釜妯″瀷鐨勯檺娴侀厤缃?
 type RateLimitModelConfig struct {
-	RPM int `yaml:"rpm"` // 每分钟最大请求数
-	TPM int `yaml:"tpm"` // 每分钟最大 Token 数
+	RPM int `yaml:"rpm"` // 姣忓垎閽熸渶澶ц姹傛暟
+	TPM int `yaml:"tpm"` // 姣忓垎閽熸渶澶?Token 鏁?
 }
 
-// LLMRateLimitConfig LLM API 限流配置（与 Hertz 的 RateLimitConfig 区分）
+// LLMRateLimitConfig LLM API 闄愭祦閰嶇疆锛堜笌 Hertz 鐨?RateLimitConfig 鍖哄垎锛?
 type LLMRateLimitConfig struct {
 	Enabled    bool                            `yaml:"enabled"`
-	DefaultRPM int                             `yaml:"default_rpm"` // 默认 RPM 限制
-	DefaultTPM int                             `yaml:"default_tpm"` // 默认 TPM 限制
-	Models     map[string]RateLimitModelConfig `yaml:"models"`      // 按模型自定义限制
+	DefaultRPM int                             `yaml:"default_rpm"` // 榛樿 RPM 闄愬埗
+	DefaultTPM int                             `yaml:"default_tpm"` // 榛樿 TPM 闄愬埗
+	Models     map[string]RateLimitModelConfig `yaml:"models"`      // 鎸夋ā鍨嬭嚜瀹氫箟闄愬埗
 }
 
-// Global 全局配置实例
+// Global 鍏ㄥ眬閰嶇疆瀹炰緥
 var Global Config
 
-// LoadConfig 从文件加载配置
-// 先对 YAML 原文做环境变量替换（${VAR} / $VAR），再反序列化到结构体。
-// 这样所有配置字段自动支持环境变量注入，无需在 ExpandEnv 中逐字段维护。
+// LoadConfig 浠庢枃浠跺姞杞介厤缃?
+// 鍏堝 YAML 鍘熸枃鍋氱幆澧冨彉閲忔浛鎹紙${VAR} / $VAR锛夛紝鍐嶅弽搴忓垪鍖栧埌缁撴瀯浣撱€?
+// 杩欐牱鎵€鏈夐厤缃瓧娈佃嚜鍔ㄦ敮鎸佺幆澧冨彉閲忔敞鍏ワ紝鏃犻渶鍦?ExpandEnv 涓€愬瓧娈电淮鎶ゃ€?
 func LoadConfig(configPath string) (*Config, error) {
 	data, err := os.ReadFile(configPath)
 	if err != nil {
@@ -234,18 +255,58 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 
+	env := normalizeRAGEnv(strings.TrimSpace(os.Getenv("APP_ENV")))
+	if env == "" {
+		env = normalizeRAGEnv(strings.TrimSpace(os.Getenv("RAG_ENV")))
+	}
+	if env == "" {
+		env = normalizeRAGEnv(strings.TrimSpace(cfg.RAG.Environment))
+	}
+	if env == "" {
+		env = "dev"
+	}
+	cfg.RAG.Environment = env
+
+	loadedPaths := []string{configPath}
+	for _, overlayPath := range buildConfigOverlayPaths(configPath, env) {
+		overlayData, readErr := os.ReadFile(overlayPath)
+		if readErr != nil {
+			if os.IsNotExist(readErr) {
+				continue
+			}
+			return nil, fmt.Errorf("failed to read overlay config %s: %w", overlayPath, readErr)
+		}
+		overlayExpanded := expandEnvInBytes(overlayData)
+		if err = yaml.Unmarshal(overlayExpanded, &cfg); err != nil {
+			return nil, fmt.Errorf("failed to parse overlay config %s: %w", overlayPath, err)
+		}
+		loadedPaths = append(loadedPaths, overlayPath)
+	}
+	cfg.RAG.Environment = env
+
+	if err := cfg.applyRAGEnvOverrides(); err != nil {
+		return nil, err
+	}
+	cfg.applyRAGDefaults()
+	cfg.ConfigVersion = cfg.buildConfigVersion()
+
 	Global = cfg
-	log.Println("配置加载成功")
+	log.Printf("閰嶇疆鍔犺浇鎴愬姛 env=%s files=%s version=%s", cfg.RAG.Environment, strings.Join(loadedPaths, ","), cfg.ConfigVersion)
+	cfg.LogRAGSnapshot()
 	return &cfg, nil
 }
 
-// ValidateRAGPrerequisites 校验 RAG 启用时的最小必填项
+// ValidateRAGPrerequisites 鏍￠獙 RAG 鍚敤鏃剁殑鏈€灏忓繀濉」
 func (c *Config) ValidateRAGPrerequisites() error {
 	if c == nil {
 		return fmt.Errorf("config is nil")
 	}
 	if !c.RAG.Enabled {
 		return nil
+	}
+
+	if !isValidRAGEnv(c.RAG.Environment) {
+		return fmt.Errorf("rag environment must be one of dev/staging/prod, got: %q", c.RAG.Environment)
 	}
 
 	if strings.TrimSpace(c.Milvus.Address) == "" {
@@ -268,10 +329,197 @@ func (c *Config) ValidateRAGPrerequisites() error {
 		return fmt.Errorf("rag enabled but Embedding.Dimensions must be > 0")
 	}
 
+	if c.RAG.FeatureFlags.EnableProdGuard {
+		if c.RAG.Thresholds.MaxRetryCount <= 0 {
+			return fmt.Errorf("rag prod guard enabled but rag.thresholds.max_retry_count must be > 0")
+		}
+		if c.RAG.Thresholds.RetryBackoffMS <= 0 {
+			return fmt.Errorf("rag prod guard enabled but rag.thresholds.retry_backoff_ms must be > 0")
+		}
+		if c.RAG.Thresholds.RetrieveTimeoutMS <= 0 {
+			return fmt.Errorf("rag prod guard enabled but rag.thresholds.retrieve_timeout_ms must be > 0")
+		}
+		if c.RAG.Thresholds.UserQPSLimit <= 0 {
+			return fmt.Errorf("rag prod guard enabled but rag.thresholds.user_qps_limit must be > 0")
+		}
+	}
+
 	return nil
 }
 
-// expandEnvInBytes 对字节切片中的 ${VAR_NAME} / $VAR_NAME 做环境变量替换
+func (c *Config) applyRAGDefaults() {
+	if c == nil {
+		return
+	}
+	if strings.TrimSpace(c.RAG.Environment) == "" {
+		c.RAG.Environment = "dev"
+	}
+	if !c.RAG.FeatureFlags.EnableProdGuard || c.RAG.Environment != "prod" {
+		if c.RAG.Thresholds.MaxRetryCount <= 0 {
+			c.RAG.Thresholds.MaxRetryCount = 3
+		}
+		if c.RAG.Thresholds.RetryBackoffMS <= 0 {
+			c.RAG.Thresholds.RetryBackoffMS = 500
+		}
+		if c.RAG.Thresholds.RetrieveTimeoutMS <= 0 {
+			c.RAG.Thresholds.RetrieveTimeoutMS = 3000
+		}
+		if c.RAG.Thresholds.UserQPSLimit <= 0 {
+			c.RAG.Thresholds.UserQPSLimit = 20
+		}
+	}
+}
+
+func (c *Config) applyRAGEnvOverrides() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLED"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Enabled = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_PROD_GUARD"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableProdGuard = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_INGEST_RETRY"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableIngestRetry = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_RETRIEVE_AUDIT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableRetrieveAudit = value
+	}
+	if value, ok, err := readEnvInt("RAG_MAX_RETRY_COUNT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Thresholds.MaxRetryCount = value
+	}
+	if value, ok, err := readEnvInt("RAG_RETRY_BACKOFF_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Thresholds.RetryBackoffMS = value
+	}
+	if value, ok, err := readEnvInt("RAG_RETRIEVE_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Thresholds.RetrieveTimeoutMS = value
+	}
+	if value, ok, err := readEnvInt("RAG_USER_QPS_LIMIT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Thresholds.UserQPSLimit = value
+	}
+	return nil
+}
+
+func (c *Config) buildConfigVersion() string {
+	data, err := yaml.Marshal(c)
+	if err != nil {
+		return "unknown"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:8])
+}
+
+func (c *Config) LogRAGSnapshot() {
+	if c == nil {
+		return
+	}
+	log.Printf(
+		"[RAG:L0] snapshot version=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} milvus={address:%s database:%s collection:%s}",
+		c.ConfigVersion,
+		c.RAG.Environment,
+		c.RAG.Enabled,
+		c.RAG.FeatureFlags.EnableProdGuard,
+		c.RAG.FeatureFlags.EnableIngestRetry,
+		c.RAG.FeatureFlags.EnableRetrieveAudit,
+		c.RAG.Thresholds.MaxRetryCount,
+		c.RAG.Thresholds.RetryBackoffMS,
+		c.RAG.Thresholds.RetrieveTimeoutMS,
+		c.RAG.Thresholds.UserQPSLimit,
+		maskAddress(c.Milvus.Address),
+		c.Milvus.DatabaseName,
+		c.Milvus.CollectionName,
+	)
+}
+
+func buildConfigOverlayPaths(baseConfigPath, env string) []string {
+	if env == "" {
+		return nil
+	}
+	baseDir := filepath.Dir(baseConfigPath)
+	return []string{
+		filepath.Join(baseDir, fmt.Sprintf("config.%s.yaml", env)),
+		filepath.Join(baseDir, fmt.Sprintf("config.%s.local.yaml", env)),
+	}
+}
+
+func readEnvBool(key string) (bool, bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return false, false, nil
+	}
+	value, err := strconv.ParseBool(strings.TrimSpace(raw))
+	if err != nil {
+		return false, true, fmt.Errorf("invalid bool env %s=%q: %w", key, raw, err)
+	}
+	return value, true, nil
+}
+
+func readEnvInt(key string) (int, bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return 0, false, nil
+	}
+	value, err := strconv.Atoi(strings.TrimSpace(raw))
+	if err != nil {
+		return 0, true, fmt.Errorf("invalid int env %s=%q: %w", key, raw, err)
+	}
+	return value, true, nil
+}
+
+func normalizeRAGEnv(env string) string {
+	normalized := strings.ToLower(strings.TrimSpace(env))
+	switch normalized {
+	case "prod", "production":
+		return "prod"
+	case "staging", "stage":
+		return "staging"
+	case "dev", "development", "local":
+		return "dev"
+	case "":
+		return ""
+	default:
+		return normalized
+	}
+}
+
+func isValidRAGEnv(env string) bool {
+	switch normalizeRAGEnv(env) {
+	case "dev", "staging", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func maskAddress(addr string) string {
+	trimmed := strings.TrimSpace(addr)
+	if trimmed == "" {
+		return ""
+	}
+	if len(trimmed) <= 6 {
+		return "***"
+	}
+	return trimmed[:3] + "***" + trimmed[len(trimmed)-3:]
+}
+
+// expandEnvInBytes 瀵瑰瓧鑺傚垏鐗囦腑鐨?${VAR_NAME} / $VAR_NAME 鍋氱幆澧冨彉閲忔浛鎹?
 func expandEnvInBytes(data []byte) []byte {
 	re := regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
 	result := re.ReplaceAllFunc(data, func(match []byte) []byte {
@@ -289,47 +537,47 @@ func expandEnvInBytes(data []byte) []byte {
 	return result
 }
 
-// EmbeddingConfig Embedding服务配置
+// EmbeddingConfig Embedding鏈嶅姟閰嶇疆
 type EmbeddingConfig struct {
-	// 认证配置（二选一）
-	APIKey    string `yaml:"APIKey"`    // 使用 API Key 认证
-	AccessKey string `yaml:"AccessKey"` // 使用 AK 认证
-	SecretKey string `yaml:"SecretKey"` // 使用 SK 认证
+	// 璁よ瘉閰嶇疆锛堜簩閫変竴锛?
+	APIKey    string `yaml:"APIKey"`    // 浣跨敤 API Key 璁よ瘉
+	AccessKey string `yaml:"AccessKey"` // 浣跨敤 AK 璁よ瘉
+	SecretKey string `yaml:"SecretKey"` // 浣跨敤 SK 璁よ瘉
 
-	// 服务配置
-	Model   string `yaml:"Model"`   // Ark 平台的端点 ID
-	BaseURL string `yaml:"BaseURL"` // API 基础 URL
-	Region  string `yaml:"Region"`  // 服务区域
+	// 鏈嶅姟閰嶇疆
+	Model   string `yaml:"Model"`   // Ark 骞冲彴鐨勭鐐?ID
+	BaseURL string `yaml:"BaseURL"` // API 鍩虹 URL
+	Region  string `yaml:"Region"`  // 鏈嶅姟鍖哄煙
 
-	// 高级配置
-	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
-	RetryTimes int           `yaml:"RetryTimes"` // 重试次数
-	Dimensions int           `yaml:"Dimensions"` // 输出向量维度
-	User       string        `yaml:"User"`       // 用户标识
+	// 楂樼骇閰嶇疆
+	Timeout    time.Duration `yaml:"Timeout"`    // 璇锋眰瓒呮椂鏃堕棿
+	RetryTimes int           `yaml:"RetryTimes"` // 閲嶈瘯娆℃暟
+	Dimensions int           `yaml:"Dimensions"` // 杈撳嚭鍚戦噺缁村害
+	User       string        `yaml:"User"`       // 鐢ㄦ埛鏍囪瘑
 }
 
-// MilvusConfig Milvus向量数据库配置
+// MilvusConfig Milvus鍚戦噺鏁版嵁搴撻厤缃?
 type MilvusConfig struct {
-	// 连接配置
-	Address        string `yaml:"Address"`        // Milvus 服务地址
-	Username       string `yaml:"Username"`       // 用户名（可选）
-	Password       string `yaml:"Password"`       // 密码（可选）
-	DatabaseName   string `yaml:"DatabaseName"`   // 数据库名称
-	CollectionName string `yaml:"CollectionName"` // 默认集合名称
+	// 杩炴帴閰嶇疆
+	Address        string `yaml:"Address"`        // Milvus 鏈嶅姟鍦板潃
+	Username       string `yaml:"Username"`       // 鐢ㄦ埛鍚嶏紙鍙€夛級
+	Password       string `yaml:"Password"`       // 瀵嗙爜锛堝彲閫夛級
+	DatabaseName   string `yaml:"DatabaseName"`   // 鏁版嵁搴撳悕绉?
+	CollectionName string `yaml:"CollectionName"` // 榛樿闆嗗悎鍚嶇О
 
-	// 多集合配置
-	Collections map[string]string `yaml:"Collections"` // 多个集合的命名映射
+	// 澶氶泦鍚堥厤缃?
+	Collections map[string]string `yaml:"Collections"` // 澶氫釜闆嗗悎鐨勫懡鍚嶆槧灏?
 
-	// 检索配置
-	TopK       int    `yaml:"TopK"`       // 返回的最相似文档数量
-	MetricType string `yaml:"MetricType"` // 距离度量类型: L2, IP, COSINE
+	// 妫€绱㈤厤缃?
+	TopK       int    `yaml:"TopK"`       // 杩斿洖鐨勬渶鐩镐技鏂囨。鏁伴噺
+	MetricType string `yaml:"MetricType"` // 璺濈搴﹂噺绫诲瀷: L2, IP, COSINE
 
-	// 超时配置
-	ConnectTimeout time.Duration `yaml:"ConnectTimeout"` // 连接超时
-	SearchTimeout  time.Duration `yaml:"SearchTimeout"`  // 搜索超时
+	// 瓒呮椂閰嶇疆
+	ConnectTimeout time.Duration `yaml:"ConnectTimeout"` // 杩炴帴瓒呮椂
+	SearchTimeout  time.Duration `yaml:"SearchTimeout"`  // 鎼滅储瓒呮椂
 }
 
-// GetCollection 获取指定名称的集合，如果不存在则返回默认集合
+// GetCollection 鑾峰彇鎸囧畾鍚嶇О鐨勯泦鍚堬紝濡傛灉涓嶅瓨鍦ㄥ垯杩斿洖榛樿闆嗗悎
 func (c *MilvusConfig) GetCollection(name string) string {
 	if c.Collections != nil {
 		if col, ok := c.Collections[name]; ok {
@@ -339,18 +587,18 @@ func (c *MilvusConfig) GetCollection(name string) string {
 	return c.CollectionName
 }
 
-// SplitterConfig 文档分割器配置
+// SplitterConfig 鏂囨。鍒嗗壊鍣ㄩ厤缃?
 type SplitterConfig struct {
-	ChunkSize   int      `yaml:"ChunkSize"`   // 目标片段大小（字符数）
-	OverlapSize int      `yaml:"OverlapSize"` // 片段重叠大小（字符数）
-	Separators  []string `yaml:"Separators"`  // 分隔符列表
-	KeepType    int      `yaml:"KeepType"`    // 分隔符保留策略：0=不保留, 1=保留在开头, 2=保留在结尾
+	ChunkSize   int      `yaml:"ChunkSize"`   // 鐩爣鐗囨澶у皬锛堝瓧绗︽暟锛?
+	OverlapSize int      `yaml:"OverlapSize"` // 鐗囨閲嶅彔澶у皬锛堝瓧绗︽暟锛?
+	Separators  []string `yaml:"Separators"`  // 鍒嗛殧绗﹀垪琛?
+	KeepType    int      `yaml:"KeepType"`    // 鍒嗛殧绗︿繚鐣欑瓥鐣ワ細0=涓嶄繚鐣? 1=淇濈暀鍦ㄥ紑澶? 2=淇濈暀鍦ㄧ粨灏?
 }
 
-// ExpandEnv 展开配置中的环境变量引用
-// 支持 ${VAR_NAME} 和 $VAR_NAME 两种语法
+// ExpandEnv 灞曞紑閰嶇疆涓殑鐜鍙橀噺寮曠敤
+// 鏀寔 ${VAR_NAME} 鍜?$VAR_NAME 涓ょ璇硶
 func (c *Config) ExpandEnv() {
-	// 展开 Embedding 配置
+	// 灞曞紑 Embedding 閰嶇疆
 	c.Embedding.APIKey = expandEnvVar(c.Embedding.APIKey)
 	c.Embedding.AccessKey = expandEnvVar(c.Embedding.AccessKey)
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
@@ -359,33 +607,33 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)
 	c.Embedding.User = expandEnvVar(c.Embedding.User)
 
-	// 展开 Database 配置
+	// 灞曞紑 Database 閰嶇疆
 	c.Database.DSN = expandEnvVar(c.Database.DSN)
 	c.Database.Driver = expandEnvVar(c.Database.Driver)
 
-	// 展开 Redis 配置
+	// 灞曞紑 Redis 閰嶇疆
 	c.Redis.Addr = expandEnvVar(c.Redis.Addr)
 	c.Redis.Password = expandEnvVar(c.Redis.Password)
 
-	// 展开 Security 配置
+	// 灞曞紑 Security 閰嶇疆
 	c.Security.JWTSecret = expandEnvVar(c.Security.JWTSecret)
 
-	// 展开 OpenAI 配置
+	// 灞曞紑 OpenAI 閰嶇疆
 	c.OpenAI.APIKey = expandEnvVar(c.OpenAI.APIKey)
 	c.OpenAI.BaseURL = expandEnvVar(c.OpenAI.BaseURL)
 	c.OpenAI.ModelName = expandEnvVar(c.OpenAI.ModelName)
 
-	// 展开 LLM 配置
+	// 灞曞紑 LLM 閰嶇疆
 	c.LLM.APIKey = expandEnvVar(c.LLM.APIKey)
 	c.LLM.BaseURL = expandEnvVar(c.LLM.BaseURL)
 	c.LLM.ModelName = expandEnvVar(c.LLM.ModelName)
 	c.LLM.ProviderName = expandEnvVar(c.LLM.ProviderName)
 
-	// 展开 Google 配置
+	// 灞曞紑 Google 閰嶇疆
 	c.GoogleSearch.APIKey = expandEnvVar(c.GoogleSearch.APIKey)
 	c.GoogleSearch.SearchEngineID = expandEnvVar(c.GoogleSearch.SearchEngineID)
 
-	// 展开 Milvus 配置
+	// 灞曞紑 Milvus 閰嶇疆
 	c.Milvus.Address = expandEnvVar(c.Milvus.Address)
 	c.Milvus.Username = expandEnvVar(c.Milvus.Username)
 	c.Milvus.Password = expandEnvVar(c.Milvus.Password)
@@ -393,55 +641,55 @@ func (c *Config) ExpandEnv() {
 	c.Milvus.CollectionName = expandEnvVar(c.Milvus.CollectionName)
 	c.Milvus.MetricType = expandEnvVar(c.Milvus.MetricType)
 
-	// 展开 Feishu 配置
+	// 灞曞紑 Feishu 閰嶇疆
 	c.Feishu.WebhookURL = expandEnvVar(c.Feishu.WebhookURL)
 
-	// 展开 GitHub 配置
+	// 灞曞紑 GitHub 閰嶇疆
 	c.GitHub.ClientID = expandEnvVar(c.GitHub.ClientID)
 	c.GitHub.ClientSecret = expandEnvVar(c.GitHub.ClientSecret)
 	c.GitHub.RedirectURL = expandEnvVar(c.GitHub.RedirectURL)
 
-	// 展开 Payment 配置
+	// 灞曞紑 Payment 閰嶇疆
 	c.Payment.Stripe.SecretKey = expandEnvVar(c.Payment.Stripe.SecretKey)
 	c.Payment.Stripe.WebhookSecret = expandEnvVar(c.Payment.Stripe.WebhookSecret)
 	c.Payment.Stripe.PublishableKey = expandEnvVar(c.Payment.Stripe.PublishableKey)
 	c.Payment.PayPal.ClientID = expandEnvVar(c.Payment.PayPal.ClientID)
 	c.Payment.PayPal.ClientSecret = expandEnvVar(c.Payment.PayPal.ClientSecret)
 	c.Payment.PayPal.WebhookID = expandEnvVar(c.Payment.PayPal.WebhookID)
-	// 展开 Google OAuth 配置
+	// 灞曞紑 Google OAuth 閰嶇疆
 	c.GoogleOAuth.ClientID = expandEnvVar(c.GoogleOAuth.ClientID)
 	c.GoogleOAuth.ClientSecret = expandEnvVar(c.GoogleOAuth.ClientSecret)
 	c.GoogleOAuth.RedirectURL = expandEnvVar(c.GoogleOAuth.RedirectURL)
 }
 
-// expandEnvVar 展开字符串中的环境变量引用
-// 支持 ${VAR_NAME} 和 $VAR_NAME 两种语法
+// expandEnvVar 灞曞紑瀛楃涓蹭腑鐨勭幆澧冨彉閲忓紩鐢?
+// 鏀寔 ${VAR_NAME} 鍜?$VAR_NAME 涓ょ璇硶
 func expandEnvVar(s string) string {
 	if s == "" {
 		return s
 	}
 
-	// 匹配 ${VAR_NAME} 或 $VAR_NAME
+	// 鍖归厤 ${VAR_NAME} 鎴?$VAR_NAME
 	re := regexp.MustCompile(`\$\{([^}]+)\}|\$([A-Za-z_][A-Za-z0-9_]*)`)
 
 	result := re.ReplaceAllStringFunc(s, func(match string) string {
-		// 提取变量名
+		// 鎻愬彇鍙橀噺鍚?
 		varName := ""
 		if strings.HasPrefix(match, "${") {
-			// ${VAR_NAME} 格式
+			// ${VAR_NAME} 鏍煎紡
 			varName = match[2 : len(match)-1]
 		} else {
-			// $VAR_NAME 格式
+			// $VAR_NAME 鏍煎紡
 			varName = match[1:]
 		}
 
-		// 获取环境变量值
+		// 鑾峰彇鐜鍙橀噺鍊?
 		value := os.Getenv(varName)
 		if value != "" {
 			return value
 		}
 
-		// 如果环境变量不存在，保持原样
+		// 濡傛灉鐜鍙橀噺涓嶅瓨鍦紝淇濇寔鍘熸牱
 		return match
 	})
 
