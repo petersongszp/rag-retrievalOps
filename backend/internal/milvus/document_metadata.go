@@ -40,7 +40,8 @@ type DocumentMetadata struct {
 
 	Source string `json:"source,omitempty"`
 
-	UserID uint `json:"user_id"`
+	OperatorAdminID uint   `json:"operator_admin_id"`
+	KBScope         string `json:"kb_scope"`
 
 	KBID uint64 `json:"kb_id"`
 
@@ -72,16 +73,17 @@ func NewDocumentMetadata(filePath string, language DocumentLanguage, category Do
 	}
 }
 
-func NewKBDocumentMetadata(userID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
+func NewKBDocumentMetadata(operatorAdminID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
 	return &DocumentMetadata{
-		UserID:      userID,
-		KBID:        kbID,
-		DocumentID:  documentID,
-		FileName:    fileName,
-		ChunkIndex:  0,
-		TotalChunks: 0,
-		CreatedAt:   time.Now().UTC().Format(time.RFC3339),
-		Extra:       make(map[string]interface{}),
+		OperatorAdminID: operatorAdminID,
+		KBScope:         "global",
+		KBID:            kbID,
+		DocumentID:      documentID,
+		FileName:        fileName,
+		ChunkIndex:      0,
+		TotalChunks:     0,
+		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
+		Extra:           make(map[string]interface{}),
 	}
 }
 
@@ -100,8 +102,11 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 		result["source"] = m.Source
 	}
 
-	if m.UserID > 0 {
-		result["user_id"] = m.UserID
+	if m.OperatorAdminID > 0 {
+		result["operator_admin_id"] = m.OperatorAdminID
+	}
+	if m.KBScope != "" {
+		result["kb_scope"] = m.KBScope
 	}
 
 	if m.KBID > 0 {

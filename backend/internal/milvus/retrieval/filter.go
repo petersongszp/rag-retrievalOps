@@ -18,11 +18,11 @@ func BuildFilterExpr(opts *RetrieveOptions) string {
 
 	var conditions []string
 
-	if opts.UserID > 0 {
-		conditions = append(conditions, fmt.Sprintf("metadata[\"user_id\"] == %d", opts.UserID))
+	if opts.KBScope != "" {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_scope\"] == '%s'", opts.KBScope))
 	}
-	if opts.KBID > 0 {
-		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_id\"] == %d", opts.KBID))
+	if opts.ActiveGlobalKBID > 0 {
+		conditions = append(conditions, fmt.Sprintf("metadata[\"kb_id\"] == %d", opts.ActiveGlobalKBID))
 	}
 
 	// 语言类型过滤

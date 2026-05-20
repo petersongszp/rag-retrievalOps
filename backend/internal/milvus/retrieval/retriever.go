@@ -171,15 +171,12 @@ func (s *RetrieverService) GetConfig() *milvus.RetrieverConfig {
 	return s.config
 }
 
-func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, userID uint, kbID uint64, topK int, collection string) ([]*schema.Document, error) {
+func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, activeGlobalKBID uint64, topK int, collection string) ([]*schema.Document, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query is empty")
 	}
-	if userID == 0 {
-		return nil, fmt.Errorf("user_id is required for knowledge retrieval")
-	}
-	if kbID == 0 {
-		return nil, fmt.Errorf("kb_id is required for knowledge retrieval")
+	if activeGlobalKBID == 0 {
+		return nil, fmt.Errorf("active_global_kb_id is required for knowledge retrieval")
 	}
 	if topK <= 0 {
 		topK = 5
@@ -191,10 +188,10 @@ func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, 
 		collection = s.config.Collection
 	}
 	opts := &RetrieveOptions{
-		UserID:     userID,
-		KBID:       kbID,
-		TopK:       topK,
-		Collection: collection,
+		KBScope:         "global",
+		ActiveGlobalKBID: activeGlobalKBID,
+		TopK:            topK,
+		Collection:      collection,
 	}
 	expr := BuildFilterExpr(opts)
 	return SearchWithExpr(ctx, s.client, s.config, query, expr, opts)

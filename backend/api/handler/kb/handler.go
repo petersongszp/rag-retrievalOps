@@ -681,17 +681,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	if collection == "" {
 		collection = config.Global.Milvus.CollectionName
 	}
+	activeGlobalKBID := uint64(0)
+	if len(kbIDs) > 0 {
+		activeGlobalKBID = kbIDs[0]
+	}
 	expr := buildKBFilterExpr(kbIDs)
 	retrieveTimeout := resolveRetrieveTimeout()
 	retrieveCtx, cancel := context.WithTimeout(ctx, retrieveTimeout)
 	defer cancel()
 
 	start := time.Now()
-	docs, err := retriever.RetrieveWithDatabaseAndCollection(retrieveCtx, req.Query, config.Global.Milvus.DatabaseName, collection, &milvus.RetrieveOptions{
-		Expr:       expr,
-		TopK:       topK,
-		Collection: collection,
-	})
+	docs, err := retriever.RetrieveKnowledge(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(err, retrieveCtx)
