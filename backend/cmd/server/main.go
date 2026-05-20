@@ -13,6 +13,7 @@ import (
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/looptrace"
+	"interview-agents/internal/observability/metrics"
 	paymentpkg "interview-agents/internal/payment"
 	paypalAdapter "interview-agents/internal/payment/providers/paypal"
 	stripeAdapter "interview-agents/internal/payment/providers/stripe"
@@ -241,6 +242,7 @@ func main() {
 	s.GET("/health", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
 	})
+	s.GET("/metrics", metrics.PrometheusHandler)
 
 	// 创建一个通道来监听中断信号
 	quit := make(chan os.Signal, 1)

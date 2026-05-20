@@ -18,6 +18,7 @@ import (
 	"interview-agents/internal/config"
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/model"
+	"interview-agents/internal/observability/metrics"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/ledongthuc/pdf"
@@ -166,6 +167,7 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 	payload, err := parseKnowledgeIngestPayload(message.Payload)
 	if err != nil {
 		log.Printf("[KB Ingest] payload parse failed: err=%v", err)
+		metrics.ObserveIngest(time.Since(start), string(model.KBIngestJobStatusFailed), string(knowledgeIngestErrorTypePayload))
 		return nil
 	}
 
@@ -173,21 +175,19 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 		return nil
 	}
 
-	writeStatus := func(jobStatus model.KBIngestJobStatus, docStatus model.KBDocumentStatus, chunkCount int, errorMsg string) {
-		if chunkCount >= 0 {
-			if updateErr := model.KBDocumentDao.UpdateChunkCount(payload.DocumentID, chunkCount); updateErr != nil {
-				log.Printf("[KB Ingest] failed to update chunk_count: job_id=%d document_id=%d err=%v", payload.JobID, payload.DocumentID, updateErr)
-			}
-		}
-		if updateErr := model.KBIngestJobDao.UpdateStatus(payload.JobID, jobStatus, errorMsg); updateErr != nil {
-			log.Printf("[KB Ingest] failed to update job status: job_id=%d status=%s err=%v", payload.JobID, jobStatus, updateErr)
-		}
-		if updateErr := model.KBDocumentDao.UpdateStatus(payload.DocumentID, docStatus, errorMsg); updateErr != nil {
-			log.Printf("[KB Ingest] failed to update document status: document_id=%d status=%s err=%v", payload.DocumentID, docStatus, updateErr)
-		}
+	claimed, claimErr := model.KBIngestJobDao.ClaimForProcessing(payload.JobID)
+	if claimErr != nil {
+		log.Printf("[KB Ingest] failed to claim job for processing: job_id=%d err=%v", payload.JobID, claimErr)
+		return nil
+	}
+	if !claimed {
+		log.Printf("[KB Ingest] job claim ignored due to state mismatch: job_id=%d", payload.JobID)
+		return nil
 	}
 
-	writeStatus(model.KBIngestJobStatusProcessing, model.KBDocumentStatusProcessing, -1, "")
+	if updateErr := model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusProcessing, ""); updateErr != nil {
+		log.Printf("[KB Ingest] failed to update document status to processing: document_id=%d err=%v", payload.DocumentID, updateErr)
+	}
 
 	totalChunks, ingestErr := ingestKnowledgeDocument(ctx, payload)
 	if ingestErr != nil {
@@ -195,8 +195,28 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 		return nil
 	}
 
-	writeStatus(model.KBIngestJobStatusCompleted, model.KBDocumentStatusCompleted, totalChunks, "")
+	if updateErr := model.KBDocumentDao.UpdateChunkCount(payload.DocumentID, totalChunks); updateErr != nil {
+		log.Printf("[KB Ingest] failed to update chunk_count: job_id=%d document_id=%d err=%v", payload.JobID, payload.DocumentID, updateErr)
+	}
+
+	updated, updateErr := model.KBIngestJobDao.UpdateStatusFrom(
+		payload.JobID,
+		model.KBIngestJobStatusCompleted,
+		"",
+		model.KBIngestJobStatusProcessing,
+	)
+	if updateErr != nil {
+		log.Printf("[KB Ingest] failed to update job completed: job_id=%d err=%v", payload.JobID, updateErr)
+	} else if updated {
+		if docErr := model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusCompleted, ""); docErr != nil {
+			log.Printf("[KB Ingest] failed to update document completed: document_id=%d err=%v", payload.DocumentID, docErr)
+		}
+	} else {
+		log.Printf("[KB Ingest] skip complete update due to non-processing state: job_id=%d", payload.JobID)
+	}
+
 	logKnowledgeIngest(payload, string(model.KBIngestJobStatusCompleted), "", totalChunks, time.Since(start))
+	metrics.ObserveIngest(time.Since(start), string(model.KBIngestJobStatusCompleted), "none")
 	return nil
 }
 
@@ -228,7 +248,7 @@ func shouldHandleKnowledgeJob(jobID uint64) bool {
 	}
 
 	switch job.Status {
-	case model.KBIngestJobStatusCompleted, model.KBIngestJobStatusDead:
+	case model.KBIngestJobStatusCompleted, model.KBIngestJobStatusDead, model.KBIngestJobStatusCanceled:
 		log.Printf("[KB Ingest] job already terminal, skip: job_id=%d status=%s", jobID, job.Status)
 		return false
 	default:
@@ -300,7 +320,7 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 	retryable := isKnowledgeIngestRetryable(errorCode, ingestErr)
 
 	if !config.Global.RAG.FeatureFlags.EnableIngestRetry || !retryable {
-		_ = model.KBIngestJobDao.UpdateFailureState(
+		if err := model.KBIngestJobDao.UpdateFailureState(
 			payload.JobID,
 			model.KBIngestJobStatusFailed,
 			errorDetail,
@@ -308,9 +328,12 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 			errorDetail,
 			nil,
 			false,
-		)
+		); err != nil {
+			log.Printf("[KB Ingest] failed to mark failed: job_id=%d err=%v", payload.JobID, err)
+		}
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
 		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
 		return
 	}
 
@@ -328,37 +351,51 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 		)
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
 		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
 		return
 	}
 
 	nextRetryCount := job.RetryCount + 1
 	maxRetryCount := resolveKnowledgeRetryCount()
 	if nextRetryCount > maxRetryCount {
-		_ = model.KBIngestJobDao.UpdateFailureState(
+		if err := model.KBIngestJobDao.UpdateFailureState(
 			payload.JobID,
-			model.KBIngestJobStatusDead,
+			model.KBIngestJobStatusFailed,
 			errorDetail,
 			string(errorCode),
 			errorDetail,
 			nil,
 			false,
-		)
+		); err != nil {
+			log.Printf("[KB Ingest Retry] failed to mark failed before dead: job_id=%d err=%v", payload.JobID, err)
+		}
+		if _, err := model.KBIngestJobDao.UpdateStatusFrom(
+			payload.JobID,
+			model.KBIngestJobStatusDead,
+			errorDetail,
+			model.KBIngestJobStatusFailed,
+		); err != nil {
+			log.Printf("[KB Ingest Retry] failed to mark dead: job_id=%d err=%v", payload.JobID, err)
+		}
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
 		logKnowledgeIngest(payload, string(model.KBIngestJobStatusDead), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusDead), string(errorCode))
 		return
 	}
 
 	delay := calculateKnowledgeRetryBackoff(nextRetryCount)
 	nextRetryAt := time.Now().Add(delay)
-	_ = model.KBIngestJobDao.UpdateFailureState(
+	if err := model.KBIngestJobDao.UpdateFailureState(
 		payload.JobID,
-		model.KBIngestJobStatusFailed,
+		model.KBIngestJobStatusRetrying,
 		errorDetail,
 		string(errorCode),
 		errorDetail,
 		&nextRetryAt,
 		true,
-	)
+	); err != nil {
+		log.Printf("[KB Ingest Retry] failed to mark retrying: job_id=%d err=%v", payload.JobID, err)
+	}
 	_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
 
 	log.Printf(
@@ -371,7 +408,8 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 		errorCode,
 		errorDetail,
 	)
-	logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+	logKnowledgeIngest(payload, string(model.KBIngestJobStatusRetrying), errorDetail, 0, time.Since(startedAt))
+	metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusRetrying), string(errorCode))
 }
 
 func startKnowledgeRetryCompensator(ctx context.Context) {
@@ -692,6 +730,11 @@ func StartConsumer(ctx context.Context) error {
 
 	if config.Global.RAG.FeatureFlags.EnableIngestRetry {
 		go startKnowledgeRetryCompensator(ctx)
+	}
+	if reporter, ok := mq.(interface {
+		StartMetricsReporter(context.Context)
+	}); ok {
+		go reporter.StartMetricsReporter(ctx)
 	}
 
 	err := mq.Subscribe(ctx, handler.HandleMessage)

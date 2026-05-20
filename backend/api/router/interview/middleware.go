@@ -12,6 +12,7 @@ import (
 
 var jwtPublicRoutes = map[string]struct{}{
 	"/health":                   {},
+	"/metrics":                  {},
 	"/api/user/login":           {},
 	"/api/user/register":        {},
 	"/api/user/logout":          {},

@@ -24,6 +24,7 @@ import (
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
+	"interview-agents/internal/observability/metrics"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
 
@@ -76,6 +77,13 @@ type uploadDocumentResponse struct {
 	JobID      uint64 `json:"job_id"`
 	Status     string `json:"status"`
 	Reused     bool   `json:"reused,omitempty"`
+}
+
+type jobListResponse struct {
+	Items    []*model.KBIngestJob `json:"items"`
+	Total    int64                `json:"total"`
+	Page     int                  `json:"page"`
+	PageSize int                  `json:"page_size"`
 }
 
 type citation struct {
@@ -342,6 +350,39 @@ func ListDocuments(ctx context.Context, c *app.RequestContext) {
 	})
 }
 
+func ListJobs(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	var status *model.KBIngestJobStatus
+	statusRaw := strings.TrimSpace(string(c.Query("status")))
+	if statusRaw != "" {
+		parsed, ok := model.ParseKBIngestJobStatus(statusRaw)
+		if !ok {
+			response.BadRequest(ctx, c, "status is invalid")
+			return
+		}
+		status = &parsed
+	}
+
+	page, pageSize := getPagination(c)
+	items, total, err := model.KBIngestJobDao.ListByUserID(userID, status, page, pageSize)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list jobs", err))
+		return
+	}
+
+	response.Success(ctx, c, jobListResponse{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
 func GetJob(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -370,6 +411,174 @@ func GetJob(ctx context.Context, c *app.RequestContext) {
 	}
 
 	response.Success(ctx, c, job)
+}
+
+func RetryJob(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	jobID, err := parseUint64(c.Param("job_id"), "job_id")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "job not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
+		return
+	}
+	if job.UserID != userID {
+		response.Forbidden(ctx, c, "forbidden")
+		return
+	}
+	if job.Status != model.KBIngestJobStatusFailed && job.Status != model.KBIngestJobStatusDead {
+		response.BadRequest(ctx, c, "manual retry only allowed for failed/dead jobs")
+		return
+	}
+
+	doc, err := model.KBDocumentDao.GetByID(job.DocumentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "document not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get document", err))
+		return
+	}
+	if doc.UserID != userID {
+		response.Forbidden(ctx, c, "forbidden")
+		return
+	}
+
+	reason := getOperationReason(c)
+	transitioned, err := model.KBIngestJobDao.MarkRetrying(jobID, userID, reason)
+	if err != nil {
+		if errors.Is(err, model.ErrInvalidKBIngestJobTransition) {
+			response.BadRequest(ctx, c, "job status transition is invalid")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to retry job", err))
+		return
+	}
+	if !transitioned {
+		response.BadRequest(ctx, c, "job status transition is invalid")
+		return
+	}
+
+	if err := mq.PublishKnowledgeIngest(ctx, mq.KnowledgeIngestPayload{
+		UserID:     job.UserID,
+		KBID:       job.KbID,
+		DocumentID: job.DocumentID,
+		JobID:      job.ID,
+		FilePath:   doc.StoragePath,
+		FileType:   doc.FileType,
+	}); err != nil {
+		errMsg := "failed to enqueue retry task: " + err.Error()
+		_, _ = model.KBIngestJobDao.UpdateStatusFrom(jobID, model.KBIngestJobStatusFailed, errMsg, model.KBIngestJobStatusRetrying)
+		_ = model.KBDocumentDao.UpdateStatus(doc.ID, model.KBDocumentStatusFailed, errMsg)
+		response.InternalServerError(ctx, c, "failed to enqueue retry task")
+		return
+	}
+
+	_ = model.KBDocumentDao.UpdateStatus(doc.ID, model.KBDocumentStatusPending, "")
+	_ = model.KBJobOperationLogDao.Create(&model.KBJobOperationLog{
+		JobID:           job.ID,
+		OperatorID:      userID,
+		Operation:       "retry",
+		OperationReason: reason,
+		FromStatus:      string(job.Status),
+		ToStatus:        string(model.KBIngestJobStatusRetrying),
+	})
+
+	updatedJob, getErr := model.KBIngestJobDao.GetByID(jobID)
+	if getErr != nil {
+		response.Success(ctx, c, map[string]interface{}{
+			"job_id":  jobID,
+			"status":  string(model.KBIngestJobStatusRetrying),
+			"message": "retry accepted",
+		})
+		return
+	}
+	response.Success(ctx, c, updatedJob)
+}
+
+func CancelJob(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	jobID, err := parseUint64(c.Param("job_id"), "job_id")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "job not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
+		return
+	}
+	if job.UserID != userID {
+		response.Forbidden(ctx, c, "forbidden")
+		return
+	}
+	if job.Status == model.KBIngestJobStatusCompleted || job.Status == model.KBIngestJobStatusCanceled {
+		response.BadRequest(ctx, c, "job cannot be canceled in current status")
+		return
+	}
+
+	reason := getOperationReason(c)
+	transitioned, err := model.KBIngestJobDao.MarkCanceled(jobID, userID, reason)
+	if err != nil {
+		if errors.Is(err, model.ErrInvalidKBIngestJobTransition) {
+			response.BadRequest(ctx, c, "job status transition is invalid")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to cancel job", err))
+		return
+	}
+	if !transitioned {
+		response.BadRequest(ctx, c, "job status transition is invalid")
+		return
+	}
+
+	if doc, err := model.KBDocumentDao.GetByID(job.DocumentID); err == nil && doc.UserID == userID {
+		_ = model.KBDocumentDao.UpdateStatus(doc.ID, model.KBDocumentStatusFailed, firstNonEmptyString(reason, "canceled by operator"))
+	}
+
+	_ = model.KBJobOperationLogDao.Create(&model.KBJobOperationLog{
+		JobID:           job.ID,
+		OperatorID:      userID,
+		Operation:       "cancel",
+		OperationReason: reason,
+		FromStatus:      string(job.Status),
+		ToStatus:        string(model.KBIngestJobStatusCanceled),
+	})
+
+	updatedJob, getErr := model.KBIngestJobDao.GetByID(jobID)
+	if getErr != nil {
+		response.Success(ctx, c, map[string]interface{}{
+			"job_id":  jobID,
+			"status":  string(model.KBIngestJobStatusCanceled),
+			"message": "job canceled",
+		})
+		return
+	}
+	response.Success(ctx, c, updatedJob)
 }
 
 func DeleteDocument(ctx context.Context, c *app.RequestContext) {
@@ -411,44 +620,68 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 }
 
 func Retrieve(ctx context.Context, c *app.RequestContext) {
+	metricsStartedAt := time.Now()
+	metricsStatus := "success"
+	metricsErrorCode := "none"
+	metricsResultCount := 0
+	defer func() {
+		metrics.ObserveRetrieve(time.Since(metricsStartedAt), metricsStatus, metricsErrorCode, metricsResultCount)
+	}()
+
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
+		metricsStatus = "error"
+		metricsErrorCode = "unauthorized"
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
 	if !allowRetrieveForUser(userID) {
+		metricsStatus = "error"
+		metricsErrorCode = "rate_limit_exceeded"
 		response.Error(ctx, c, 429, "retrieve rate limit exceeded")
 		return
 	}
 
 	var req retrieveRequest
 	if err := c.BindAndValidate(&req); err != nil {
+		metricsStatus = "error"
+		metricsErrorCode = "invalid_param"
 		response.BadRequest(ctx, c, "Invalid request: "+err.Error())
 		return
 	}
 	req.Query = strings.TrimSpace(req.Query)
 	if req.Query == "" {
+		metricsStatus = "error"
+		metricsErrorCode = "invalid_param"
 		response.BadRequest(ctx, c, "query is required")
 		return
 	}
 
 	if _, err := mustOwnKnowledgeBase(userID, req.KBID); err != nil {
+		metricsStatus = "error"
+		metricsErrorCode = resolveAppErrorCode(err, "forbidden_or_not_found")
 		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 
 	if !config.Global.RAG.Enabled {
+		metricsStatus = "error"
+		metricsErrorCode = "rag_disabled"
 		response.Error(ctx, c, 503, "RAG is disabled")
 		return
 	}
 
 	manager, err := milvus.GetMilvusManager()
 	if err != nil {
+		metricsStatus = "error"
+		metricsErrorCode = "milvus_not_initialized"
 		response.Error(ctx, c, 503, "Milvus is not initialized")
 		return
 	}
 	retriever := manager.GetRetrieverService()
 	if retriever == nil {
+		metricsStatus = "error"
+		metricsErrorCode = "retriever_not_initialized"
 		response.Error(ctx, c, 503, "Retriever is not initialized")
 		return
 	}
@@ -471,6 +704,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	})
 	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
+		metricsStatus, metricsErrorCode = classifyRetrieveError(err, retrieveCtx)
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", err))
 		return
 	}
@@ -523,7 +757,33 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		)
 	}
 
+	metricsResultCount = len(items)
 	response.Success(ctx, c, retrieveResponse{Items: items})
+}
+
+func resolveAppErrorCode(err error, fallback string) string {
+	if err == nil {
+		return fallback
+	}
+	var appErr *myerrors.AppError
+	if errors.As(err, &appErr) && appErr != nil {
+		return strings.ToLower(string(appErr.Code))
+	}
+	return fallback
+}
+
+func classifyRetrieveError(err error, retrieveCtx context.Context) (string, string) {
+	if err == nil {
+		return "success", "none"
+	}
+	errText := strings.ToLower(err.Error())
+	if errors.Is(err, context.DeadlineExceeded) ||
+		errors.Is(retrieveCtx.Err(), context.DeadlineExceeded) ||
+		strings.Contains(errText, "timeout") ||
+		strings.Contains(errText, "deadline exceeded") {
+		return "timeout", "timeout"
+	}
+	return "error", "milvus_error"
 }
 
 func resolveRetrieveTimeout() time.Duration {
@@ -783,4 +1043,12 @@ func firstNonEmptyString(values ...string) string {
 		}
 	}
 	return ""
+}
+
+func getOperationReason(c *app.RequestContext) string {
+	reason := strings.TrimSpace(string(c.Query("operation_reason")))
+	if reason != "" {
+		return reason
+	}
+	return strings.TrimSpace(c.PostForm("operation_reason"))
 }
