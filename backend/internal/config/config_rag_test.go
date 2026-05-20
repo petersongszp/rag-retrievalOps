@@ -1,10 +1,23 @@
 package config
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"testing"
+)
 
 func baseValidRAGConfig() *Config {
 	return &Config{
-		RAG: RAGConfig{Enabled: true},
+		RAG: RAGConfig{
+			Enabled:     true,
+			Environment: "dev",
+			Thresholds: RAGThresholds{
+				MaxRetryCount:     3,
+				RetryBackoffMS:    500,
+				RetrieveTimeoutMS: 3000,
+				UserQPSLimit:      20,
+			},
+		},
 		Milvus: MilvusConfig{
 			Address:        "localhost:19530",
 			CollectionName: "documents",
@@ -35,9 +48,79 @@ func TestValidateRAGPrerequisites_MissingMilvusAddress(t *testing.T) {
 	}
 }
 
+func TestValidateRAGPrerequisites_ProdGuardThresholds(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableProdGuard = true
+	cfg.RAG.Thresholds.RetrieveTimeoutMS = 0
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when prod guard enabled and threshold is missing")
+	}
+}
+
 func TestValidateRAGPrerequisites_Valid(t *testing.T) {
 	cfg := baseValidRAGConfig()
 	if err := cfg.ValidateRAGPrerequisites(); err != nil {
 		t.Fatalf("expected nil error for valid rag config, got: %v", err)
+	}
+}
+
+func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "config.yaml")
+	overlayPath := filepath.Join(tempDir, "config.staging.yaml")
+
+	baseConfig := `
+rag:
+  enabled: true
+  environment: dev
+  feature_flags:
+    enable_prod_guard: false
+    enable_ingest_retry: false
+    enable_retrieve_audit: true
+  thresholds:
+    max_retry_count: 3
+    retry_backoff_ms: 500
+    retrieve_timeout_ms: 3000
+    user_qps_limit: 20
+Milvus:
+  Address: localhost:19530
+  CollectionName: documents
+Embedding:
+  APIKey: test-key
+  Model: bge-m3
+  BaseURL: https://example.com/v1
+  Dimensions: 1024
+`
+	overlayConfig := `
+rag:
+  thresholds:
+    retrieve_timeout_ms: 9000
+  feature_flags:
+    enable_retrieve_audit: false
+`
+
+	if err := os.WriteFile(basePath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write base config: %v", err)
+	}
+	if err := os.WriteFile(overlayPath, []byte(overlayConfig), 0644); err != nil {
+		t.Fatalf("failed to write overlay config: %v", err)
+	}
+
+	t.Setenv("APP_ENV", "staging")
+	t.Setenv("RAG_RETRIEVE_TIMEOUT_MS", "7000")
+
+	cfg, err := LoadConfig(basePath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.RAG.Environment != "staging" {
+		t.Fatalf("expected staging env, got %s", cfg.RAG.Environment)
+	}
+	if cfg.RAG.Thresholds.RetrieveTimeoutMS != 7000 {
+		t.Fatalf("expected retrieve_timeout_ms override to 7000, got %d", cfg.RAG.Thresholds.RetrieveTimeoutMS)
+	}
+	if cfg.RAG.FeatureFlags.EnableRetrieveAudit {
+		t.Fatalf("expected retrieve_audit to be false from overlay")
 	}
 }

@@ -14,6 +14,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"interview-agents/api/response"
@@ -27,15 +28,22 @@ import (
 	"interview-agents/internal/storage"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 )
 
 const (
 	defaultKBPageSize      = 10
 	defaultRetrieveTopK    = 5
+	defaultRetrieveTimeout = 3 * time.Second
 	maxRetrieveTopK        = 20
 	maxKnowledgeFileSize   = 20 * 1024 * 1024
 	knowledgeUploadFormKey = "file"
+)
+
+var (
+	retrieveLimiterMu sync.Mutex
+	retrieveLimiters  = map[uint]*rate.Limiter{}
 )
 
 type createKnowledgeBaseRequest struct {
@@ -273,7 +281,15 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		log.Printf("[KB Upload] failed to publish ingest message: job_id=%d document_id=%d kb_id=%d user_id=%d err=%v",
 			job.ID, doc.ID, kbID, userID, publishErr)
 		errMsg := "failed to enqueue ingest task: " + publishErr.Error()
-		_ = model.KBIngestJobDao.UpdateStatus(job.ID, model.KBIngestJobStatusFailed, errMsg)
+		_ = model.KBIngestJobDao.UpdateFailureState(
+			job.ID,
+			model.KBIngestJobStatusFailed,
+			errMsg,
+			"enqueue_error",
+			errMsg,
+			nil,
+			false,
+		)
 		_ = model.KBDocumentDao.UpdateStatus(doc.ID, model.KBDocumentStatusFailed, errMsg)
 		response.InternalServerError(ctx, c, "failed to enqueue ingest task")
 		return
@@ -400,6 +416,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
+	if !allowRetrieveForUser(userID) {
+		response.Error(ctx, c, 429, "retrieve rate limit exceeded")
+		return
+	}
 
 	var req retrieveRequest
 	if err := c.BindAndValidate(&req); err != nil {
@@ -439,9 +459,12 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		collection = config.Global.Milvus.CollectionName
 	}
 	expr := fmt.Sprintf("metadata[\"user_id\"] == %d && metadata[\"kb_id\"] == %d", userID, req.KBID)
+	retrieveTimeout := resolveRetrieveTimeout()
+	retrieveCtx, cancel := context.WithTimeout(ctx, retrieveTimeout)
+	defer cancel()
 
 	start := time.Now()
-	docs, err := retriever.RetrieveWithDatabaseAndCollection(ctx, req.Query, config.Global.Milvus.DatabaseName, collection, &milvus.RetrieveOptions{
+	docs, err := retriever.RetrieveWithDatabaseAndCollection(retrieveCtx, req.Query, config.Global.Milvus.DatabaseName, collection, &milvus.RetrieveOptions{
 		Expr:       expr,
 		TopK:       topK,
 		Collection: collection,
@@ -484,20 +507,52 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		})
 	}
 
-	log.Printf(
-		"[KB Retrieve] query=%q user_id=%d kb_id=%d expr=%q topk=%d rewrite=%q routes=%q final_count=%d duration_ms=%d",
-		req.Query,
-		userID,
-		req.KBID,
-		expr,
-		topK,
-		"",
-		"dense",
-		len(items),
-		durationMs,
-	)
+	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
+		log.Printf(
+			"[KB Retrieve] query=%q user_id=%d kb_id=%d expr=%q topk=%d rewrite=%q routes=%q final_count=%d duration_ms=%d timeout_ms=%d",
+			req.Query,
+			userID,
+			req.KBID,
+			expr,
+			topK,
+			"",
+			"dense",
+			len(items),
+			durationMs,
+			retrieveTimeout.Milliseconds(),
+		)
+	}
 
 	response.Success(ctx, c, retrieveResponse{Items: items})
+}
+
+func resolveRetrieveTimeout() time.Duration {
+	timeoutMs := config.Global.RAG.Thresholds.RetrieveTimeoutMS
+	if timeoutMs <= 0 {
+		return defaultRetrieveTimeout
+	}
+	return time.Duration(timeoutMs) * time.Millisecond
+}
+
+func allowRetrieveForUser(userID uint) bool {
+	limit := config.Global.RAG.Thresholds.UserQPSLimit
+	if limit <= 0 {
+		return true
+	}
+
+	retrieveLimiterMu.Lock()
+	limiter, exists := retrieveLimiters[userID]
+	if !exists {
+		burst := limit
+		if burst < 1 {
+			burst = 1
+		}
+		limiter = rate.NewLimiter(rate.Limit(limit), burst)
+		retrieveLimiters[userID] = limiter
+	}
+	retrieveLimiterMu.Unlock()
+
+	return limiter.Allow()
 }
 
 func mustOwnKnowledgeBase(userID uint, kbID uint64) (*model.KBKnowledgeBase, error) {
