@@ -16,7 +16,7 @@
 1. `统一检索结果契约` 固定指：`content/score/citation/source`。
 2. `source` 在 Phase 0 最小包含：`route/collection`。
 3. `Collection 一致性校验` 固定指：导入 Collection、查询 Collection、当前 active Collection 三者一致。
-4. `结构化检索日志` 固定至少包含：`query/user_id/kb_id/expr/topk/rewrite/routes/final_count/duration_ms`。
+4. `结构化检索日志` 固定至少包含：`query/interview_user_id/kb_scope/expr/topk/rewrite/routes/final_count/duration_ms`。
 
 ---
 
@@ -45,7 +45,7 @@
 Phase 0 通过标准（全满足）：
 
 1. 上传 `pdf/md/txt` 后可自动入库并成功检索。
-2. 用户只能检索到自己的 `kb_id` 数据。
+2. 面试用户检索时统一命中 `global` 作用域下的已启用知识数据。
 3. 删除文档后，不再检索到该文档 chunk。
 4. 失败任务有明确错误信息，可定位问题。
 5. 冒烟测试清单全通过，且不影响现有简历链路。
@@ -60,7 +60,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 2. L1：数据模型与持久化
 3. L2：API 与路由（知识库域）
 4. L3：异步任务编排（MQ + Consumer）
-5. L4：Milvus 入库与检索隔离
+5. L4：Milvus 入库与检索范围控制
 6. L5：前端最小管理页
 7. L6：测试、验收、回滚预案
 
@@ -113,16 +113,17 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 `kb_knowledge_base`
 1. `id` PK
-2. `user_id` index
+2. `owner_admin_id` index
 3. `name`
 4. `description`
-5. `status`（`active`/`disabled`）
-6. `created_at/updated_at`
+5. `scope`（Phase 0 固定 `global`）
+6. `status`（`active`/`disabled`）
+7. `created_at/updated_at`
 
 `kb_document`
 1. `id` PK
 2. `kb_id` index
-3. `user_id` index
+3. `operator_admin_id` index
 4. `file_name/file_type/file_size`
 5. `file_hash` index
 6. `storage_path`
@@ -139,7 +140,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 `kb_ingest_job`
 1. `id` PK
-2. `kb_id/document_id/user_id` index
+2. `kb_id/document_id/operator_admin_id` index
 3. `status`
 4. `retry_count`
 5. `error_msg`
@@ -169,13 +170,13 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 ### API 列表（Phase 0）
 
-1. `POST /api/kb/bases`：创建知识库
-2. `GET /api/kb/bases`：知识库列表
-3. `POST /api/kb/documents/upload`：上传文档
-4. `GET /api/kb/documents?kb_id=`：文档列表
-5. `GET /api/kb/jobs/:job_id`：任务状态
-6. `DELETE /api/kb/documents/:document_id`：删除文档
-7. `POST /api/kb/retrieve`：知识库检索
+1. `POST /api/admin/kb/bases`：创建知识库（管理后台）
+2. `GET /api/admin/kb/bases`：知识库列表（管理后台）
+3. `POST /api/admin/kb/documents/upload`：上传文档（管理后台）
+4. `GET /api/admin/kb/documents?kb_id=`：文档列表（管理后台）
+5. `GET /api/admin/kb/jobs/:job_id`：任务状态（管理后台）
+6. `DELETE /api/admin/kb/documents/:document_id`：删除文档（管理后台）
+7. `POST /api/kb/retrieve`：知识库检索（面试链路内部调用）
 
 ### 接口契约（关键字段）
 
@@ -215,7 +216,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 在 `backend/internal/mq/mq.go`：
 1. 新增 `MessageTypeKnowledgeIngest`
 2. 新增 payload 结构：
-   - `user_id`
+   - `operator_admin_id`
    - `kb_id`
    - `document_id`
    - `job_id`
@@ -239,7 +240,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 补充要求：
 
-1. 消费日志采用结构化字段，至少包含 `job_id/document_id/kb_id/user_id/status/error_msg/duration_ms`。
+1. 消费日志采用结构化字段，至少包含 `job_id/document_id/kb_id/operator_admin_id/status/error_msg/duration_ms`。
 2. 对解析失败、embedding 失败、Milvus 写入失败做错误分类，便于 Phase 1 接重试与补偿。
 
 ### 验收
@@ -249,15 +250,16 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 ---
 
-## 5.5 L4 Milvus 入库与检索隔离
+## 5.5 L4 Milvus 入库与检索范围控制
 
 ### 目标
-确保 RAG 检索可用且安全隔离。
+确保 RAG 检索可用，且面试链路稳定命中全局共享知识。
 
 ### 功能任务
 
 1. 统一 chunk metadata 字段（Phase 0 固定）：
-   - `user_id`
+   - `operator_admin_id`
+   - `kb_scope`（固定 `global`）
    - `kb_id`
    - `document_id`
    - `chunk_index`
@@ -265,8 +267,8 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
    - `file_name`
    - `created_at`
 2. 检索接口强制附加过滤表达式：
-   - `user_id == 当前用户`
-   - `kb_id == 请求值`
+   - `kb_scope == "global"`
+   - `kb_id == 系统配置的active_global_kb_id`（或 active 集合）
 3. `top_k` 保护：
    - 默认 5
    - 最大 20
@@ -280,7 +282,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 ### 验收
 
 1. 同文档关键词可检索命中。
-2. 跨用户/跨 kb_id 无法命中（隔离生效）。
+2. 面试用户检索时可命中共享知识；未启用知识库不会被命中。
 3. 任意检索路径下 `score` 字段不为空。
 
 ---
@@ -293,7 +295,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 ### 功能任务
 
 1. 在 `frontend/src/config/api.ts` 增加 `KB_API` 常量。
-2. 新增页面 `frontend/src/app/user/knowledge/page.tsx`（或挂到 user center）。
+2. 新增页面 `frontend/src/app/admin/knowledge/page.tsx`（挂到管理后台）。
 3. 最小交互：
    - 创建知识库
    - 上传文档
@@ -335,7 +337,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 ### 回滚预案（Phase 0）
 
-1. 代码层面：通过 feature flag 临时关闭 `/api/kb/*` 路由注册。
+1. 代码层面：通过 feature flag 临时关闭 `/api/admin/kb/*` 与 `/api/kb/retrieve` 路由注册。
 2. 运行层面：消费器异常时暂停 knowledge ingest 消费。
 3. 数据层面：仅软删除 kb_document，避免误删历史文件。
 
@@ -347,7 +349,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 
 1. 先完成 `L0 + L1`，确认基础设施和表结构稳定。
 2. 再完成 `L2 + L3`，形成“上传-任务-消费”主链路。
-3. 然后完成 `L4`，打通检索并落实隔离。
+3. 然后完成 `L4`，打通检索并落实共享范围控制。
 4. 再完成 `L5`，提供可视化操作界面。
 5. 最后执行 `L6`，完成验收与回滚准备。
 
@@ -396,7 +398,7 @@ Phase 0 按 7 条路线推进，按门禁顺序合流：
 1. 重试/补偿机制完善
 2. 监控与告警补齐
 3. 基础溯源增强
-4. 安全隔离回归压测
+4. 权限与共享范围回归压测
 
 完成 Phase 1 门禁后，再进入 Phase 2 的召回率优化（混合检索、动态 TopK、索引优化评测）。
 

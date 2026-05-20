@@ -1,0 +1,32 @@
+route:
+  receiver: rag-p2
+  group_by: [alertname, service, layer]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 30m
+  routes:
+  - matchers:
+    - severity="p1"
+    receiver: rag-p1
+    group_wait: 10s
+    repeat_interval: 5m
+    continue: true
+  - matchers:
+    - severity="p2"
+    receiver: rag-p2
+
+receivers:
+- name: rag-p1
+  webhook_configs:
+  - url: http://alert-proxy.local/feishu/rag-p1
+    send_resolved: true
+
+- name: rag-p2
+  webhook_configs:
+  - url: http://alert-proxy.local/feishu/rag-p2
+    send_resolved: true
+
+inhibit_rules:
+- source_matchers: [severity="p1"]
+  target_matchers: [severity="p2"]
+  equal: [alertname, service]

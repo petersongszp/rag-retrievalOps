@@ -79,6 +79,16 @@ llm:
 # RAG 基础开关（L0）
 rag:
   enabled: true
+  environment: dev
+  feature_flags:
+    enable_prod_guard: false
+    enable_ingest_retry: false
+    enable_retrieve_audit: true
+  thresholds:
+    max_retry_count: 3
+    retry_backoff_ms: 500
+    retrieve_timeout_ms: 3000
+    user_qps_limit: 20
 
 # Embedding 服务配置
 Embedding:

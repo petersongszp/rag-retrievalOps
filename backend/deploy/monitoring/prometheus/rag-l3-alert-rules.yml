@@ -1,0 +1,58 @@
+groups:
+- name: rag-l3-alerts
+  rules:
+  - alert: RAGIngestFailureRateHigh
+    expr: |
+      sum(rate(rag_ingest_jobs_total{status=~"failed|dead"}[10m]))
+      /
+      clamp_min(sum(rate(rag_ingest_jobs_total{status=~"completed|failed|dead"}[10m])), 0.001)
+      > 0.05
+    for: 10m
+    labels:
+      severity: p1
+      service: rag
+      layer: l3
+    annotations:
+      summary: "RAG ingest failure rate is high"
+      description: "Ingest failure/dead rate > 5% in last 10m. Check kb ingest jobs and error_code dimensions."
+
+  - alert: RAGRetrieveErrorRateHigh
+    expr: |
+      sum(rate(rag_retrieve_requests_total{status=~"error|timeout"}[5m]))
+      /
+      clamp_min(sum(rate(rag_retrieve_requests_total[5m])), 0.001)
+      > 0.03
+    for: 5m
+    labels:
+      severity: p1
+      service: rag
+      layer: l3
+    annotations:
+      summary: "RAG retrieve error rate is high"
+      description: "Retrieve error/timeout rate > 3% in last 5m. Filter by error_code for root cause."
+
+  - alert: RAGRetrieveP95LatencyHigh
+    expr: |
+      histogram_quantile(0.95, sum(rate(rag_retrieve_duration_seconds_bucket[10m])) by (le)) > 2
+    for: 10m
+    labels:
+      severity: p2
+      service: rag
+      layer: l3
+    annotations:
+      summary: "RAG retrieve P95 latency is high"
+      description: "Retrieve P95 latency > 2s in last 10m. Check milvus health and timeout trend."
+
+  - alert: RAGConsumerBacklogRising
+    expr: |
+      increase(rag_consumer_backlog[15m]) > 100
+      and
+      avg_over_time(rag_consumer_backlog[15m]) > 50
+    for: 10m
+    labels:
+      severity: p2
+      service: rag
+      layer: l3
+    annotations:
+      summary: "RAG consumer backlog keeps rising"
+      description: "Consumer backlog is rising continuously. Check redis stream, consumer workers and downstream dependencies."
