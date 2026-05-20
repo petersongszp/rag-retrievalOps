@@ -230,13 +230,17 @@ func parseKnowledgeIngestPayload(raw map[string]interface{}) (KnowledgeIngestPay
 	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
 		return KnowledgeIngestPayload{}, fmt.Errorf("invalid knowledge_ingest payload: %w", err)
 	}
+	if payload.OperatorAdminID == 0 {
+		payload.OperatorAdminID = payload.UserID
+	}
 
-	if payload.UserID == 0 || payload.KBID == 0 || payload.DocumentID == 0 || payload.JobID == 0 || strings.TrimSpace(payload.FilePath) == "" {
+	if payload.OperatorAdminID == 0 || payload.KBID == 0 || payload.DocumentID == 0 || payload.JobID == 0 || strings.TrimSpace(payload.FilePath) == "" {
 		return KnowledgeIngestPayload{}, fmt.Errorf(
-			"invalid knowledge_ingest payload values: user_id=%d kb_id=%d document_id=%d job_id=%d file_path=%q",
-			payload.UserID, payload.KBID, payload.DocumentID, payload.JobID, payload.FilePath,
+			"invalid knowledge_ingest payload values: operator_admin_id=%d kb_id=%d document_id=%d job_id=%d file_path=%q",
+			payload.OperatorAdminID, payload.KBID, payload.DocumentID, payload.JobID, payload.FilePath,
 		)
 	}
+	payload.UserID = payload.OperatorAdminID
 	return payload, nil
 }
 
@@ -298,6 +302,8 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 			chunk.MetaData = map[string]interface{}{}
 		}
 		chunk.MetaData["user_id"] = payload.UserID
+		chunk.MetaData["operator_admin_id"] = payload.OperatorAdminID
+		chunk.MetaData["kb_scope"] = "global"
 		chunk.MetaData["kb_id"] = payload.KBID
 		chunk.MetaData["document_id"] = payload.DocumentID
 		chunk.MetaData["chunk_index"] = i

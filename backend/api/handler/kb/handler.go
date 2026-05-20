@@ -53,9 +53,10 @@ type createKnowledgeBaseRequest struct {
 }
 
 type retrieveRequest struct {
-	KBID  uint64 `json:"kb_id" vd:"$>0"`
-	Query string `json:"query" vd:"len($)>0"`
-	TopK  int    `json:"top_k"`
+	KBID  uint64   `json:"kb_id"`
+	KBIDs []uint64 `json:"kb_ids"`
+	Query string   `json:"query" vd:"len($)>0"`
+	TopK  int      `json:"top_k"`
 }
 
 type knowledgeBaseListResponse struct {
@@ -130,7 +131,7 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	existing, err := model.KBKnowledgeBaseDao.GetByUserIDAndName(userID, req.Name)
+	existing, err := model.KBKnowledgeBaseDao.GetByName(req.Name)
 	if err == nil && existing != nil {
 		response.BadRequest(ctx, c, "knowledge base name already exists")
 		return
@@ -155,14 +156,13 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 }
 
 func ListKnowledgeBases(ctx context.Context, c *app.RequestContext) {
-	userID := middleware.GetUserID(c)
-	if userID == 0 {
+	if middleware.GetUserID(c) == 0 {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
 
 	page, pageSize := getPagination(c)
-	items, total, err := model.KBKnowledgeBaseDao.ListByUserID(userID, page, pageSize)
+	items, total, err := model.KBKnowledgeBaseDao.List(page, pageSize)
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list knowledge bases", err))
 		return
@@ -189,7 +189,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := mustOwnKnowledgeBase(userID, kbID); err != nil {
+	if _, err := mustKnowledgeBaseExist(kbID); err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
 	}
@@ -214,7 +214,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 	}
 
 	existingDoc, err := model.KBDocumentDao.GetByFileHash(kbID, fileHash)
-	if err == nil && existingDoc != nil && existingDoc.UserID == userID {
+	if err == nil && existingDoc != nil {
 		jobID := uint64(0)
 		if job, jobErr := model.KBIngestJobDao.GetLatestByDocumentID(existingDoc.ID); jobErr == nil && job != nil {
 			jobID = job.ID
@@ -238,7 +238,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	objectKey := buildKnowledgeObjectKey(userID, kbID, fileName)
+	objectKey := buildKnowledgeObjectKey(kbID, fileName)
 	storagePath, err := ossClient.PutObject(ctx, objectKey, bytes.NewReader(content), int64(len(content)), fileHeader.Header.Get("Content-Type"))
 	if err != nil {
 		response.InternalServerError(ctx, c, "failed to save document")
@@ -278,12 +278,13 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 	}
 
 	publishErr := mq.PublishKnowledgeIngest(ctx, mq.KnowledgeIngestPayload{
-		UserID:     userID,
-		KBID:       kbID,
-		DocumentID: doc.ID,
-		JobID:      job.ID,
-		FilePath:   storagePath,
-		FileType:   fileType,
+		UserID:          userID,
+		OperatorAdminID: userID,
+		KBID:            kbID,
+		DocumentID:      doc.ID,
+		JobID:           job.ID,
+		FilePath:        storagePath,
+		FileType:        fileType,
 	})
 	if publishErr != nil {
 		log.Printf("[KB Upload] failed to publish ingest message: job_id=%d document_id=%d kb_id=%d user_id=%d err=%v",
@@ -323,7 +324,7 @@ func ListDocuments(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := mustOwnKnowledgeBase(userID, kbID); err != nil {
+	if _, err := mustKnowledgeBaseExist(kbID); err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
 	}
@@ -335,15 +336,8 @@ func ListDocuments(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	filtered := make([]*model.KBDocument, 0, len(items))
-	for _, item := range items {
-		if item != nil && item.UserID == userID {
-			filtered = append(filtered, item)
-		}
-	}
-
 	response.Success(ctx, c, documentListResponse{
-		Items:    filtered,
+		Items:    items,
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
@@ -369,7 +363,7 @@ func ListJobs(ctx context.Context, c *app.RequestContext) {
 	}
 
 	page, pageSize := getPagination(c)
-	items, total, err := model.KBIngestJobDao.ListByUserID(userID, status, page, pageSize)
+	items, total, err := model.KBIngestJobDao.List(status, page, pageSize)
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list jobs", err))
 		return
@@ -405,11 +399,6 @@ func GetJob(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
 		return
 	}
-	if job.UserID != userID {
-		response.Forbidden(ctx, c, "forbidden")
-		return
-	}
-
 	response.Success(ctx, c, job)
 }
 
@@ -435,10 +424,6 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
 		return
 	}
-	if job.UserID != userID {
-		response.Forbidden(ctx, c, "forbidden")
-		return
-	}
 	if job.Status != model.KBIngestJobStatusFailed && job.Status != model.KBIngestJobStatusDead {
 		response.BadRequest(ctx, c, "manual retry only allowed for failed/dead jobs")
 		return
@@ -453,11 +438,6 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get document", err))
 		return
 	}
-	if doc.UserID != userID {
-		response.Forbidden(ctx, c, "forbidden")
-		return
-	}
-
 	reason := getOperationReason(c)
 	transitioned, err := model.KBIngestJobDao.MarkRetrying(jobID, userID, reason)
 	if err != nil {
@@ -474,12 +454,13 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 	}
 
 	if err := mq.PublishKnowledgeIngest(ctx, mq.KnowledgeIngestPayload{
-		UserID:     job.UserID,
-		KBID:       job.KbID,
-		DocumentID: job.DocumentID,
-		JobID:      job.ID,
-		FilePath:   doc.StoragePath,
-		FileType:   doc.FileType,
+		UserID:          userID,
+		OperatorAdminID: userID,
+		KBID:            job.KbID,
+		DocumentID:      job.DocumentID,
+		JobID:           job.ID,
+		FilePath:        doc.StoragePath,
+		FileType:        doc.FileType,
 	}); err != nil {
 		errMsg := "failed to enqueue retry task: " + err.Error()
 		_, _ = model.KBIngestJobDao.UpdateStatusFrom(jobID, model.KBIngestJobStatusFailed, errMsg, model.KBIngestJobStatusRetrying)
@@ -532,10 +513,6 @@ func CancelJob(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
 		return
 	}
-	if job.UserID != userID {
-		response.Forbidden(ctx, c, "forbidden")
-		return
-	}
 	if job.Status == model.KBIngestJobStatusCompleted || job.Status == model.KBIngestJobStatusCanceled {
 		response.BadRequest(ctx, c, "job cannot be canceled in current status")
 		return
@@ -556,7 +533,7 @@ func CancelJob(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if doc, err := model.KBDocumentDao.GetByID(job.DocumentID); err == nil && doc.UserID == userID {
+	if doc, err := model.KBDocumentDao.GetByID(job.DocumentID); err == nil {
 		_ = model.KBDocumentDao.UpdateStatus(doc.ID, model.KBDocumentStatusFailed, firstNonEmptyString(reason, "canceled by operator"))
 	}
 
@@ -594,8 +571,7 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	doc, err := model.KBDocumentDao.GetByID(documentID)
-	if err != nil {
+	if _, err := model.KBDocumentDao.GetByID(documentID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			response.NotFound(ctx, c, "document not found")
 			return
@@ -603,11 +579,6 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get document", err))
 		return
 	}
-	if doc.UserID != userID {
-		response.Forbidden(ctx, c, "forbidden")
-		return
-	}
-
 	if err := model.KBDocumentDao.SoftDelete(documentID); err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to delete document", err))
 		return
@@ -657,13 +628,6 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := mustOwnKnowledgeBase(userID, req.KBID); err != nil {
-		metricsStatus = "error"
-		metricsErrorCode = resolveAppErrorCode(err, "forbidden_or_not_found")
-		response.ErrorFromErr(ctx, c, err)
-		return
-	}
-
 	if !config.Global.RAG.Enabled {
 		metricsStatus = "error"
 		metricsErrorCode = "rag_disabled"
@@ -687,11 +651,25 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	}
 
 	topK := clampTopK(req.TopK)
+	activeKBIDs, err := model.KBKnowledgeBaseDao.ListIDsByStatus(model.KBKnowledgeBaseStatusActive)
+	if err != nil {
+		metricsStatus = "error"
+		metricsErrorCode = "db_error"
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list active knowledge bases", err))
+		return
+	}
+
+	kbIDs := resolveRetrieveKBIDs(req, activeKBIDs)
+	if len(kbIDs) == 0 {
+		response.Success(ctx, c, retrieveResponse{Items: []retrieveItem{}})
+		return
+	}
+
 	collection := config.Global.Milvus.GetCollection("knowledge")
 	if collection == "" {
 		collection = config.Global.Milvus.CollectionName
 	}
-	expr := fmt.Sprintf("metadata[\"user_id\"] == %d && metadata[\"kb_id\"] == %d", userID, req.KBID)
+	expr := buildKBFilterExpr(kbIDs)
 	retrieveTimeout := resolveRetrieveTimeout()
 	retrieveCtx, cancel := context.WithTimeout(ctx, retrieveTimeout)
 	defer cancel()
@@ -709,6 +687,11 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	allowedKBs := make(map[uint64]struct{}, len(kbIDs))
+	for _, id := range kbIDs {
+		allowedKBs[id] = struct{}{}
+	}
+
 	items := make([]retrieveItem, 0, len(docs))
 	for _, doc := range docs {
 		if doc == nil {
@@ -720,7 +703,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			continue
 		}
 		storedDoc, err := model.KBDocumentDao.GetByID(documentID)
-		if err != nil || storedDoc.UserID != userID || storedDoc.KbID != req.KBID {
+		if err != nil || storedDoc == nil {
+			continue
+		}
+		if _, ok := allowedKBs[storedDoc.KbID]; !ok {
 			continue
 		}
 
@@ -728,7 +714,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			Content: doc.Content,
 			Score:   getFloat64Metadata(doc.MetaData, "score"),
 			Citation: citation{
-				KBID:       req.KBID,
+				KBID:       storedDoc.KbID,
 				DocumentID: documentID,
 				ChunkID:    firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id")),
 				FileName:   firstNonEmptyString(getStringMetadata(doc.MetaData, "file_name"), storedDoc.FileName),
@@ -743,10 +729,11 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] query=%q user_id=%d kb_id=%d expr=%q topk=%d rewrite=%q routes=%q final_count=%d duration_ms=%d timeout_ms=%d",
+			"[KB Retrieve] query=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d rewrite=%q routes=%q final_count=%d duration_ms=%d timeout_ms=%d",
 			req.Query,
 			userID,
-			req.KBID,
+			kbIDs,
+			"global",
 			expr,
 			topK,
 			"",
@@ -815,16 +802,13 @@ func allowRetrieveForUser(userID uint) bool {
 	return limiter.Allow()
 }
 
-func mustOwnKnowledgeBase(userID uint, kbID uint64) (*model.KBKnowledgeBase, error) {
+func mustKnowledgeBaseExist(kbID uint64) (*model.KBKnowledgeBase, error) {
 	kb, err := model.KBKnowledgeBaseDao.GetByID(kbID)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, myerrors.NewNotFoundError("knowledge base")
 		}
 		return nil, myerrors.NewDBError("failed to get knowledge base", err)
-	}
-	if kb.UserID != userID {
-		return nil, myerrors.NewAppError(myerrors.ErrCodeForbidden, "forbidden", 403)
 	}
 	return kb, nil
 }
@@ -906,9 +890,74 @@ func readKnowledgeFile(fileHeader *multipart.FileHeader) ([]byte, string, error)
 	return content, hex.EncodeToString(sum[:]), nil
 }
 
-func buildKnowledgeObjectKey(userID uint, kbID uint64, fileName string) string {
+func buildKnowledgeObjectKey(kbID uint64, fileName string) string {
 	safeName := strings.ReplaceAll(filepath.Base(fileName), " ", "_")
-	return fmt.Sprintf("kb_%d_%d_%d_%s", userID, kbID, time.Now().UnixNano(), safeName)
+	return fmt.Sprintf("kb_%d_%d_%s", kbID, time.Now().UnixNano(), safeName)
+}
+
+func resolveRetrieveKBIDs(req retrieveRequest, activeKBIDs []uint64) []uint64 {
+	activeSet := make(map[uint64]struct{}, len(activeKBIDs))
+	for _, id := range activeKBIDs {
+		if id > 0 {
+			activeSet[id] = struct{}{}
+		}
+	}
+	if len(activeSet) == 0 {
+		return nil
+	}
+
+	candidates := make([]uint64, 0, len(req.KBIDs)+1)
+	for _, id := range req.KBIDs {
+		if id > 0 {
+			candidates = append(candidates, id)
+		}
+	}
+	if req.KBID > 0 {
+		candidates = append(candidates, req.KBID)
+	}
+
+	if len(candidates) == 0 {
+		result := make([]uint64, 0, len(activeSet))
+		for id := range activeSet {
+			result = append(result, id)
+		}
+		return result
+	}
+
+	result := make([]uint64, 0, len(candidates))
+	seen := make(map[uint64]struct{}, len(candidates))
+	for _, id := range candidates {
+		if _, ok := activeSet[id]; !ok {
+			continue
+		}
+		if _, ok := seen[id]; ok {
+			continue
+		}
+		seen[id] = struct{}{}
+		result = append(result, id)
+	}
+	return result
+}
+
+func buildKBFilterExpr(kbIDs []uint64) string {
+	if len(kbIDs) == 0 {
+		return ""
+	}
+	if len(kbIDs) == 1 {
+		return fmt.Sprintf("metadata['kb_id'] == %d", kbIDs[0])
+	}
+
+	conditions := make([]string, 0, len(kbIDs))
+	for _, id := range kbIDs {
+		if id == 0 {
+			continue
+		}
+		conditions = append(conditions, fmt.Sprintf("metadata['kb_id'] == %d", id))
+	}
+	if len(conditions) == 0 {
+		return ""
+	}
+	return "(" + strings.Join(conditions, " || ") + ")"
 }
 
 func parseUint64(raw string, field string) (uint64, error) {

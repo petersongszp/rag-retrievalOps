@@ -166,6 +166,38 @@ func (d *_KBIngestJob) ListByUserID(userID uint, status *KBIngestJobStatus, page
 	return list, total, nil
 }
 
+func (d *_KBIngestJob) List(status *KBIngestJobStatus, page, pageSize int) ([]*KBIngestJob, int64, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	var list []*KBIngestJob
+	var total int64
+
+	query := getDB().Model(&KBIngestJob{})
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+
+	if err := query.Count(&total).Error; err != nil {
+		return nil, 0, err
+	}
+	err := query.Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at DESC").
+		Find(&list).Error
+	if err != nil {
+		return nil, 0, err
+	}
+	return list, total, nil
+}
+
 func (d *_KBIngestJob) ListPendingJobs(limit int) ([]*KBIngestJob, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
