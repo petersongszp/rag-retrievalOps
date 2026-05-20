@@ -6,6 +6,8 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,8 +15,10 @@ import (
 
 	"interview-agents/internal/agents/usecase/evaluation"
 	"interview-agents/internal/agents/usecase/resume"
+	"interview-agents/internal/config"
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/model"
+	"interview-agents/internal/observability/metrics"
 
 	"github.com/cloudwego/eino/schema"
 	"github.com/ledongthuc/pdf"
@@ -23,11 +27,22 @@ import (
 type knowledgeIngestErrorType string
 
 const (
+	knowledgeIngestErrorTypePayload   knowledgeIngestErrorType = "invalid_payload"
 	knowledgeIngestErrorTypeParse     knowledgeIngestErrorType = "parse_error"
 	knowledgeIngestErrorTypeEmbedding knowledgeIngestErrorType = "embedding_error"
 	knowledgeIngestErrorTypeMilvus    knowledgeIngestErrorType = "milvus_write_error"
 	knowledgeIngestErrorTypeUnknown   knowledgeIngestErrorType = "unknown_error"
 )
+
+const (
+	knowledgeRetryScannerBatchSize       = 50
+	knowledgeRetryScannerFallbackBackoff = 5 * time.Second
+	maxKnowledgeRetryBackoff             = 5 * time.Minute
+)
+
+func init() {
+	rand.Seed(time.Now().UnixNano())
+}
 
 // ConsumerHandler handles async message processing.
 type ConsumerHandler struct{}
@@ -147,104 +162,133 @@ func (h *ConsumerHandler) handleResumeParse(ctx context.Context, message *Messag
 }
 
 func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Message) error {
-	// 步骤1：记录处理开始时间，用于统计耗时
 	start := time.Now()
-	// 步骤2：序列化+反序列化，解析消息载荷为业务结构体
-	// 把消息的Payload转成JSON字节
-	payloadBytes, err := json.Marshal(message.Payload)
+
+	payload, err := parseKnowledgeIngestPayload(message.Payload)
 	if err != nil {
-		return fmt.Errorf("failed to marshal payload: %w", err)
-	}
-	// 把JSON字节解析为 KnowledgeIngestPayload（知识录入的参数结构体）
-	var payload KnowledgeIngestPayload
-	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
-		return fmt.Errorf("invalid knowledge_ingest payload: %w", err)
-	}
-	// 步骤3：必填参数校验（核心参数不能为空/0）
-	// 校验：用户ID、知识库ID、文档ID、任务ID、文件路径 必须合法
-	if payload.UserID == 0 || payload.KBID == 0 || payload.DocumentID == 0 || payload.JobID == 0 || strings.TrimSpace(payload.FilePath) == "" {
-		return fmt.Errorf("invalid knowledge_ingest payload values: user_id=%d kb_id=%d document_id=%d job_id=%d file_path=%q",
-			payload.UserID, payload.KBID, payload.DocumentID, payload.JobID, payload.FilePath)
+		log.Printf("[KB Ingest] payload parse failed: err=%v", err)
+		metrics.ObserveIngest(time.Since(start), string(model.KBIngestJobStatusFailed), string(knowledgeIngestErrorTypePayload))
+		return nil
 	}
 
-	// =====================================================================
-	// 步骤4：定义内部闭包函数 writeStatus（核心：更新数据库状态）
-	// 作用：统一更新「录入任务状态」「文档状态」「文档分块数」
-	// 参数：任务状态、文档状态、分块数量、错误信息
-	// 特点：失败只打日志，不中断主流程（保证状态尽量落地）
-	// =====================================================================
-	writeStatus := func(jobStatus model.KBIngestJobStatus, docStatus model.KBDocumentStatus, chunkCount int, errorMsg string) {
-		// 1. 如果分块数≥0，更新数据库中文档的分块总数
-		if chunkCount >= 0 {
-			if err := model.KBDocumentDao.UpdateChunkCount(payload.DocumentID, chunkCount); err != nil {
-				log.Printf("[KB Ingest] failed to update chunk_count: job_id=%d document_id=%d err=%v", payload.JobID, payload.DocumentID, err)
-			}
-		}
-		// 2. 更新数据库中「录入任务」的状态+错误信息
-		if err := model.KBIngestJobDao.UpdateStatus(payload.JobID, jobStatus, errorMsg); err != nil {
-			log.Printf("[KB Ingest] failed to update job status: job_id=%d status=%s err=%v", payload.JobID, jobStatus, err)
-		}
-		// 3. 更新数据库中「文档」的状态+错误信息
-		if err := model.KBDocumentDao.UpdateStatus(payload.DocumentID, docStatus, errorMsg); err != nil {
-			log.Printf("[KB Ingest] failed to update document status: document_id=%d status=%s err=%v", payload.DocumentID, docStatus, err)
-		}
+	if !shouldHandleKnowledgeJob(payload.JobID) {
+		return nil
 	}
-	// 步骤5：初始状态：标记「任务+文档」为 处理中(Processing)
-	writeStatus(model.KBIngestJobStatusProcessing, model.KBDocumentStatusProcessing, -1, "")
-	// 步骤6：提取文件原始文本
-	// 调用工具方法：根据文件路径+文件类型，读取并提取纯文本内容
+
+	claimed, claimErr := model.KBIngestJobDao.ClaimForProcessing(payload.JobID)
+	if claimErr != nil {
+		log.Printf("[KB Ingest] failed to claim job for processing: job_id=%d err=%v", payload.JobID, claimErr)
+		return nil
+	}
+	if !claimed {
+		log.Printf("[KB Ingest] job claim ignored due to state mismatch: job_id=%d", payload.JobID)
+		return nil
+	}
+
+	if updateErr := model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusProcessing, ""); updateErr != nil {
+		log.Printf("[KB Ingest] failed to update document status to processing: document_id=%d err=%v", payload.DocumentID, updateErr)
+	}
+
+	totalChunks, ingestErr := ingestKnowledgeDocument(ctx, payload)
+	if ingestErr != nil {
+		handleKnowledgeIngestFailure(payload, ingestErr, start)
+		return nil
+	}
+
+	if updateErr := model.KBDocumentDao.UpdateChunkCount(payload.DocumentID, totalChunks); updateErr != nil {
+		log.Printf("[KB Ingest] failed to update chunk_count: job_id=%d document_id=%d err=%v", payload.JobID, payload.DocumentID, updateErr)
+	}
+
+	updated, updateErr := model.KBIngestJobDao.UpdateStatusFrom(
+		payload.JobID,
+		model.KBIngestJobStatusCompleted,
+		"",
+		model.KBIngestJobStatusProcessing,
+	)
+	if updateErr != nil {
+		log.Printf("[KB Ingest] failed to update job completed: job_id=%d err=%v", payload.JobID, updateErr)
+	} else if updated {
+		if docErr := model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusCompleted, ""); docErr != nil {
+			log.Printf("[KB Ingest] failed to update document completed: document_id=%d err=%v", payload.DocumentID, docErr)
+		}
+	} else {
+		log.Printf("[KB Ingest] skip complete update due to non-processing state: job_id=%d", payload.JobID)
+	}
+
+	logKnowledgeIngest(payload, string(model.KBIngestJobStatusCompleted), "", totalChunks, time.Since(start))
+	metrics.ObserveIngest(time.Since(start), string(model.KBIngestJobStatusCompleted), "none")
+	return nil
+}
+
+func parseKnowledgeIngestPayload(raw map[string]interface{}) (KnowledgeIngestPayload, error) {
+	payloadBytes, err := json.Marshal(raw)
+	if err != nil {
+		return KnowledgeIngestPayload{}, fmt.Errorf("failed to marshal payload: %w", err)
+	}
+
+	var payload KnowledgeIngestPayload
+	if err := json.Unmarshal(payloadBytes, &payload); err != nil {
+		return KnowledgeIngestPayload{}, fmt.Errorf("invalid knowledge_ingest payload: %w", err)
+	}
+	if payload.OperatorAdminID == 0 {
+		payload.OperatorAdminID = payload.UserID
+	}
+
+	if payload.OperatorAdminID == 0 || payload.KBID == 0 || payload.DocumentID == 0 || payload.JobID == 0 || strings.TrimSpace(payload.FilePath) == "" {
+		return KnowledgeIngestPayload{}, fmt.Errorf(
+			"invalid knowledge_ingest payload values: operator_admin_id=%d kb_id=%d document_id=%d job_id=%d file_path=%q",
+			payload.OperatorAdminID, payload.KBID, payload.DocumentID, payload.JobID, payload.FilePath,
+		)
+	}
+	payload.UserID = payload.OperatorAdminID
+	return payload, nil
+}
+
+func shouldHandleKnowledgeJob(jobID uint64) bool {
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		log.Printf("[KB Ingest] failed to load job, skip message: job_id=%d err=%v", jobID, err)
+		return false
+	}
+
+	switch job.Status {
+	case model.KBIngestJobStatusCompleted, model.KBIngestJobStatusDead, model.KBIngestJobStatusCanceled:
+		log.Printf("[KB Ingest] job already terminal, skip: job_id=%d status=%s", jobID, job.Status)
+		return false
+	default:
+		return true
+	}
+}
+
+func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload) (int, error) {
 	rawText, err := extractKnowledgeRawText(ctx, payload.FilePath, payload.FileType)
 	if err != nil {
-		// 提取失败：分类错误类型 → 更新状态为失败 → 记录日志 → 返回错误
-		errType := classifyKnowledgeIngestError(err)
-		finalErr := fmt.Errorf("%s: %v", errType, err)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "failed to extract source text", err)
 	}
-	// 步骤7：获取向量数据库(Milvus)管理器
+
 	manager, err := milvus.GetMilvusManager()
 	if err != nil {
-		// Milvus连接失败：标记失败 → 日志 → 返回
-		finalErr := fmt.Errorf("%s: %v", knowledgeIngestErrorTypeMilvus, err)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to get milvus manager", err)
 	}
-	// 校验Milvus的两个核心服务是否初始化完成
 	if manager.GetSplitterService() == nil || manager.GetIndexerService() == nil {
-		finalErr := fmt.Errorf("%s: milvus manager services are not initialized", knowledgeIngestErrorTypeMilvus)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
 	}
-	// 步骤8：文本分块（知识库核心：把长文本切成小片段）
-	// 封装文档对象 → 调用拆分服务切割文本
+
 	doc := &schema.Document{Content: rawText}
 	chunks, err := manager.GetSplitterService().Split(ctx, []*schema.Document{doc})
 	if err != nil {
-		errType := classifyKnowledgeIngestError(err)
-		finalErr := fmt.Errorf("%s: %v", errType, err)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		errorCode := classifyKnowledgeIngestError(err)
+		return 0, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
 	}
-	// 分块失败：标记失败 → 日志 → 返回
 	if len(chunks) == 0 {
-		finalErr := fmt.Errorf("%s: empty chunks after split", knowledgeIngestErrorTypeParse)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "empty chunks after split", nil)
 	}
-	// 步骤9：从数据库查询文档原始信息（主要拿文件名）
+
 	docRecord, err := model.KBDocumentDao.GetByID(payload.DocumentID)
 	if err != nil {
-		finalErr := fmt.Errorf("%s: failed to load document: %v", knowledgeIngestErrorTypeUnknown, err)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
-	// 步骤10：填充分块的元数据（关键：给每个文本块加标识，方便后续检索）
+
 	now := time.Now().UTC().Format(time.RFC3339)
 	totalChunks := len(chunks)
 	for i, chunk := range chunks {
@@ -258,6 +302,8 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 			chunk.MetaData = map[string]interface{}{}
 		}
 		chunk.MetaData["user_id"] = payload.UserID
+		chunk.MetaData["operator_admin_id"] = payload.OperatorAdminID
+		chunk.MetaData["kb_scope"] = "global"
 		chunk.MetaData["kb_id"] = payload.KBID
 		chunk.MetaData["document_id"] = payload.DocumentID
 		chunk.MetaData["chunk_index"] = i
@@ -265,150 +311,415 @@ func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Me
 		chunk.MetaData["file_name"] = docRecord.FileName
 		chunk.MetaData["created_at"] = now
 	}
-	// 步骤11：将分块存入向量数据库(Milvus)
+
 	if _, err := manager.GetIndexerService().Store(ctx, chunks); err != nil {
-		errType := classifyKnowledgeIngestError(err)
-		finalErr := fmt.Errorf("%s: %v", errType, err)
-		writeStatus(model.KBIngestJobStatusFailed, model.KBDocumentStatusFailed, 0, finalErr.Error())
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), finalErr.Error(), 0, time.Since(start))
-		return finalErr
+		errorCode := classifyKnowledgeIngestError(err)
+		return 0, buildKnowledgeIngestError(errorCode, "failed to store chunks to milvus", err)
 	}
-	// 步骤12：处理完成！更新状态为成功
-	writeStatus(model.KBIngestJobStatusCompleted, model.KBDocumentStatusCompleted, totalChunks, "")
-	logKnowledgeIngest(payload, string(model.KBIngestJobStatusCompleted), "", totalChunks, time.Since(start))
-	return nil
+
+	return totalChunks, nil
 }
 
-// 参数解释：
-// payload: 知识录入请求参数（含任务ID、文档ID等）
-// status: 任务状态（处理中/失败/完成）
-// errorMsg: 错误信息（成功为空字符串）
-// chunkCount: 文本分块数量
-// duration: 任务总耗时
+func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr error, startedAt time.Time) {
+	errorCode := getKnowledgeIngestErrorCode(ingestErr)
+	errorDetail := ingestErr.Error()
+	retryable := isKnowledgeIngestRetryable(errorCode, ingestErr)
+
+	if !config.Global.RAG.FeatureFlags.EnableIngestRetry || !retryable {
+		if err := model.KBIngestJobDao.UpdateFailureState(
+			payload.JobID,
+			model.KBIngestJobStatusFailed,
+			errorDetail,
+			string(errorCode),
+			errorDetail,
+			nil,
+			false,
+		); err != nil {
+			log.Printf("[KB Ingest] failed to mark failed: job_id=%d err=%v", payload.JobID, err)
+		}
+		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
+		return
+	}
+
+	job, err := model.KBIngestJobDao.GetByID(payload.JobID)
+	if err != nil {
+		log.Printf("[KB Ingest Retry] failed to load job, fallback to failed: job_id=%d err=%v", payload.JobID, err)
+		_ = model.KBIngestJobDao.UpdateFailureState(
+			payload.JobID,
+			model.KBIngestJobStatusFailed,
+			errorDetail,
+			string(errorCode),
+			errorDetail,
+			nil,
+			false,
+		)
+		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
+		return
+	}
+
+	nextRetryCount := job.RetryCount + 1
+	maxRetryCount := resolveKnowledgeRetryCount()
+	if nextRetryCount > maxRetryCount {
+		if err := model.KBIngestJobDao.UpdateFailureState(
+			payload.JobID,
+			model.KBIngestJobStatusFailed,
+			errorDetail,
+			string(errorCode),
+			errorDetail,
+			nil,
+			false,
+		); err != nil {
+			log.Printf("[KB Ingest Retry] failed to mark failed before dead: job_id=%d err=%v", payload.JobID, err)
+		}
+		if _, err := model.KBIngestJobDao.UpdateStatusFrom(
+			payload.JobID,
+			model.KBIngestJobStatusDead,
+			errorDetail,
+			model.KBIngestJobStatusFailed,
+		); err != nil {
+			log.Printf("[KB Ingest Retry] failed to mark dead: job_id=%d err=%v", payload.JobID, err)
+		}
+		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusDead), errorDetail, 0, time.Since(startedAt))
+		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusDead), string(errorCode))
+		return
+	}
+
+	delay := calculateKnowledgeRetryBackoff(nextRetryCount)
+	nextRetryAt := time.Now().Add(delay)
+	if err := model.KBIngestJobDao.UpdateFailureState(
+		payload.JobID,
+		model.KBIngestJobStatusRetrying,
+		errorDetail,
+		string(errorCode),
+		errorDetail,
+		&nextRetryAt,
+		true,
+	); err != nil {
+		log.Printf("[KB Ingest Retry] failed to mark retrying: job_id=%d err=%v", payload.JobID, err)
+	}
+	_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
+
+	log.Printf(
+		"[KB Ingest Retry] job_id=%d retry_count=%d max_retry=%d next_retry_at=%s backoff_ms=%d error_code=%s error=%q",
+		payload.JobID,
+		nextRetryCount,
+		maxRetryCount,
+		nextRetryAt.Format(time.RFC3339),
+		delay.Milliseconds(),
+		errorCode,
+		errorDetail,
+	)
+	logKnowledgeIngest(payload, string(model.KBIngestJobStatusRetrying), errorDetail, 0, time.Since(startedAt))
+	metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusRetrying), string(errorCode))
+}
+
+func startKnowledgeRetryCompensator(ctx context.Context) {
+	interval := resolveKnowledgeRetryScannerInterval()
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+	log.Printf("[KB Retry Scanner] started, interval=%s batch=%d", interval, knowledgeRetryScannerBatchSize)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Printf("[KB Retry Scanner] stopped")
+			return
+		case <-ticker.C:
+			runKnowledgeRetryCompensation(ctx)
+		}
+	}
+}
+
+func runKnowledgeRetryCompensation(ctx context.Context) {
+	now := time.Now()
+	jobs, err := model.KBIngestJobDao.ListRetryDueJobs(knowledgeRetryScannerBatchSize, now)
+	if err != nil {
+		log.Printf("[KB Retry Scanner] failed to list due jobs: err=%v", err)
+		return
+	}
+	if len(jobs) == 0 {
+		return
+	}
+
+	for _, job := range jobs {
+		if job == nil {
+			continue
+		}
+
+		claimed, err := model.KBIngestJobDao.MarkPendingForRetry(job.ID, now)
+		if err != nil {
+			log.Printf("[KB Retry Scanner] failed to claim job: job_id=%d err=%v", job.ID, err)
+			continue
+		}
+		if !claimed {
+			continue
+		}
+
+		doc, err := model.KBDocumentDao.GetByID(job.DocumentID)
+		if err != nil {
+			detail := fmt.Sprintf("source document not found during retry compensation: %v", err)
+			_ = model.KBIngestJobDao.UpdateFailureState(
+				job.ID,
+				model.KBIngestJobStatusDead,
+				detail,
+				string(knowledgeIngestErrorTypeUnknown),
+				detail,
+				nil,
+				false,
+			)
+			log.Printf("[KB Retry Scanner] mark job dead because document missing: job_id=%d document_id=%d", job.ID, job.DocumentID)
+			continue
+		}
+
+		payload := KnowledgeIngestPayload{
+			UserID:     job.UserID,
+			KBID:       job.KbID,
+			DocumentID: job.DocumentID,
+			JobID:      job.ID,
+			FilePath:   doc.StoragePath,
+			FileType:   doc.FileType,
+		}
+
+		if err := PublishKnowledgeIngest(ctx, payload); err != nil {
+			detail := fmt.Sprintf("failed to republish ingest task: %v", err)
+			nextRetryAt := time.Now().Add(knowledgeRetryScannerFallbackBackoff)
+			_ = model.KBIngestJobDao.UpdateFailureState(
+				job.ID,
+				model.KBIngestJobStatusFailed,
+				detail,
+				string(knowledgeIngestErrorTypeUnknown),
+				detail,
+				&nextRetryAt,
+				false,
+			)
+			log.Printf("[KB Retry Scanner] failed to republish: job_id=%d err=%v", job.ID, err)
+			continue
+		}
+
+		_ = model.KBDocumentDao.UpdateStatus(job.DocumentID, model.KBDocumentStatusPending, "")
+		log.Printf("[KB Retry Scanner] republished job: job_id=%d document_id=%d retry_count=%d", job.ID, job.DocumentID, job.RetryCount)
+	}
+}
+
 func logKnowledgeIngest(payload KnowledgeIngestPayload, status, errorMsg string, chunkCount int, duration time.Duration) {
-	// 格式化打印日志，所有核心字段一一对应
 	log.Printf(
 		"[KB Ingest] job_id=%d document_id=%d kb_id=%d user_id=%d status=%s error_msg=%q chunk_count=%d duration_ms=%d",
-		payload.JobID,           // 唯一任务ID
-		payload.DocumentID,      // 文档ID
-		payload.KBID,            // 知识库ID
-		payload.UserID,          // 用户ID
-		status,                  // 处理状态
-		errorMsg,                // 错误信息（空则为""）
-		chunkCount,              // 文本分块总数
-		duration.Milliseconds(), // 耗时（转换为毫秒，方便统计）
+		payload.JobID,
+		payload.DocumentID,
+		payload.KBID,
+		payload.UserID,
+		status,
+		errorMsg,
+		chunkCount,
+		duration.Milliseconds(),
 	)
 }
 
-// 返回值：自定义枚举类型 knowledgeIngestErrorType（定义了：嵌入失败/向量库失败/解析失败/未知错误）
-func classifyKnowledgeIngestError(err error) knowledgeIngestErrorType {
-	// 空错误直接返回未知类型
+func buildKnowledgeIngestError(errorCode knowledgeIngestErrorType, detail string, cause error) error {
+	if cause == nil {
+		return fmt.Errorf("%s: %s", errorCode, detail)
+	}
+	return fmt.Errorf("%s: %s: %w", errorCode, detail, cause)
+}
+
+func getKnowledgeIngestErrorCode(err error) knowledgeIngestErrorType {
 	if err == nil {
 		return knowledgeIngestErrorTypeUnknown
 	}
-	// 把错误信息转小写，避免大小写导致匹配失败
+
 	msg := strings.ToLower(err.Error())
-	// 关键词匹配分类
 	switch {
-	// 匹配：嵌入、向量生成相关错误
-	case strings.Contains(msg, "embed"), strings.Contains(msg, "embedding"), strings.Contains(msg, "vector"):
-		return knowledgeIngestErrorTypeEmbedding
-	// 匹配：向量数据库Milvus、存储相关错误
-	case strings.Contains(msg, "milvus"), strings.Contains(msg, "indexer"), strings.Contains(msg, "store"):
-		return knowledgeIngestErrorTypeMilvus
-	// 匹配：文件解析、读取、切割、PDF处理相关错误
-	case strings.Contains(msg, "parse"), strings.Contains(msg, "pdf"), strings.Contains(msg, "read"), strings.Contains(msg, "extract"), strings.Contains(msg, "split"):
+	case strings.Contains(msg, string(knowledgeIngestErrorTypePayload)):
+		return knowledgeIngestErrorTypePayload
+	case strings.Contains(msg, string(knowledgeIngestErrorTypeParse)):
 		return knowledgeIngestErrorTypeParse
-	// 其他所有错误：未知类型
+	case strings.Contains(msg, string(knowledgeIngestErrorTypeEmbedding)):
+		return knowledgeIngestErrorTypeEmbedding
+	case strings.Contains(msg, string(knowledgeIngestErrorTypeMilvus)):
+		return knowledgeIngestErrorTypeMilvus
+	default:
+		return classifyKnowledgeIngestError(err)
+	}
+}
+
+func classifyKnowledgeIngestError(err error) knowledgeIngestErrorType {
+	if err == nil {
+		return knowledgeIngestErrorTypeUnknown
+	}
+
+	msg := strings.ToLower(err.Error())
+	switch {
+	case strings.Contains(msg, "embed"),
+		strings.Contains(msg, "embedding"),
+		strings.Contains(msg, "vector"):
+		return knowledgeIngestErrorTypeEmbedding
+	case strings.Contains(msg, "milvus"),
+		strings.Contains(msg, "indexer"),
+		strings.Contains(msg, "store"):
+		return knowledgeIngestErrorTypeMilvus
+	case strings.Contains(msg, "parse"),
+		strings.Contains(msg, "pdf"),
+		strings.Contains(msg, "read"),
+		strings.Contains(msg, "extract"),
+		strings.Contains(msg, "split"):
+		return knowledgeIngestErrorTypeParse
 	default:
 		return knowledgeIngestErrorTypeUnknown
 	}
 }
 
-// 参数：ctx上下文、文件路径、文件类型
-// 返回：提取的纯文本、错误
-func extractKnowledgeRawText(ctx context.Context, filePath, fileType string) (string, error) {
-	_ = ctx // 上下文暂未使用，保留用于未来扩展（超时、链路追踪）
+func isKnowledgeIngestRetryable(errorCode knowledgeIngestErrorType, err error) bool {
+	switch errorCode {
+	case knowledgeIngestErrorTypePayload, knowledgeIngestErrorTypeParse:
+		return false
+	case knowledgeIngestErrorTypeEmbedding, knowledgeIngestErrorTypeMilvus:
+		return hasTransientFailureSignal(err)
+	case knowledgeIngestErrorTypeUnknown:
+		return hasTransientFailureSignal(err)
+	default:
+		return false
+	}
+}
 
-	// 1. 基础校验：文件路径不能为空
+func hasTransientFailureSignal(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	msg := strings.ToLower(err.Error())
+	transientKeywords := []string{
+		"timeout",
+		"timed out",
+		"deadline exceeded",
+		"temporarily unavailable",
+		"temporary failure",
+		"connection reset",
+		"connection refused",
+		"broken pipe",
+		"eof",
+		"i/o timeout",
+		"network",
+	}
+	for _, keyword := range transientKeywords {
+		if strings.Contains(msg, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func resolveKnowledgeRetryCount() int {
+	maxRetry := config.Global.RAG.Thresholds.MaxRetryCount
+	if maxRetry <= 0 {
+		return 3
+	}
+	return maxRetry
+}
+
+func resolveKnowledgeRetryBackoff() time.Duration {
+	backoffMS := config.Global.RAG.Thresholds.RetryBackoffMS
+	if backoffMS <= 0 {
+		backoffMS = 500
+	}
+	return time.Duration(backoffMS) * time.Millisecond
+}
+
+func resolveKnowledgeRetryScannerInterval() time.Duration {
+	base := resolveKnowledgeRetryBackoff()
+	if base < 5*time.Second {
+		return 5 * time.Second
+	}
+	if base > 30*time.Second {
+		return 30 * time.Second
+	}
+	return base
+}
+
+func calculateKnowledgeRetryBackoff(retryCount int) time.Duration {
+	if retryCount <= 0 {
+		retryCount = 1
+	}
+
+	base := resolveKnowledgeRetryBackoff()
+	exponent := math.Pow(2, float64(retryCount-1))
+	delay := time.Duration(float64(base) * exponent)
+	if delay > maxKnowledgeRetryBackoff {
+		delay = maxKnowledgeRetryBackoff
+	}
+
+	jitter := 0.8 + rand.Float64()*0.4
+	jittered := time.Duration(float64(delay) * jitter)
+	if jittered < time.Second {
+		return time.Second
+	}
+	return jittered
+}
+
+func extractKnowledgeRawText(ctx context.Context, filePath, fileType string) (string, error) {
+	_ = ctx
+
 	if strings.TrimSpace(filePath) == "" {
 		return "", fmt.Errorf("file path is empty")
 	}
-	// 2. 校验文件是否存在、是否可访问
 	if _, err := os.Stat(filePath); err != nil {
 		return "", fmt.Errorf("failed to access file: %w", err)
 	}
 
-	// 3. 标准化文件类型（转小写、去空格）
 	normalizedType := strings.ToLower(strings.TrimSpace(fileType))
-	// 如果未传入文件类型，自动从文件路径中提取后缀（如 .pdf → pdf）
 	if normalizedType == "" {
 		normalizedType = strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
 	}
 
-	// 4. 根据文件类型分支处理
 	switch normalizedType {
-	// 文本类文件：直接读取
 	case "txt", "md", "markdown":
 		data, err := os.ReadFile(filePath)
 		if err != nil {
 			return "", fmt.Errorf("failed to read text file: %w", err)
 		}
-		// 转字符串并去除首尾空白
 		text := strings.TrimSpace(string(data))
-		// 空文本直接报错
 		if text == "" {
 			return "", fmt.Errorf("empty text content")
 		}
 		return text, nil
-	// PDF文件：调用专用PDF提取函数
 	case "pdf":
 		return extractTextFromPDF(filePath)
-	// 不支持的文件类型：报错
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", normalizedType)
 	}
 }
 
-// 参数：PDF文件路径
-// 返回：PDF纯文本、错误
 func extractTextFromPDF(filePath string) (string, error) {
-	// 打开PDF文件（使用第三方pdf库）
 	f, r, err := pdf.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open pdf: %w", err)
 	}
-	// 延迟关闭文件句柄，防止资源泄漏
 	defer func() {
 		_ = f.Close()
 	}()
 
-	// 字符串Builder：高效拼接文本
 	var builder strings.Builder
-	// 获取PDF总页数
 	totalPages := r.NumPage()
 
-	// 逐页遍历提取文本
 	for pageIndex := 1; pageIndex <= totalPages; pageIndex++ {
 		p := r.Page(pageIndex)
-		// 跳过空页面
 		if p.V.IsNull() {
 			continue
 		}
-		// 提取当前页纯文本
+
 		pageText, err := p.GetPlainText(nil)
 		if err != nil {
-			// 报错携带页码，方便定位损坏页面
 			return "", fmt.Errorf("failed to extract pdf text on page %d: %w", pageIndex, err)
 		}
-		// 拼接文本，每页换行
 		builder.WriteString(pageText)
 		builder.WriteString("\n")
 	}
 
-	// 最终文本去空白
 	text := strings.TrimSpace(builder.String())
-	// 空内容报错
 	if text == "" {
 		return "", errors.New("empty text extracted from pdf")
 	}
@@ -416,23 +727,23 @@ func extractTextFromPDF(filePath string) (string, error) {
 }
 
 // StartConsumer starts MQ consumer loop.
-// 注释：启动MQ消费者循环
-// 参数：ctx上下文（用于优雅关闭消费者）
 func StartConsumer(ctx context.Context) error {
-	// 1. 获取全局消息队列实例（单例）
 	mq := GetMessageQueue()
-	// 2. 创建消息处理器（就是包含handleKnowledgeIngest的结构体）
 	handler := NewConsumerHandler()
 
-	// 打印启动日志
 	log.Printf("[Consumer] starting message consumer")
-	// 打印MQ类型，方便调试（确认使用的是Kafka/RabbitMQ等）
 	log.Printf("[Consumer] MQ type: %T", mq)
 
-	// 3. 核心：订阅消息队列，绑定HandleMessage处理方法
-	// 程序会阻塞在这里，持续消费消息，直到上下文关闭/异常退出
+	if config.Global.RAG.FeatureFlags.EnableIngestRetry {
+		go startKnowledgeRetryCompensator(ctx)
+	}
+	if reporter, ok := mq.(interface {
+		StartMetricsReporter(context.Context)
+	}); ok {
+		go reporter.StartMetricsReporter(ctx)
+	}
+
 	err := mq.Subscribe(ctx, handler.HandleMessage)
-	// 消费者停止后打印日志
 	log.Printf("[Consumer] consumer stopped: %v", err)
 	return err
 }

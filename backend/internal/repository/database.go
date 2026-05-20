@@ -80,6 +80,7 @@ func migrateDatabase() error {
 		&model.KBKnowledgeBase{},
 		&model.KBDocument{},
 		&model.KBIngestJob{},
+		&model.KBJobOperationLog{},
 	)
 }
 

@@ -4,15 +4,23 @@ import (
 	kb "interview-agents/api/handler/kb"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
+	"github.com/cloudwego/hertz/pkg/route"
 )
 
 func registerKnowledgeBaseRoutes(r *server.Hertz) {
-	kbGroup := r.Group("/api/kb")
-	kbGroup.POST("/bases", kb.CreateKnowledgeBase)
-	kbGroup.GET("/bases", kb.ListKnowledgeBases)
-	kbGroup.POST("/documents/upload", kb.UploadDocument)
-	kbGroup.GET("/documents", kb.ListDocuments)
-	kbGroup.GET("/jobs/:job_id", kb.GetJob)
-	kbGroup.DELETE("/documents/:document_id", kb.DeleteDocument)
-	kbGroup.POST("/retrieve", kb.Retrieve)
+	registerKBGroup(r.Group("/api/kb"))
+	registerKBGroup(r.Group("/api/admin/kb"))
+}
+
+func registerKBGroup(group *route.RouterGroup) {
+	group.POST("/bases", kb.CreateKnowledgeBase)
+	group.GET("/bases", kb.ListKnowledgeBases)
+	group.POST("/documents/upload", kb.UploadDocument)
+	group.GET("/documents", kb.ListDocuments)
+	group.GET("/jobs", kb.ListJobs)
+	group.GET("/jobs/:job_id", kb.GetJob)
+	group.POST("/jobs/:job_id/retry", kb.RetryJob)
+	group.POST("/jobs/:job_id/cancel", kb.CancelJob)
+	group.DELETE("/documents/:document_id", kb.DeleteDocument)
+	group.POST("/retrieve", kb.Retrieve)
 }

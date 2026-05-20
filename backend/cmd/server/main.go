@@ -13,6 +13,7 @@ import (
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/looptrace"
+	"interview-agents/internal/observability/metrics"
 	paymentpkg "interview-agents/internal/payment"
 	paypalAdapter "interview-agents/internal/payment/providers/paypal"
 	stripeAdapter "interview-agents/internal/payment/providers/stripe"
@@ -63,6 +64,17 @@ func main() {
 	log.Printf("DEBUG LLM_API_KEY from env: %q", os.Getenv("LLM_API_KEY"))
 	log.Printf("DEBUG cfg.LLM.APIKey after expand: %q", cfg.LLM.APIKey)
 	log.Printf("RAG feature enabled: %t", cfg.RAG.Enabled)
+	log.Printf("[RAG:L0] flags prod_guard=%t ingest_retry=%t retrieve_audit=%t",
+		cfg.RAG.FeatureFlags.EnableProdGuard,
+		cfg.RAG.FeatureFlags.EnableIngestRetry,
+		cfg.RAG.FeatureFlags.EnableRetrieveAudit,
+	)
+	log.Printf("[RAG:L0] thresholds max_retry_count=%d retry_backoff_ms=%d retrieve_timeout_ms=%d user_qps_limit=%d",
+		cfg.RAG.Thresholds.MaxRetryCount,
+		cfg.RAG.Thresholds.RetryBackoffMS,
+		cfg.RAG.Thresholds.RetrieveTimeoutMS,
+		cfg.RAG.Thresholds.UserQPSLimit,
+	)
 
 	// 4. 初始化数据库
 	log.Println("Initializing database connection...")
@@ -230,6 +242,7 @@ func main() {
 	s.GET("/health", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "healthy"})
 	})
+	s.GET("/metrics", metrics.PrometheusHandler)
 
 	// 创建一个通道来监听中断信号
 	quit := make(chan os.Signal, 1)

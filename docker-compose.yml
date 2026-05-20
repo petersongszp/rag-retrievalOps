@@ -218,6 +218,59 @@
     networks:
       - app-network
 
+  # 15. Prometheus metrics and rules
+  prometheus:
+    image: prom/prometheus:v2.54.1
+    container_name: app-prometheus
+    restart: always
+    ports:
+      - '9090:9090'
+    volumes:
+      - ./backend/deploy/monitoring/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./backend/deploy/monitoring/prometheus/rag-l3-alert-rules.yml:/etc/prometheus/rules/rag-l3-alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    depends_on:
+      - backend
+      - alertmanager
+    networks:
+      - app-network
+
+  # 16. Alertmanager
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: app-alertmanager
+    restart: always
+    ports:
+      - '9093:9093'
+    command:
+      - '--config.file=/etc/alertmanager/alertmanager.yml'
+      - '--storage.path=/alertmanager'
+    volumes:
+      - ./backend/deploy/monitoring/alertmanager/rag-l3-alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - app-network
+
+  # 17. Grafana dashboards
+  grafana:
+    image: grafana/grafana:11.1.4
+    container_name: app-grafana
+    restart: always
+    ports:
+      - '3001:3000'
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - ./backend/deploy/monitoring/grafana/provisioning/datasources:/etc/grafana/provisioning/datasources:ro
+      - ./backend/deploy/monitoring/grafana/provisioning/dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./backend/deploy/monitoring/grafana/dashboards:/etc/grafana/provisioning/dashboards-json:ro
+      - grafana-data:/var/lib/grafana
+    depends_on:
+      - prometheus
+    networks:
+      - app-network
+
 volumes:
   mysql-data:
     driver: local
@@ -228,6 +281,12 @@ volumes:
   minio-data:
     driver: local
   milvus-data:
+    driver: local
+  prometheus-data:
+    driver: local
+  alertmanager-data:
+    driver: local
+  grafana-data:
     driver: local
   go-mod-cache:
   node-mod-cache:

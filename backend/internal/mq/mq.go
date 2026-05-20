@@ -43,12 +43,13 @@ type ResumeParsePayload struct {
 }
 
 type KnowledgeIngestPayload struct {
-	UserID     uint   `json:"user_id"`
-	KBID       uint64 `json:"kb_id"`
-	DocumentID uint64 `json:"document_id"`
-	JobID      uint64 `json:"job_id"`
-	FilePath   string `json:"file_path"`
-	FileType   string `json:"file_type"`
+	UserID          uint   `json:"user_id"`
+	OperatorAdminID uint   `json:"operator_admin_id,omitempty"`
+	KBID            uint64 `json:"kb_id"`
+	DocumentID      uint64 `json:"document_id"`
+	JobID           uint64 `json:"job_id"`
+	FilePath        string `json:"file_path"`
+	FileType        string `json:"file_type"`
 }
 
 // MessageQueue defines queue behavior.
