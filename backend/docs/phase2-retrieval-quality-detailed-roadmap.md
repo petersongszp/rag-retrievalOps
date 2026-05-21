@@ -78,9 +78,7 @@ Phase 2 按 9 条路线推进，按门禁顺序合流：
 
 ### 目标
 在不破坏 Phase 1 生产稳定性的前提下，为质量优化提供可灰度、可回滚、可对比的运行基础。
-
 ### 功能任务
-
 1. 新增 Feature Flag：
    - `RAG_ENABLE_HYBRID_RETRIEVAL`
    - `RAG_ENABLE_QUERY_REWRITE`
