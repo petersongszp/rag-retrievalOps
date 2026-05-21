@@ -69,11 +69,28 @@ func main() {
 		cfg.RAG.FeatureFlags.EnableIngestRetry,
 		cfg.RAG.FeatureFlags.EnableRetrieveAudit,
 	)
+	log.Printf("[RAG:L0] phase2_flags hybrid=%t rewrite=%t dynamic_topk=%t advanced_rerank=%t",
+		cfg.RAG.FeatureFlags.EnableHybridRetrieval,
+		cfg.RAG.FeatureFlags.EnableQueryRewrite,
+		cfg.RAG.FeatureFlags.EnableDynamicTopK,
+		cfg.RAG.FeatureFlags.EnableAdvancedRerank,
+	)
 	log.Printf("[RAG:L0] thresholds max_retry_count=%d retry_backoff_ms=%d retrieve_timeout_ms=%d user_qps_limit=%d",
 		cfg.RAG.Thresholds.MaxRetryCount,
 		cfg.RAG.Thresholds.RetryBackoffMS,
 		cfg.RAG.Thresholds.RetrieveTimeoutMS,
 		cfg.RAG.Thresholds.UserQPSLimit,
+	)
+	log.Printf("[RAG:L0] phase2_params dense_weight=%.3f sparse_weight=%.3f candidate_topk=%d min_topk=%d max_topk=%d rewrite_timeout_ms=%d rewrite_max_expansions=%d rerank_timeout_ms=%d rerank_model=%s",
+		cfg.RAG.Phase2.HybridDenseWeight,
+		cfg.RAG.Phase2.HybridSparseWeight,
+		cfg.RAG.Phase2.CandidateTopK,
+		cfg.RAG.Phase2.MinTopK,
+		cfg.RAG.Phase2.MaxTopK,
+		cfg.RAG.Phase2.RewriteTimeoutMS,
+		cfg.RAG.Phase2.RewriteMaxExpansions,
+		cfg.RAG.Phase2.RerankTimeoutMS,
+		cfg.RAG.Phase2.RerankModel,
 	)
 
 	// 4. 初始化数据库

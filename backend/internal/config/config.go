@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -207,12 +208,17 @@ type RAGConfig struct {
 	Environment  string          `yaml:"environment"`
 	FeatureFlags RAGFeatureFlags `yaml:"feature_flags"`
 	Thresholds   RAGThresholds   `yaml:"thresholds"`
+	Phase2       RAGPhase2Config `yaml:"phase2"`
 }
 
 type RAGFeatureFlags struct {
-	EnableProdGuard     bool `yaml:"enable_prod_guard"`
-	EnableIngestRetry   bool `yaml:"enable_ingest_retry"`
-	EnableRetrieveAudit bool `yaml:"enable_retrieve_audit"`
+	EnableProdGuard       bool `yaml:"enable_prod_guard"`
+	EnableIngestRetry     bool `yaml:"enable_ingest_retry"`
+	EnableRetrieveAudit   bool `yaml:"enable_retrieve_audit"`
+	EnableHybridRetrieval bool `yaml:"enable_hybrid_retrieval"`
+	EnableQueryRewrite    bool `yaml:"enable_query_rewrite"`
+	EnableDynamicTopK     bool `yaml:"enable_dynamic_topk"`
+	EnableAdvancedRerank  bool `yaml:"enable_advanced_rerank"`
 }
 
 type RAGThresholds struct {
@@ -220,6 +226,18 @@ type RAGThresholds struct {
 	RetryBackoffMS    int `yaml:"retry_backoff_ms"`
 	RetrieveTimeoutMS int `yaml:"retrieve_timeout_ms"`
 	UserQPSLimit      int `yaml:"user_qps_limit"`
+}
+
+type RAGPhase2Config struct {
+	HybridDenseWeight    float64 `yaml:"hybrid_dense_weight"`
+	HybridSparseWeight   float64 `yaml:"hybrid_sparse_weight"`
+	CandidateTopK        int     `yaml:"candidate_topk"`
+	MinTopK              int     `yaml:"min_topk"`
+	MaxTopK              int     `yaml:"max_topk"`
+	RewriteTimeoutMS     int     `yaml:"rewrite_timeout_ms"`
+	RewriteMaxExpansions int     `yaml:"rewrite_max_expansions"`
+	RerankTimeoutMS      int     `yaml:"rerank_timeout_ms"`
+	RerankModel          string  `yaml:"rerank_model"`
 }
 
 // RateLimitModelConfig 鍗曚釜妯″瀷鐨勯檺娴侀厤缃?
@@ -289,6 +307,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	}
 	cfg.applyRAGDefaults()
 	cfg.ConfigVersion = cfg.buildConfigVersion()
+	if err := cfg.writePhase1BaselineSnapshot(configPath); err != nil {
+		return nil, err
+	}
 
 	Global = cfg
 	log.Printf("閰嶇疆鍔犺浇鎴愬姛 env=%s files=%s version=%s", cfg.RAG.Environment, strings.Join(loadedPaths, ","), cfg.ConfigVersion)
@@ -343,6 +364,51 @@ func (c *Config) ValidateRAGPrerequisites() error {
 			return fmt.Errorf("rag prod guard enabled but rag.thresholds.user_qps_limit must be > 0")
 		}
 	}
+	if c.RAG.FeatureFlags.EnableHybridRetrieval {
+		if c.RAG.Phase2.HybridDenseWeight <= 0 {
+			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.hybrid_dense_weight must be > 0")
+		}
+		if c.RAG.Phase2.HybridSparseWeight <= 0 {
+			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.hybrid_sparse_weight must be > 0")
+		}
+		weightSum := c.RAG.Phase2.HybridDenseWeight + c.RAG.Phase2.HybridSparseWeight
+		if weightSum < 0.999 || weightSum > 1.001 {
+			return fmt.Errorf("rag phase2 hybrid enabled but dense+sparse weight must be 1.0, got %.4f", weightSum)
+		}
+		if c.RAG.Phase2.CandidateTopK <= 0 {
+			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.candidate_topk must be > 0")
+		}
+	}
+	if c.RAG.FeatureFlags.EnableDynamicTopK {
+		if c.RAG.Phase2.MinTopK <= 0 {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.min_topk must be > 0")
+		}
+		if c.RAG.Phase2.MaxTopK <= 0 {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.max_topk must be > 0")
+		}
+		if c.RAG.Phase2.MinTopK > c.RAG.Phase2.MaxTopK {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.min_topk (%d) > rag.phase2.max_topk (%d)", c.RAG.Phase2.MinTopK, c.RAG.Phase2.MaxTopK)
+		}
+		if c.RAG.Phase2.CandidateTopK < c.RAG.Phase2.MaxTopK {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.candidate_topk (%d) < rag.phase2.max_topk (%d)", c.RAG.Phase2.CandidateTopK, c.RAG.Phase2.MaxTopK)
+		}
+	}
+	if c.RAG.FeatureFlags.EnableQueryRewrite {
+		if c.RAG.Phase2.RewriteTimeoutMS <= 0 {
+			return fmt.Errorf("rag query rewrite enabled but rag.phase2.rewrite_timeout_ms must be > 0")
+		}
+		if c.RAG.Phase2.RewriteMaxExpansions <= 0 {
+			return fmt.Errorf("rag query rewrite enabled but rag.phase2.rewrite_max_expansions must be > 0")
+		}
+	}
+	if c.RAG.FeatureFlags.EnableAdvancedRerank {
+		if c.RAG.Phase2.RerankTimeoutMS <= 0 {
+			return fmt.Errorf("rag advanced rerank enabled but rag.phase2.rerank_timeout_ms must be > 0")
+		}
+		if strings.TrimSpace(c.RAG.Phase2.RerankModel) == "" {
+			return fmt.Errorf("rag advanced rerank enabled but rag.phase2.rerank_model is empty")
+		}
+	}
 
 	return nil
 }
@@ -367,6 +433,33 @@ func (c *Config) applyRAGDefaults() {
 		if c.RAG.Thresholds.UserQPSLimit <= 0 {
 			c.RAG.Thresholds.UserQPSLimit = 20
 		}
+	}
+	if c.RAG.Phase2.HybridDenseWeight <= 0 {
+		c.RAG.Phase2.HybridDenseWeight = 0.7
+	}
+	if c.RAG.Phase2.HybridSparseWeight <= 0 {
+		c.RAG.Phase2.HybridSparseWeight = 0.3
+	}
+	if c.RAG.Phase2.CandidateTopK <= 0 {
+		c.RAG.Phase2.CandidateTopK = 10
+	}
+	if c.RAG.Phase2.MinTopK <= 0 {
+		c.RAG.Phase2.MinTopK = 3
+	}
+	if c.RAG.Phase2.MaxTopK <= 0 {
+		c.RAG.Phase2.MaxTopK = 8
+	}
+	if c.RAG.Phase2.RewriteTimeoutMS <= 0 {
+		c.RAG.Phase2.RewriteTimeoutMS = 120
+	}
+	if c.RAG.Phase2.RewriteMaxExpansions <= 0 {
+		c.RAG.Phase2.RewriteMaxExpansions = 3
+	}
+	if c.RAG.Phase2.RerankTimeoutMS <= 0 {
+		c.RAG.Phase2.RerankTimeoutMS = 250
+	}
+	if strings.TrimSpace(c.RAG.Phase2.RerankModel) == "" {
+		c.RAG.Phase2.RerankModel = "jaccard-v1"
 	}
 }
 
@@ -394,6 +487,26 @@ func (c *Config) applyRAGEnvOverrides() error {
 	} else if ok {
 		c.RAG.FeatureFlags.EnableRetrieveAudit = value
 	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_HYBRID_RETRIEVAL"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableHybridRetrieval = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_QUERY_REWRITE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableQueryRewrite = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_DYNAMIC_TOPK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableDynamicTopK = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_ADVANCED_RERANK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableAdvancedRerank = value
+	}
 	if value, ok, err := readEnvInt("RAG_MAX_RETRY_COUNT"); err != nil {
 		return err
 	} else if ok {
@@ -414,6 +527,49 @@ func (c *Config) applyRAGEnvOverrides() error {
 	} else if ok {
 		c.RAG.Thresholds.UserQPSLimit = value
 	}
+	if value, ok, err := readEnvFloat64("RAG_HYBRID_DENSE_WEIGHT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.HybridDenseWeight = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_HYBRID_SPARSE_WEIGHT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.HybridSparseWeight = value
+	}
+	if value, ok, err := readEnvInt("RAG_CANDIDATE_TOPK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.CandidateTopK = value
+	}
+	if value, ok, err := readEnvInt("RAG_MIN_TOPK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.MinTopK = value
+	}
+	if value, ok, err := readEnvInt("RAG_MAX_TOPK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.MaxTopK = value
+	}
+	if value, ok, err := readEnvInt("RAG_REWRITE_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RewriteTimeoutMS = value
+	}
+	if value, ok, err := readEnvInt("RAG_REWRITE_MAX_EXPANSIONS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RewriteMaxExpansions = value
+	}
+	if value, ok, err := readEnvInt("RAG_RERANK_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RerankTimeoutMS = value
+	}
+	if value, ok := os.LookupEnv("RAG_RERANK_MODEL"); ok {
+		c.RAG.Phase2.RerankModel = strings.TrimSpace(value)
+	}
 	return nil
 }
 
@@ -431,17 +587,31 @@ func (c *Config) LogRAGSnapshot() {
 		return
 	}
 	log.Printf(
-		"[RAG:L0] snapshot version=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
+		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
 		c.RAG.Enabled,
 		c.RAG.FeatureFlags.EnableProdGuard,
 		c.RAG.FeatureFlags.EnableIngestRetry,
 		c.RAG.FeatureFlags.EnableRetrieveAudit,
+		c.RAG.FeatureFlags.EnableHybridRetrieval,
+		c.RAG.FeatureFlags.EnableQueryRewrite,
+		c.RAG.FeatureFlags.EnableDynamicTopK,
+		c.RAG.FeatureFlags.EnableAdvancedRerank,
 		c.RAG.Thresholds.MaxRetryCount,
 		c.RAG.Thresholds.RetryBackoffMS,
 		c.RAG.Thresholds.RetrieveTimeoutMS,
 		c.RAG.Thresholds.UserQPSLimit,
+		c.RAG.Phase2.HybridDenseWeight,
+		c.RAG.Phase2.HybridSparseWeight,
+		c.RAG.Phase2.CandidateTopK,
+		c.RAG.Phase2.MinTopK,
+		c.RAG.Phase2.MaxTopK,
+		c.RAG.Phase2.RewriteTimeoutMS,
+		c.RAG.Phase2.RewriteMaxExpansions,
+		c.RAG.Phase2.RerankTimeoutMS,
+		c.RAG.Phase2.RerankModel,
 		maskAddress(c.Milvus.Address),
 		c.Milvus.DatabaseName,
 		c.Milvus.CollectionName,
@@ -481,6 +651,93 @@ func readEnvInt(key string) (int, bool, error) {
 		return 0, true, fmt.Errorf("invalid int env %s=%q: %w", key, raw, err)
 	}
 	return value, true, nil
+}
+
+func readEnvFloat64(key string) (float64, bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return 0, false, nil
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil {
+		return 0, true, fmt.Errorf("invalid float env %s=%q: %w", key, raw, err)
+	}
+	return value, true, nil
+}
+
+func (c *Config) buildRAGStrategyDigest() string {
+	if c == nil {
+		return "unknown"
+	}
+	payload := map[string]interface{}{
+		"enabled":    c.RAG.Enabled,
+		"env":        c.RAG.Environment,
+		"flags":      c.RAG.FeatureFlags,
+		"thresholds": c.RAG.Thresholds,
+		"phase2":     c.RAG.Phase2,
+	}
+	data, err := json.Marshal(payload)
+	if err != nil {
+		return "unknown"
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:8])
+}
+
+// writePhase1BaselineSnapshot 固定 Phase 1 基线快照（配置 + 指标 + 评测报告占位）。
+// 首次启动时落盘，后续启动不会覆盖，避免基线在开发过程中被误修改。
+func (c *Config) writePhase1BaselineSnapshot(configPath string) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	baseDir := filepath.Dir(configPath)
+	snapshotDir := filepath.Join(baseDir, "docs", "baseline", "phase1")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		return fmt.Errorf("failed to create phase1 baseline dir: %w", err)
+	}
+	snapshotPath := filepath.Join(snapshotDir, "baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check phase1 baseline snapshot: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"snapshot_type":   "phase1_baseline",
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"config_version":  c.ConfigVersion,
+		"strategy_digest": c.buildRAGStrategyDigest(),
+		"rag": map[string]interface{}{
+			"enabled":       c.RAG.Enabled,
+			"environment":   c.RAG.Environment,
+			"feature_flags": c.RAG.FeatureFlags,
+			"thresholds":    c.RAG.Thresholds,
+			"phase2":        c.RAG.Phase2,
+		},
+		"metrics_snapshot": map[string]interface{}{
+			"recall_at_10":       nil,
+			"mrr":                nil,
+			"ndcg":               nil,
+			"citation_accuracy":  nil,
+			"retrieval_p95_ms":   nil,
+			"context_avg_tokens": nil,
+			"notes":              "请在完成 Phase 1 基线评测后补齐该节",
+		},
+		"evaluation_report": map[string]interface{}{
+			"dataset_version": "",
+			"report_path":     "",
+			"summary":         "请在完成离线评测后补齐该节",
+		},
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase1 baseline snapshot: %w", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write phase1 baseline snapshot: %w", err)
+	}
+	log.Printf("[RAG:L0] phase1 baseline snapshot created: %s", snapshotPath)
+	return nil
 }
 
 func normalizeRAGEnv(env string) string {

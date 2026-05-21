@@ -84,11 +84,25 @@ rag:
     enable_prod_guard: false
     enable_ingest_retry: false
     enable_retrieve_audit: true
+    enable_hybrid_retrieval: false
+    enable_query_rewrite: false
+    enable_dynamic_topk: false
+    enable_advanced_rerank: false
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
     retrieve_timeout_ms: 3000
     user_qps_limit: 20
+  phase2:
+    hybrid_dense_weight: 0.7
+    hybrid_sparse_weight: 0.3
+    candidate_topk: 10
+    min_topk: 3
+    max_topk: 8
+    rewrite_timeout_ms: 120
+    rewrite_max_expansions: 3
+    rerank_timeout_ms: 250
+    rerank_model: "jaccard-v1"
 
 # Embedding 服务配置
 Embedding:

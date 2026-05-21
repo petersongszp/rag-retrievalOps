@@ -64,6 +64,28 @@ func TestValidateRAGPrerequisites_Valid(t *testing.T) {
 	}
 }
 
+func TestValidateRAGPrerequisites_HybridWeightInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableHybridRetrieval = true
+	cfg.RAG.Phase2.HybridDenseWeight = 0.9
+	cfg.RAG.Phase2.HybridSparseWeight = 0.3
+	cfg.RAG.Phase2.CandidateTopK = 10
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when hybrid dense+sparse weights are invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_DynamicTopKRangeInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableDynamicTopK = true
+	cfg.RAG.Phase2.CandidateTopK = 6
+	cfg.RAG.Phase2.MinTopK = 8
+	cfg.RAG.Phase2.MaxTopK = 7
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when dynamic topk min/max range is invalid")
+	}
+}
+
 func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	basePath := filepath.Join(tempDir, "config.yaml")
@@ -122,5 +144,10 @@ rag:
 	}
 	if cfg.RAG.FeatureFlags.EnableRetrieveAudit {
 		t.Fatalf("expected retrieve_audit to be false from overlay")
+	}
+
+	snapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase1", "baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err != nil {
+		t.Fatalf("expected phase1 baseline snapshot to be created, got err: %v", err)
 	}
 }
