@@ -29,6 +29,7 @@ import (
 	"interview-agents/internal/storage"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"github.com/google/uuid"
 	"golang.org/x/time/rate"
 	"gorm.io/gorm"
 )
@@ -88,16 +89,18 @@ type jobListResponse struct {
 }
 
 type citation struct {
-	KBID       uint64 `json:"kb_id"`
-	DocumentID uint64 `json:"document_id"`
-	ChunkID    string `json:"chunk_id"`
-	FileName   string `json:"file_name"`
-	ChunkIndex int    `json:"chunk_index"`
+	KBID         uint64 `json:"kb_id"`
+	DocumentID   uint64 `json:"document_id"`
+	ChunkID      string `json:"chunk_id"`
+	FileName     string `json:"file_name"`
+	ChunkIndex   int    `json:"chunk_index"`
+	SnippetOffset int   `json:"snippet_offset,omitempty"`
 }
 
 type source struct {
-	Route      string `json:"route"`
-	Collection string `json:"collection"`
+	Route            string `json:"route"`
+	Collection       string `json:"collection"`
+	RetrieverVersion string `json:"retriever_version"`
 }
 
 type retrieveItem struct {
@@ -108,7 +111,8 @@ type retrieveItem struct {
 }
 
 type retrieveResponse struct {
-	Items []retrieveItem `json:"items"`
+	RequestID string         `json:"request_id"`
+	Items     []retrieveItem `json:"items"`
 }
 
 func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
@@ -603,6 +607,7 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 }
 
 func Retrieve(ctx context.Context, c *app.RequestContext) {
+	requestID := uuid.New().String()
 	metricsStartedAt := time.Now()
 	metricsStatus := "success"
 	metricsErrorCode := "none"
@@ -673,7 +678,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	kbIDs := resolveRetrieveKBIDs(req, activeKBIDs)
 	if len(kbIDs) == 0 {
-		response.Success(ctx, c, retrieveResponse{Items: []retrieveItem{}})
+		response.Success(ctx, c, retrieveResponse{RequestID: requestID, Items: []retrieveItem{}})
 		return
 	}
 
@@ -691,19 +696,38 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	defer cancel()
 
 	start := time.Now()
-	docs, err := retriever.RetrieveKnowledge(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
+	searchResult, err := retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	durationMs := time.Since(start).Milliseconds()
 	if err != nil {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(err, retrieveCtx)
+		persistRetrieveLog(&model.KBRetrieveLog{
+			RequestID:    requestID,
+			UserID:       userID,
+			KBIDs:        formatKBIDs(kbIDs),
+			Query:        req.Query,
+			Expr:         expr,
+			TopK:         topK,
+			Routes:       "dense",
+			Collection:   collection,
+			ResultStatus: classifyRetrieveResultStatus(metricsStatus),
+			ErrorCode:    metricsErrorCode,
+			ErrorMsg:     err.Error(),
+			DurationMs:   durationMs,
+			TimeoutMs:    retrieveTimeout.Milliseconds(),
+		})
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", err))
 		return
 	}
+
+	docs := searchResult.Documents
+	searchMetrics := searchResult.Metrics
 
 	allowedKBs := make(map[uint64]struct{}, len(kbIDs))
 	for _, id := range kbIDs {
 		allowedKBs[id] = struct{}{}
 	}
 
+	queryLower := strings.ToLower(req.Query)
 	items := make([]retrieveItem, 0, len(docs))
 	for _, doc := range docs {
 		if doc == nil {
@@ -726,22 +750,55 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			Content: doc.Content,
 			Score:   getFloat64Metadata(doc.MetaData, "score"),
 			Citation: citation{
-				KBID:       storedDoc.KbID,
-				DocumentID: documentID,
-				ChunkID:    firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id")),
-				FileName:   firstNonEmptyString(getStringMetadata(doc.MetaData, "file_name"), storedDoc.FileName),
-				ChunkIndex: getIntMetadata(doc.MetaData, "chunk_index"),
+				KBID:         storedDoc.KbID,
+				DocumentID:   documentID,
+				ChunkID:      firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id")),
+				FileName:     firstNonEmptyString(getStringMetadata(doc.MetaData, "file_name"), storedDoc.FileName),
+				ChunkIndex:   getIntMetadata(doc.MetaData, "chunk_index"),
+				SnippetOffset: computeSnippetOffset(doc.Content, queryLower),
 			},
 			Source: source{
-				Route:      "dense",
-				Collection: collection,
+				Route:            "dense",
+				Collection:       collection,
+				RetrieverVersion: "v1",
 			},
 		})
 	}
 
+	resultStatus := model.RetrieveResultStatusSuccess
+	if len(items) == 0 {
+		if searchMetrics.HitCount > 0 {
+			resultStatus = model.RetrieveResultStatusFilteredOut
+		} else {
+			resultStatus = model.RetrieveResultStatusNoResult
+		}
+	}
+
+	retrieveLog := &model.KBRetrieveLog{
+		RequestID:       requestID,
+		UserID:          userID,
+		KBIDs:           formatKBIDs(kbIDs),
+		Query:           req.Query,
+		Expr:            expr,
+		TopK:            topK,
+		Routes:          "dense",
+		Collection:      collection,
+		RetrieverVersion: "v1",
+		FinalCount:      len(items),
+		TruncatedCount:  searchMetrics.TruncatedCount,
+		ResultStatus:    resultStatus,
+		EmbeddingMs:     searchMetrics.EmbeddingMs,
+		SearchMs:        searchMetrics.SearchMs,
+		PostprocessMs:   searchMetrics.PostprocessMs,
+		DurationMs:      durationMs,
+		TimeoutMs:       retrieveTimeout.Milliseconds(),
+	}
+	persistRetrieveLog(retrieveLog)
+
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] query=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d rewrite=%q routes=%q final_count=%d duration_ms=%d timeout_ms=%d",
+			"[KB Retrieve] request_id=%s query=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d rewrite=%q routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			requestID,
 			req.Query,
 			userID,
 			kbIDs,
@@ -751,13 +808,19 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			"",
 			"dense",
 			len(items),
+			searchMetrics.HitCount,
+			searchMetrics.TruncatedCount,
 			durationMs,
+			searchMetrics.EmbeddingMs,
+			searchMetrics.SearchMs,
+			searchMetrics.PostprocessMs,
 			retrieveTimeout.Milliseconds(),
+			string(resultStatus),
 		)
 	}
 
 	metricsResultCount = len(items)
-	response.Success(ctx, c, retrieveResponse{Items: items})
+	response.Success(ctx, c, retrieveResponse{RequestID: requestID, Items: items})
 }
 
 func resolveAppErrorCode(err error, fallback string) string {
@@ -1112,4 +1175,129 @@ func getOperationReason(c *app.RequestContext) string {
 		return reason
 	}
 	return strings.TrimSpace(c.PostForm("operation_reason"))
+}
+
+func computeSnippetOffset(content, queryLower string) int {
+	if queryLower == "" || content == "" {
+		return -1
+	}
+	idx := strings.Index(strings.ToLower(content), queryLower)
+	if idx >= 0 {
+		return idx
+	}
+	words := strings.Fields(queryLower)
+	if len(words) > 0 {
+		idx = strings.Index(strings.ToLower(content), words[0])
+		if idx >= 0 {
+			return idx
+		}
+	}
+	return -1
+}
+
+func persistRetrieveLog(entry *model.KBRetrieveLog) {
+	go func() {
+		if err := model.KBRetrieveLogDao.Create(entry); err != nil {
+			log.Printf("[KB Retrieve Audit] failed to persist retrieve log request_id=%s err=%v", entry.RequestID, err)
+		}
+	}()
+}
+
+func classifyRetrieveResultStatus(metricsStatus string) model.RetrieveResultStatus {
+	switch metricsStatus {
+	case "timeout":
+		return model.RetrieveResultStatusTimeout
+	case "error":
+		return model.RetrieveResultStatusError
+	default:
+		return model.RetrieveResultStatusSuccess
+	}
+}
+
+func formatKBIDs(ids []uint64) string {
+	if len(ids) == 0 {
+		return ""
+	}
+	parts := make([]string, len(ids))
+	for i, id := range ids {
+		parts[i] = strconv.FormatUint(id, 10)
+	}
+	return strings.Join(parts, ",")
+}
+
+func GetRetrieveAuditLog(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	requestID := strings.TrimSpace(c.Param("request_id"))
+	if requestID == "" {
+		response.BadRequest(ctx, c, "request_id is required")
+		return
+	}
+
+	logEntry, err := model.KBRetrieveLogDao.GetByRequestID(requestID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "retrieve log not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get retrieve log", err))
+		return
+	}
+
+	response.Success(ctx, c, logEntry)
+}
+
+type retrieveAuditListResponse struct {
+	Items    []*model.KBRetrieveLog `json:"items"`
+	Total    int64                  `json:"total"`
+	Page     int                    `json:"page"`
+	PageSize int                    `json:"page_size"`
+}
+
+func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	page, pageSize := getPagination(c)
+
+	statusRaw := strings.TrimSpace(string(c.Query("result_status")))
+	if statusRaw != "" {
+		status, ok := model.ParseRetrieveResultStatus(statusRaw)
+		if !ok {
+			response.BadRequest(ctx, c, "result_status is invalid")
+			return
+		}
+		items, total, err := model.KBRetrieveLogDao.ListByStatus(status, page, pageSize)
+		if err != nil {
+			response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
+			return
+		}
+		response.Success(ctx, c, retrieveAuditListResponse{
+			Items:    items,
+			Total:    total,
+			Page:     page,
+			PageSize: pageSize,
+		})
+		return
+	}
+
+	items, total, err := model.KBRetrieveLogDao.ListByUserID(userID, page, pageSize)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
+		return
+	}
+
+	response.Success(ctx, c, retrieveAuditListResponse{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }

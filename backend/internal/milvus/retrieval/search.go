@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/bytedance/sonic"
 	milvusRetriever "github.com/cloudwego/eino-ext/components/retriever/milvus"
@@ -10,6 +11,21 @@ import (
 	milvusClient "github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 )
+
+// SearchMetrics 检索各阶段耗时统计
+type SearchMetrics struct {
+	EmbeddingMs   int64
+	SearchMs      int64
+	PostprocessMs int64
+	HitCount      int
+	TruncatedCount int
+}
+
+// SearchResult 带指标的检索结果
+type SearchResult struct {
+	Documents []*schema.Document
+	Metrics   SearchMetrics
+}
 
 // SearchWithExpr 使用表达式过滤进行检索
 func SearchWithExpr(
@@ -20,6 +36,22 @@ func SearchWithExpr(
 	expr string,
 	opts *RetrieveOptions,
 ) ([]*schema.Document, error) {
+	result, err := SearchWithExprAndMetrics(ctx, client, config, query, expr, opts)
+	if err != nil {
+		return nil, err
+	}
+	return result.Documents, nil
+}
+
+// SearchWithExprAndMetrics 使用表达式过滤进行检索，返回带耗时指标的结果
+func SearchWithExprAndMetrics(
+	ctx context.Context,
+	client milvusClient.Client,
+	config *milvusRetriever.RetrieverConfig,
+	query string,
+	expr string,
+	opts *RetrieveOptions,
+) (*SearchResult, error) {
 	// 获取 embedding
 	embedder := config.Embedding
 	if embedder == nil {
@@ -27,7 +59,9 @@ func SearchWithExpr(
 	}
 
 	// 将查询文本转换为向量
+	embedStart := time.Now()
 	vectors, err := embedder.EmbedStrings(ctx, []string{query})
+	embeddingMs := time.Since(embedStart).Milliseconds()
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed query: %w", err)
 	}
@@ -63,6 +97,7 @@ func SearchWithExpr(
 	}
 
 	// 执行搜索
+	searchStart := time.Now()
 	searchResults, err := client.Search(
 		ctx,
 		collectionName,
@@ -75,12 +110,15 @@ func SearchWithExpr(
 		topK,
 		searchParam,
 	)
+	searchMs := time.Since(searchStart).Milliseconds()
 	if err != nil {
 		return nil, fmt.Errorf("failed to search: %w", err)
 	}
 
 	// 转换搜索结果
+	postprocessStart := time.Now()
 	documents := make([]*schema.Document, 0)
+	rawHitCount := 0
 	if len(searchResults) > 0 {
 		result := searchResults[0]
 		// 解析字段数据
@@ -89,8 +127,8 @@ func SearchWithExpr(
 		idField := result.IDs
 
 		// 获取结果数量
-		resultCount := idField.Len()
-		for i := 0; i < resultCount; i++ {
+		rawHitCount = idField.Len()
+		for i := 0; i < rawHitCount; i++ {
 			// 获取 ID
 			idValue, err := idField.GetAsString(i)
 			if err != nil {
@@ -131,6 +169,16 @@ func SearchWithExpr(
 			documents = append(documents, doc)
 		}
 	}
+	postprocessMs := time.Since(postprocessStart).Milliseconds()
 
-	return documents, nil
+	return &SearchResult{
+		Documents: documents,
+		Metrics: SearchMetrics{
+			EmbeddingMs:    embeddingMs,
+			SearchMs:       searchMs,
+			PostprocessMs:  postprocessMs,
+			HitCount:       rawHitCount,
+			TruncatedCount: rawHitCount - len(documents),
+		},
+	}, nil
 }
