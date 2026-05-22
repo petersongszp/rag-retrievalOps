@@ -108,10 +108,11 @@ Phase 2 按 9 条路线推进，按门禁顺序合流：
 ### 功能任务
 
 1. 在 `backend/internal/milvus/retrieval` 增加或完善模块：
-   - `sparse_search.go`（BM25/关键词召回）
+   - `sparse_search.go`（关键词候选召回 + 显式倒排/BM25 排序）
    - `hybrid_search.go`（多路编排入口）
 2. 统一召回输入参数：`query/expr/topk/kb_scope/kb_id/request_id`。
 3. Dense 路由复用现有 `RetrieverService`，Sparse 路由采用倒排/BM25 索引实现。
+   - 当前实现口径：Sparse 路由先按 query term 从 Milvus 拉取候选，再在应用侧构建显式倒排索引，并基于 BM25 完成 sparse 排序与 TopK 截断。
 4. 每路召回独立打点：命中数量、耗时、错误码。
 5. 召回失败容错：单路失败不拖垮整体请求（降级为可用路由）。
 

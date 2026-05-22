@@ -146,9 +146,15 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	log.Println("Initializing Hybrid Retriever Service...")
 	// 如果配置文件中没有专门的 Rerank 配置，使用默认值
 	// 后续可以在 config.Config 中添加 Rerank 配置字段
+	candidateTopK := cfg.Milvus.TopK * 2
+	if cfg.RAG.Phase2.CandidateTopK > 0 {
+		candidateTopK = cfg.RAG.Phase2.CandidateTopK
+	}
 	hybridConfig := &retrieval.HybridRetrieverConfig{
-		CandidateTopK: cfg.Milvus.TopK * 2, // 召回数量是最终返回数量的2倍
-		// RerankerImpl 使用默认的 JaccardReranker
+		CandidateTopK: candidateTopK,
+		SparseConfig: &retrieval.SparseRetrieverConfig{
+			DefaultTopK: candidateTopK,
+		},
 	}
 	hybridRetriever, err := retrieval.NewHybridRetriever(retrieverService, hybridConfig)
 	if err != nil {

@@ -31,7 +31,8 @@ type RetrieveOptions struct {
 	// 数据库名称（可选，如果指定则使用指定的数据库）
 	Database string
 	// 集合名称（可选，如果指定则使用指定的集合）
-	Collection string
-	KBScope         string
-	ActiveGlobalKBID uint64
+	Collection       string // 集合/表名称
+	RequestID        string // 请求唯一标识
+	KBScope          string // 知识库范围
+	ActiveGlobalKBID uint64 // 生效的全局知识库ID
 }
