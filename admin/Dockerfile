@@ -13,7 +13,9 @@ WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
 ARG NEXT_PUBLIC_API_BASE_URL
+ARG API_PROXY_TARGET
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8899/api}
+ENV API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:8899/api}
 RUN --mount=type=cache,target=/app/.next/cache,id=next-cache \
     npm run build
 

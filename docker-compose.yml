@@ -211,6 +211,7 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: /api
+        API_PROXY_TARGET: http://backend:8899/api
       cache_from:
         - type=local,src=/tmp/.buildx-cache/admin
     ports:
@@ -220,6 +221,7 @@ services:
     environment:
       # API 请求指向后端服务
       NEXT_PUBLIC_API_BASE_URL: /api
+      API_PROXY_TARGET: http://backend:8899/api
     depends_on:
       - backend
     networks:
