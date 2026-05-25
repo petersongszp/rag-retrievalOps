@@ -172,6 +172,14 @@ func (s *RetrieverService) GetConfig() *milvus.RetrieverConfig {
 }
 
 func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, activeGlobalKBID uint64, topK int, collection string) ([]*schema.Document, error) {
+	result, err := s.RetrieveKnowledgeWithMetrics(ctx, query, activeGlobalKBID, topK, collection)
+	if err != nil {
+		return nil, err
+	}
+	return result.Documents, nil
+}
+
+func (s *RetrieverService) RetrieveKnowledgeWithMetrics(ctx context.Context, query string, activeGlobalKBID uint64, topK int, collection string) (*SearchResult, error) {
 	if query == "" {
 		return nil, fmt.Errorf("query is empty")
 	}
@@ -188,11 +196,11 @@ func (s *RetrieverService) RetrieveKnowledge(ctx context.Context, query string, 
 		collection = s.config.Collection
 	}
 	opts := &RetrieveOptions{
-		KBScope:         "global",
+		KBScope:          "global",
 		ActiveGlobalKBID: activeGlobalKBID,
-		TopK:            topK,
-		Collection:      collection,
+		TopK:             topK,
+		Collection:       collection,
 	}
 	expr := BuildFilterExpr(opts)
-	return SearchWithExpr(ctx, s.client, s.config, query, expr, opts)
+	return SearchWithExprAndMetrics(ctx, s.client, s.config, query, expr, opts)
 }

@@ -71,7 +71,6 @@ func migrateDatabase() error {
 		&model.Resume{},
 		&model.PredictionRecord{},
 		&model.PredictionQuestion{},
-		// 支付模块
 		&model.PaymentOrder{},
 		&model.PaymentAttempt{},
 		&model.Subscription{},
@@ -81,6 +80,7 @@ func migrateDatabase() error {
 		&model.KBDocument{},
 		&model.KBIngestJob{},
 		&model.KBJobOperationLog{},
+		&model.KBRetrieveLog{},
 	)
 }
 

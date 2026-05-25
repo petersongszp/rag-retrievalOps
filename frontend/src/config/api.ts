@@ -64,3 +64,4 @@ export const PAYMENT_API = {
   ORDER_QUERY: `${API_BASE_URL}/payment/order/query`,
   ORDER_LIST: `${API_BASE_URL}/payment/order/list`,
 };
+

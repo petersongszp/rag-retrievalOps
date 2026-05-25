@@ -1,4 +1,4 @@
-﻿services:
+services:
   # 1. MySQL database
   mysql:
     image: mysql:8.0
@@ -203,6 +203,30 @@
     networks:
       - app-network
 
+  # 15. Admin 管理后台（知识库管理）
+  # 独立服务，部署在 3001 端口，供业务人员管理知识库
+  admin:
+    build:
+      context: ./admin
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: /api
+        API_PROXY_TARGET: http://backend:8899/api
+      cache_from:
+        - type=local,src=/tmp/.buildx-cache/admin
+    ports:
+      - '3002:3001'
+    container_name: app-admin
+    restart: always
+    environment:
+      # API 请求指向后端服务
+      NEXT_PUBLIC_API_BASE_URL: /api
+      API_PROXY_TARGET: http://backend:8899/api
+    depends_on:
+      - backend
+    networks:
+      - app-network
+
   # 13. Nginx reverse proxy
   nginx:
     image: nginx:alpine
@@ -215,6 +239,7 @@
     depends_on:
       - backend
       - frontend
+      - admin
     networks:
       - app-network
 
@@ -257,7 +282,7 @@
     container_name: app-grafana
     restart: always
     ports:
-      - '3001:3000'
+      - '3003:3000'
     environment:
       GF_SECURITY_ADMIN_USER: admin
       GF_SECURITY_ADMIN_PASSWORD: admin

@@ -162,6 +162,11 @@ func (h *ConsumerHandler) handleResumeParse(ctx context.Context, message *Messag
 }
 
 func (h *ConsumerHandler) handleKnowledgeIngest(ctx context.Context, message *Message) error {
+	if IsKnowledgeIngestPaused() {
+		log.Printf("[KB Ingest] Skipping knowledge ingest because it's paused")
+		return nil
+	}
+
 	start := time.Now()
 
 	payload, err := parseKnowledgeIngestPayload(message.Payload)
