@@ -18,6 +18,9 @@ var (
 	retrieveRequestsTotal *prometheus.CounterVec
 	retrieveDuration      *prometheus.HistogramVec
 	retrieveResultCount   prometheus.Histogram
+	retrieveRouteRequests *prometheus.CounterVec
+	retrieveRouteDuration *prometheus.HistogramVec
+	retrieveRouteHits     *prometheus.HistogramVec
 
 	ingestJobsTotal *prometheus.CounterVec
 	ingestDuration  *prometheus.HistogramVec
@@ -56,6 +59,29 @@ func registerCollectors() {
 				Help:    "RAG retrieve result count distribution per request.",
 				Buckets: []float64{0, 1, 2, 3, 5, 8, 10, 15, 20, 30, 50},
 			},
+		)
+		retrieveRouteRequests = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_retrieve_route_requests_total",
+				Help: "Total number of route-level retrieve requests by route/status/error code.",
+			},
+			[]string{"route", "status", "error_code"},
+		)
+		retrieveRouteDuration = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "rag_retrieve_route_duration_seconds",
+				Help:    "Route-level retrieve latency in seconds.",
+				Buckets: []float64{0.001, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2, 3, 5},
+			},
+			[]string{"route", "status"},
+		)
+		retrieveRouteHits = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "rag_retrieve_route_hits",
+				Help:    "Route-level hit count distribution per request.",
+				Buckets: []float64{0, 1, 2, 3, 5, 8, 10, 15, 20, 30, 50},
+			},
+			[]string{"route"},
 		)
 		ingestJobsTotal = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
@@ -105,6 +131,9 @@ func registerCollectors() {
 			retrieveRequestsTotal,
 			retrieveDuration,
 			retrieveResultCount,
+			retrieveRouteRequests,
+			retrieveRouteDuration,
+			retrieveRouteHits,
 			ingestJobsTotal,
 			ingestDuration,
 			errorTotal,
@@ -126,6 +155,21 @@ func ObserveRetrieve(duration time.Duration, status, errorCode string, resultCou
 	}
 	if e != "none" {
 		errorTotal.WithLabelValues("retrieve", e).Inc()
+	}
+}
+
+func ObserveRetrieveRoute(route string, duration time.Duration, status, errorCode string, hitCount int) {
+	registerCollectors()
+	r := sanitizeLabel(route, "unknown")
+	s := sanitizeLabel(status, "unknown")
+	e := sanitizeLabel(errorCode, "none")
+	retrieveRouteRequests.WithLabelValues(r, s, e).Inc()
+	retrieveRouteDuration.WithLabelValues(r, s).Observe(duration.Seconds())
+	if hitCount >= 0 {
+		retrieveRouteHits.WithLabelValues(r).Observe(float64(hitCount))
+	}
+	if e != "none" {
+		errorTotal.WithLabelValues("retrieve_route", e).Inc()
 	}
 }
 
