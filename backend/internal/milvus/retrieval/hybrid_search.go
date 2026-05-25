@@ -14,8 +14,9 @@ import (
 )
 
 const (
-	routeDense  = "dense"
-	routeSparse = "sparse"
+	routeDense             = "dense"
+	routeSparse            = "sparse"
+	hybridRetrieverVersion = "phase2-hybrid-v1"
 )
 
 type HybridSearchRequest struct {
@@ -270,10 +271,24 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		return []*schema.Document{}, nil
 	}
 
+	rerankModel := ""
+	rerankVersion := ""
+	rerankFallback := false
+	rerankReason := ""
+	var rerankMS int64
 	if h.reranker != nil {
 		reranked, err := h.reranker.Rerank(ctx, req.OriginalQuery, merged)
-		if err == nil && len(reranked) > 0 {
-			merged = reranked
+		if err != nil {
+			log.Printf("[RAG:L5] request_id=%s rerank_failed=true rerank_error=%q", req.RequestID, err.Error())
+		} else if reranked != nil {
+			rerankModel = reranked.Model
+			rerankVersion = reranked.Version
+			rerankFallback = reranked.Fallback
+			rerankReason = reranked.Reason
+			rerankMS = reranked.Latency.Milliseconds()
+			if len(reranked.Documents) > 0 {
+				merged = reranked.Documents
+			}
 		}
 	}
 
@@ -288,7 +303,7 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 
 	totalMS := time.Since(start).Milliseconds()
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.OriginalQuery,
 		req.RewriteQuery,
@@ -309,6 +324,11 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		totalMS,
 		denseMS,
 		sparseMS,
+		rerankMS,
+		rerankModel,
+		rerankVersion,
+		rerankFallback,
+		rerankReason,
 		toLogError(denseErr),
 		toLogError(sparseErr),
 	)
@@ -339,6 +359,14 @@ func (h *HybridRetriever) searchDense(ctx context.Context, req *HybridSearchRequ
 		}
 		doc.MetaData["route"] = routeDense
 		doc.MetaData["dense_score"] = readDocScore(doc)
+		doc.MetaData["retriever_version"] = hybridRetrieverVersion
+		source := ensureSourceMetadata(doc)
+		source["route"] = routeDense
+		source["retriever_version"] = hybridRetrieverVersion
+		if collection := readCollectionFromDoc(doc); collection != "" {
+			source["collection"] = collection
+		}
+		doc.MetaData["source"] = source
 		attachRewriteMetadata(doc, req)
 	}
 	return docs, nil

@@ -137,6 +137,14 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 				doc.MetaData = make(map[string]interface{})
 			}
 			doc.MetaData["route"] = "sparse"
+			doc.MetaData["retriever_version"] = hybridRetrieverVersion
+			source := ensureSourceMetadata(doc)
+			source["route"] = routeSparse
+			source["retriever_version"] = hybridRetrieverVersion
+			if collection != "" {
+				source["collection"] = collection
+			}
+			doc.MetaData["source"] = source
 			merged[docID] = doc
 		}
 	}
@@ -167,6 +175,14 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		doc.MetaData["route"] = routeSparse
 		doc.MetaData["sparse_score"] = hit.Score
 		doc.MetaData["score"] = hit.Score
+		doc.MetaData["retriever_version"] = hybridRetrieverVersion
+		source := ensureSourceMetadata(doc)
+		source["route"] = routeSparse
+		source["retriever_version"] = hybridRetrieverVersion
+		if collection != "" {
+			source["collection"] = collection
+		}
+		doc.MetaData["source"] = source
 		attachRewriteMetadata(doc, req)
 		results = append(results, doc)
 	}

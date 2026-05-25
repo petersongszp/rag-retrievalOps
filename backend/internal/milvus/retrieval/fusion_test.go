@@ -77,6 +77,9 @@ func TestFuseRouteCandidatesAndDedupe(t *testing.T) {
 	if source["route"] != routeDense {
 		t.Fatalf("expected source.route=%q, got %v", routeDense, source["route"])
 	}
+	if source["retriever_version"] != hybridRetrieverVersion {
+		t.Fatalf("expected source.retriever_version=%q, got %v", hybridRetrieverVersion, source["retriever_version"])
+	}
 
 	routeContrib, ok := source["route_contrib"].(map[string]interface{})
 	if !ok {

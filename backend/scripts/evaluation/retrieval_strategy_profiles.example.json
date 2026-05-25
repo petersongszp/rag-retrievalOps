@@ -1,0 +1,30 @@
+[
+  {
+    "name": "dense_only",
+    "label": "Dense Only",
+    "baseline": true,
+    "mode": "dense"
+  },
+  {
+    "name": "hybrid",
+    "label": "Hybrid",
+    "mode": "hybrid",
+    "candidate_top_k": 10
+  },
+  {
+    "name": "hybrid_rewrite",
+    "label": "Hybrid + Rewrite",
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "candidate_top_k": 10
+  },
+  {
+    "name": "hybrid_rewrite_dynamic_topk",
+    "label": "Hybrid + Rewrite + DynamicTopK",
+    "candidate": true,
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "candidate_top_k": 10
+  }
+]

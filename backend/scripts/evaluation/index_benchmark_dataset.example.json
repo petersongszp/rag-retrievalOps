@@ -1,0 +1,26 @@
+[
+  {
+    "id": "go-goroutine-channel",
+    "query": "goroutine 和 channel 的关系",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-doc-id-1"
+    ]
+  },
+  {
+    "id": "mysql-mvcc",
+    "query": "MySQL MVCC 机制",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-doc-id-2"
+    ]
+  },
+  {
+    "id": "redis-persistence",
+    "query": "Redis 持久化机制",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-doc-id-3"
+    ]
+  }
+]
