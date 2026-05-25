@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
-	"github.com/cloudwego/eino-ext/components/embedding/ark"
 	milvusIndexer "github.com/cloudwego/eino-ext/components/indexer/milvus"
 	milvusRetriever "github.com/cloudwego/eino-ext/components/retriever/milvus"
 	"github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -73,19 +72,7 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 
 	// 2. 初始化 Embedding 服务
 	log.Println("Initializing Embedding Service...")
-	timeout := cfg.Embedding.Timeout
-	retryTimes := cfg.Embedding.RetryTimes
-	embeddingConfig := &ark.EmbeddingConfig{
-		APIKey:     cfg.Embedding.APIKey,
-		AccessKey:  cfg.Embedding.AccessKey,
-		SecretKey:  cfg.Embedding.SecretKey,
-		Model:      cfg.Embedding.Model,
-		BaseURL:    cfg.Embedding.BaseURL,
-		Region:     cfg.Embedding.Region,
-		Timeout:    &timeout,
-		RetryTimes: &retryTimes,
-	}
-	embeddingService, err := storage.NewArkEmbeddingService(ctx, embeddingConfig)
+	embeddingService, err := storage.NewEmbeddingService(ctx, &cfg.Embedding)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize embedding service: %w", err)
 	}

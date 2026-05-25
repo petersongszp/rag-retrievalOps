@@ -6,71 +6,98 @@ import (
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/embedding/ark"
+	einoopenai "github.com/cloudwego/eino-ext/components/embedding/openai"
 	"github.com/cloudwego/eino/components/embedding"
+
+	"interview-agents/internal/config"
 )
 
-// 参考文档：https://www.cloudwego.io/zh/docs/eino/ecosystem_integration/embedding/embedding_ark/
-
-// EmbeddingService Embedding服务包装
+// EmbeddingService Embedding服务包装，支持多种向量模型提供商
 type EmbeddingService struct {
 	embedder embedding.Embedder
-	config   *ark.EmbeddingConfig
+	model    string
 }
 
-// NewArkEmbeddingService 创建新的Embedding服务
-func NewArkEmbeddingService(ctx context.Context, config *ark.EmbeddingConfig) (*EmbeddingService, error) {
-	if config == nil {
+// NewEmbeddingService 根据配置中的 Provider 字段创建对应的 Embedding 服务
+// 支持: ark (火山引擎), openai (OpenAI 及兼容接口), ollama (本地)
+func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*EmbeddingService, error) {
+	if cfg == nil {
 		return nil, fmt.Errorf("embedding config is nil")
 	}
-	// 验证配置
-	if config.APIKey == "" && (config.AccessKey == "" || config.SecretKey == "") {
-		return nil, fmt.Errorf("must provide APIKey or AccessKey/SecretKey")
+	if cfg.Model == "" {
+		return nil, fmt.Errorf("embedding model is required")
 	}
-	if config.Model == "" {
-		return nil, fmt.Errorf("model is required")
+
+	var embedder embedding.Embedder
+	var err error
+
+	switch cfg.Provider {
+	case "ark":
+		embedder, err = newArkEmbedder(ctx, cfg)
+	case "openai", "":
+		// openai 兼容接口，也是默认值
+		// 国内大多数 API (DashScope/阿里云、智谱、百度千帆等) 均兼容 OpenAI 接口
+		// 只需设置对应的 BaseURL 和 APIKey 即可
+		embedder, err = newOpenAIEmbedder(ctx, cfg)
+	default:
+		return nil, fmt.Errorf("unsupported embedding provider %q, supported: ark, openai", cfg.Provider)
 	}
-	// 设置默认值
-	if config.BaseURL == "" {
-		config.BaseURL = "https://ark.cn-beijing.volces.com/api/v3"
-	}
-	if config.Region == "" {
-		config.Region = "cn-beijing"
-	}
-	defaultTimeout := 30 * time.Second
-	if config.Timeout == nil {
-		config.Timeout = &defaultTimeout
-	}
-	defaultRetryTimes := 3
-	if config.RetryTimes == nil {
-		config.RetryTimes = &defaultRetryTimes
-	}
-	// 构建 Ark Embedding 配置
-	arkConfig := &ark.EmbeddingConfig{
-		Model:   config.Model,
-		BaseURL: config.BaseURL,
-		Region:  config.Region,
-	}
-	// 设置认证方式
-	if config.APIKey != "" {
-		arkConfig.APIKey = config.APIKey
-	} else {
-		arkConfig.AccessKey = config.AccessKey
-		arkConfig.SecretKey = config.SecretKey
-	}
-	// 设置可选配置
-	timeout := config.Timeout
-	arkConfig.Timeout = timeout
-	retryTimes := config.RetryTimes
-	arkConfig.RetryTimes = retryTimes
-	// 创建 embedder
-	embedder, err := ark.NewEmbedder(ctx, arkConfig)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create ark embedder: %w", err)
+		return nil, err
 	}
+
 	return &EmbeddingService{
 		embedder: embedder,
-		config:   config,
+		model:    cfg.Model,
 	}, nil
+}
+
+func newArkEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding.Embedder, error) {
+	if cfg.APIKey == "" && (cfg.AccessKey == "" || cfg.SecretKey == "") {
+		return nil, fmt.Errorf("ark provider requires APIKey or AccessKey/SecretKey")
+	}
+
+	baseURL := cfg.BaseURL
+	if baseURL == "" {
+		baseURL = "https://ark.cn-beijing.volces.com/api/v3"
+	}
+	region := cfg.Region
+	if region == "" {
+		region = "cn-beijing"
+	}
+	timeout := cfg.Timeout
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+	retryTimes := cfg.RetryTimes
+	if retryTimes == 0 {
+		retryTimes = 3
+	}
+
+	arkCfg := &ark.EmbeddingConfig{
+		Model:      cfg.Model,
+		BaseURL:    baseURL,
+		Region:     region,
+		APIKey:     cfg.APIKey,
+		AccessKey:  cfg.AccessKey,
+		SecretKey:  cfg.SecretKey,
+		Timeout:    &timeout,
+		RetryTimes: &retryTimes,
+	}
+	return ark.NewEmbedder(ctx, arkCfg)
+}
+
+func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding.Embedder, error) {
+	if cfg.APIKey == "" {
+		return nil, fmt.Errorf("openai provider requires APIKey")
+	}
+
+	openaiCfg := &einoopenai.EmbeddingConfig{
+		Model:   cfg.Model,
+		APIKey:  cfg.APIKey,
+		BaseURL: cfg.BaseURL,
+	}
+	return einoopenai.NewEmbedder(ctx, openaiCfg)
 }
 
 // EmbedBatch 批量将文本转换为向量
@@ -78,18 +105,16 @@ func (s *EmbeddingService) EmbedBatch(ctx context.Context, texts []string) ([][]
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("texts is empty")
 	}
-
 	vectors, err := s.embedder.EmbedStrings(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed texts: %w", err)
 	}
-
 	return vectors, nil
 }
 
 // GetModel 获取模型名称
 func (s *EmbeddingService) GetModel() string {
-	return s.config.Model
+	return s.model
 }
 
 // GetEmbedder 获取底层的 Embedder 实例（用于 Retriever 等组件）
@@ -99,6 +124,5 @@ func (s *EmbeddingService) GetEmbedder() embedding.Embedder {
 
 // Close 关闭服务
 func (s *EmbeddingService) Close() error {
-	// 如果 embedder 有 Close 方法，可以在这里调用
 	return nil
 }

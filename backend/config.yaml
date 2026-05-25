@@ -113,14 +113,15 @@ Embedding:
   # SecretKey: "${EMBEDDING_SECRET_KEY}"   # 从环境变量 EMBEDDING_SECRET_KEY 读取
 
   # 服务配置
-  Model: '${EMBEDDING_MODEL}' # Ark 平台的端点 ID，从环境变量读取
+  Provider: '${EMBEDDING_PROVIDER}' # 提供商: ark, openai（默认 ark）
+  Model: '${EMBEDDING_MODEL}' # 模型 ID，从环境变量读取
   BaseURL: '${EMBEDDING_BASE_URL}' # API 基础 URL，从环境变量读取
-  Region: '${EMBEDDING_REGION}' # 服务区域，从环境变量读取
+  Region: '${EMBEDDING_REGION}' # 服务区域（ark 专用），从环境变量读取
 
   # 高级配置
   Timeout: 30s # 请求超时时间
   RetryTimes: 3 # 重试次数
-  Dimensions: 2560 # 输出向量维度（修改为实际模型输出维度）
+  Dimensions: 2048 # 智谱 embedding-3 输出维度
   User: '' # 用户标识（可选）
 
 # Milvus 向量数据库配置

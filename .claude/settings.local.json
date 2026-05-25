@@ -1,0 +1,7 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(EMBEDDING_PROVIDER=openai EMBEDDING_API_KEY=44c5fed5d6c34c2c8e3336ce5dd730bf.tnKljlIoJwXigjmV EMBEDDING_MODEL=embedding-3 EMBEDDING_BASE_URL=https://open.bigmodel.cn/api/paas/v4 EMBEDDING_REGION= go run ./internal/milvus/cmd/milvusctl -cmd embed -text \"test\")"
+    ]
+  }
+}
