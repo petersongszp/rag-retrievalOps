@@ -715,8 +715,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchResult = &retrieval.SearchResult{
 			Documents: docs,
 			Metrics: retrieval.SearchMetrics{
-				SearchMs: time.Since(start).Milliseconds(),
-				HitCount: len(docs),
+				SearchMs:      time.Since(start).Milliseconds(),
+				HitCount:      len(docs),
+				FinalTopK:     topK,
+				CandidateTopK: topK,
 			},
 		}
 		searchErr = hybridErr
@@ -727,20 +729,24 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	if searchErr != nil {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(searchErr, retrieveCtx)
 		persistRetrieveLog(&model.KBRetrieveLog{
-			RequestID:    requestID,
-			UserID:       userID,
-			KBIDs:        formatKBIDs(kbIDs),
-			Query:        req.Query,
-			FinalQuery:   req.Query,
-			Expr:         expr,
-			TopK:         topK,
-			Routes:       resolveRetrieveRoutes(useHybrid),
-			Collection:   collection,
-			ResultStatus: classifyRetrieveResultStatus(metricsStatus),
-			ErrorCode:    metricsErrorCode,
-			ErrorMsg:     searchErr.Error(),
-			DurationMs:   durationMs,
-			TimeoutMs:    retrieveTimeout.Milliseconds(),
+			RequestID:      requestID,
+			UserID:         userID,
+			KBIDs:          formatKBIDs(kbIDs),
+			Query:          req.Query,
+			FinalQuery:     req.Query,
+			Expr:           expr,
+			TopK:           topK,
+			CandidateTopK:  searchResult.Metrics.CandidateTopK,
+			FinalTopK:      searchResult.Metrics.FinalTopK,
+			TokenBudget:    searchResult.Metrics.TokenBudget,
+			TruncateReason: searchResult.Metrics.TruncateReason,
+			Routes:         resolveRetrieveRoutes(useHybrid),
+			Collection:     collection,
+			ResultStatus:   classifyRetrieveResultStatus(metricsStatus),
+			ErrorCode:      metricsErrorCode,
+			ErrorMsg:       searchErr.Error(),
+			DurationMs:     durationMs,
+			TimeoutMs:      retrieveTimeout.Milliseconds(),
 		})
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
@@ -810,6 +816,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		FinalQuery:       firstNonEmptyString(extractFinalQuery(docs), req.Query),
 		Expr:             expr,
 		TopK:             topK,
+		CandidateTopK:    searchMetrics.CandidateTopK,
+		FinalTopK:        searchMetrics.FinalTopK,
+		TokenBudget:      searchMetrics.TokenBudget,
+		TruncateReason:   searchMetrics.TruncateReason,
 		Rewrite:          extractRewriteQuery(docs),
 		RewriteStrategy:  extractRewriteStrategy(docs),
 		RewriteApplied:   extractRewriteApplied(docs),
@@ -829,7 +839,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] request_id=%s query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] request_id=%s query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
 			req.Query,
 			retrieveLog.FinalQuery,
@@ -841,6 +851,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			"global",
 			expr,
 			topK,
+			searchMetrics.CandidateTopK,
+			searchMetrics.FinalTopK,
+			searchMetrics.TokenBudget,
+			searchMetrics.TruncateReason,
 			retrieveLog.Routes,
 			len(items),
 			searchMetrics.HitCount,

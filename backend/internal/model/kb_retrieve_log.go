@@ -27,6 +27,10 @@ type (
 		FinalQuery       string               `json:"final_query" gorm:"size:2000"`
 		Expr             string               `json:"expr" gorm:"size:2000"`
 		TopK             int                  `json:"top_k"`
+		CandidateTopK    int                  `json:"candidate_topk"`
+		FinalTopK        int                  `json:"final_topk"`
+		TokenBudget      int                  `json:"token_budget"`
+		TruncateReason   string               `json:"truncate_reason" gorm:"size:64"`
 		Rewrite          string               `json:"rewrite" gorm:"size:1000"`
 		RewriteStrategy  string               `json:"rewrite_strategy" gorm:"size:255"`
 		RewriteApplied   bool                 `json:"rewrite_applied"`

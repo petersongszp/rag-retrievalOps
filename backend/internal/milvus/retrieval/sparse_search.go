@@ -74,7 +74,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		return nil, fmt.Errorf("query is empty")
 	}
 
-	topK := req.TopK
+	topK := req.CandidateTopK
 	if topK <= 0 {
 		topK = s.config.DefaultTopK
 	}

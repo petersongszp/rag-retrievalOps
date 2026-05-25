@@ -21,6 +21,7 @@ type RetrieveOptions struct {
 	Category         DocumentCategory
 	Expr             string
 	TopK             int
+	CandidateTopK    int
 	Database         string
 	Collection       string
 	RequestID        string
