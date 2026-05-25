@@ -92,6 +92,11 @@ func annotateDedupedDocument(doc *schema.Document, score float64, primaryRoute s
 	if collection := readCollectionFromDoc(doc); collection != "" {
 		source["collection"] = collection
 	}
+	if version := readMetadataString(doc, "retriever_version"); version != "" {
+		source["retriever_version"] = version
+	} else if _, exists := source["retriever_version"]; !exists {
+		source["retriever_version"] = hybridRetrieverVersion
+	}
 	doc.MetaData["source"] = source
 }
 

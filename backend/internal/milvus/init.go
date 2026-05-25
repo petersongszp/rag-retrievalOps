@@ -165,6 +165,26 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 			MinAnswerChunks: cfg.RAG.Phase2.MinAnswerChunks,
 		},
 	}
+	fallbackReranker := retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
+		TopK:      candidateTopK,
+		ModelName: retrieval.DefaultRerankModelJaccardV1,
+		Version:   retrieval.DefaultRerankVersion,
+	})
+	if cfg.RAG.FeatureFlags.EnableAdvancedRerank {
+		timeout := time.Duration(cfg.RAG.Phase2.RerankTimeoutMS) * time.Millisecond
+		hybridConfig.RerankerImpl = retrieval.NewConfigurableReranker(
+			cfg.RAG.Phase2.RerankModel,
+			timeout,
+			retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
+				TopK:      candidateTopK,
+				ModelName: cfg.RAG.Phase2.RerankModel,
+				Version:   cfg.RAG.Phase2.RerankModel,
+			}),
+			fallbackReranker,
+		)
+	} else {
+		hybridConfig.RerankerImpl = fallbackReranker
+	}
 	if cfg.RAG.FeatureFlags.EnableQueryRewrite {
 		hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
 			MaxExpansions: cfg.RAG.Phase2.RewriteMaxExpansions,
