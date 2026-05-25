@@ -132,14 +132,43 @@ func (q *InMemoryQueue) Close() error {
 }
 
 var (
-	globalMQ MessageQueue
-	mqMutex  sync.RWMutex
+	globalMQ          MessageQueue
+	mqMutex           sync.RWMutex
+	ingestPaused      bool
+	ingestPausedMutex sync.RWMutex
 )
 
 func InitMessageQueue(mq MessageQueue) {
 	mqMutex.Lock()
 	defer mqMutex.Unlock()
 	globalMQ = mq
+}
+
+// PauseKnowledgeIngest pauses knowledge ingest consumption
+func PauseKnowledgeIngest() {
+	ingestPausedMutex.Lock()
+	defer ingestPausedMutex.Unlock()
+	if !ingestPaused {
+		ingestPaused = true
+		log.Println("[MQ] Knowledge ingest paused")
+	}
+}
+
+// ResumeKnowledgeIngest resumes knowledge ingest consumption
+func ResumeKnowledgeIngest() {
+	ingestPausedMutex.Lock()
+	defer ingestPausedMutex.Unlock()
+	if ingestPaused {
+		ingestPaused = false
+		log.Println("[MQ] Knowledge ingest resumed")
+	}
+}
+
+// IsKnowledgeIngestPaused checks if knowledge ingest is paused
+func IsKnowledgeIngestPaused() bool {
+	ingestPausedMutex.RLock()
+	defer ingestPausedMutex.RUnlock()
+	return ingestPaused
 }
 
 func GetMessageQueue() MessageQueue {

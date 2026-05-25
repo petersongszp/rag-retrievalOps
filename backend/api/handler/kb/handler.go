@@ -1301,3 +1301,33 @@ func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 		PageSize: pageSize,
 	})
 }
+
+func PauseIngest(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	mq.PauseKnowledgeIngest()
+	response.Success(ctx, c, map[string]interface{}{"paused": true})
+}
+
+func ResumeIngest(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	mq.ResumeKnowledgeIngest()
+	response.Success(ctx, c, map[string]interface{}{"paused": false})
+}
+
+func GetIngestStatus(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	paused := mq.IsKnowledgeIngestPaused()
+	response.Success(ctx, c, map[string]interface{}{"paused": paused})
+}

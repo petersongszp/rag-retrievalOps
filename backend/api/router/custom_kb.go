@@ -1,6 +1,8 @@
 package router
 
 import (
+	"interview-agents/internal/config"
+	"log"
 	kb "interview-agents/api/handler/kb"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -8,6 +10,11 @@ import (
 )
 
 func registerKnowledgeBaseRoutes(r *server.Hertz) {
+	if !config.Global.RAG.Enabled {
+		log.Println("[RAG] RAG is disabled, skipping knowledge base routes registration")
+		return
+	}
+	log.Println("[RAG] Registering knowledge base routes")
 	registerKBGroup(r.Group("/api/kb"))
 	registerKBGroup(r.Group("/api/admin/kb"))
 }
@@ -25,4 +32,7 @@ func registerKBGroup(group *route.RouterGroup) {
 	group.POST("/retrieve", kb.Retrieve)
 	group.GET("/retrieve/audit/:request_id", kb.GetRetrieveAuditLog)
 	group.GET("/retrieve/audit", kb.ListRetrieveAuditLogs)
+	group.POST("/ingest/pause", kb.PauseIngest)
+	group.POST("/ingest/resume", kb.ResumeIngest)
+	group.GET("/ingest/status", kb.GetIngestStatus)
 }
