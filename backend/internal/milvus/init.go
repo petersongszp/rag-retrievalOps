@@ -158,6 +158,11 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 			DefaultTopK: candidateTopK,
 		},
 	}
+	if cfg.RAG.FeatureFlags.EnableQueryRewrite {
+		hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
+			MaxExpansions: cfg.RAG.Phase2.RewriteMaxExpansions,
+		})
+	}
 	hybridRetriever, err := retrieval.NewHybridRetriever(retrieverService, hybridConfig)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize hybrid retriever: %w", err)

@@ -22,12 +22,14 @@ import (
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/middleware"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/milvus/retrieval"
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
 
+	"github.com/cloudwego/eino/schema"
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/google/uuid"
 	"golang.org/x/time/rate"
@@ -89,12 +91,12 @@ type jobListResponse struct {
 }
 
 type citation struct {
-	KBID         uint64 `json:"kb_id"`
-	DocumentID   uint64 `json:"document_id"`
-	ChunkID      string `json:"chunk_id"`
-	FileName     string `json:"file_name"`
-	ChunkIndex   int    `json:"chunk_index"`
-	SnippetOffset int   `json:"snippet_offset,omitempty"`
+	KBID          uint64 `json:"kb_id"`
+	DocumentID    uint64 `json:"document_id"`
+	ChunkID       string `json:"chunk_id"`
+	FileName      string `json:"file_name"`
+	ChunkIndex    int    `json:"chunk_index"`
+	SnippetOffset int    `json:"snippet_offset,omitempty"`
 }
 
 type source struct {
@@ -666,6 +668,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.Error(ctx, c, 503, "Retriever is not initialized")
 		return
 	}
+	useHybrid := config.Global.RAG.FeatureFlags.EnableHybridRetrieval && manager.GetHybridRetriever() != nil
 
 	topK := clampTopK(req.TopK)
 	activeKBIDs, err := model.KBKnowledgeBaseDao.ListIDsByStatus(model.KBKnowledgeBaseStatusActive)
@@ -696,26 +699,50 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	defer cancel()
 
 	start := time.Now()
-	searchResult, err := retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
+	var (
+		searchResult *retrieval.SearchResult
+		searchErr    error
+	)
+	if useHybrid {
+		docs, hybridErr := manager.GetHybridRetriever().Search(retrieveCtx, req.Query, &retrieval.RetrieveOptions{
+			TopK:             topK,
+			Collection:       collection,
+			KBScope:          "global",
+			ActiveGlobalKBID: activeGlobalKBID,
+			RequestID:        requestID,
+			OriginalQuery:    req.Query,
+		})
+		searchResult = &retrieval.SearchResult{
+			Documents: docs,
+			Metrics: retrieval.SearchMetrics{
+				SearchMs: time.Since(start).Milliseconds(),
+				HitCount: len(docs),
+			},
+		}
+		searchErr = hybridErr
+	} else {
+		searchResult, searchErr = retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
+	}
 	durationMs := time.Since(start).Milliseconds()
-	if err != nil {
-		metricsStatus, metricsErrorCode = classifyRetrieveError(err, retrieveCtx)
+	if searchErr != nil {
+		metricsStatus, metricsErrorCode = classifyRetrieveError(searchErr, retrieveCtx)
 		persistRetrieveLog(&model.KBRetrieveLog{
 			RequestID:    requestID,
 			UserID:       userID,
 			KBIDs:        formatKBIDs(kbIDs),
 			Query:        req.Query,
+			FinalQuery:   req.Query,
 			Expr:         expr,
 			TopK:         topK,
-			Routes:       "dense",
+			Routes:       resolveRetrieveRoutes(useHybrid),
 			Collection:   collection,
 			ResultStatus: classifyRetrieveResultStatus(metricsStatus),
 			ErrorCode:    metricsErrorCode,
-			ErrorMsg:     err.Error(),
+			ErrorMsg:     searchErr.Error(),
 			DurationMs:   durationMs,
 			TimeoutMs:    retrieveTimeout.Milliseconds(),
 		})
-		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", err))
+		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
 	}
 
@@ -746,19 +773,20 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			continue
 		}
 
+		route := firstNonEmptyString(getStringMetadata(doc.MetaData, "route"), resolvePrimaryRoute(useHybrid))
 		items = append(items, retrieveItem{
 			Content: doc.Content,
 			Score:   getFloat64Metadata(doc.MetaData, "score"),
 			Citation: citation{
-				KBID:         storedDoc.KbID,
-				DocumentID:   documentID,
-				ChunkID:      firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id")),
-				FileName:     firstNonEmptyString(getStringMetadata(doc.MetaData, "file_name"), storedDoc.FileName),
-				ChunkIndex:   getIntMetadata(doc.MetaData, "chunk_index"),
+				KBID:          storedDoc.KbID,
+				DocumentID:    documentID,
+				ChunkID:       firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id")),
+				FileName:      firstNonEmptyString(getStringMetadata(doc.MetaData, "file_name"), storedDoc.FileName),
+				ChunkIndex:    getIntMetadata(doc.MetaData, "chunk_index"),
 				SnippetOffset: computeSnippetOffset(doc.Content, queryLower),
 			},
 			Source: source{
-				Route:            "dense",
+				Route:            route,
 				Collection:       collection,
 				RetrieverVersion: "v1",
 			},
@@ -775,38 +803,45 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	}
 
 	retrieveLog := &model.KBRetrieveLog{
-		RequestID:       requestID,
-		UserID:          userID,
-		KBIDs:           formatKBIDs(kbIDs),
-		Query:           req.Query,
-		Expr:            expr,
-		TopK:            topK,
-		Routes:          "dense",
-		Collection:      collection,
+		RequestID:        requestID,
+		UserID:           userID,
+		KBIDs:            formatKBIDs(kbIDs),
+		Query:            req.Query,
+		FinalQuery:       firstNonEmptyString(extractFinalQuery(docs), req.Query),
+		Expr:             expr,
+		TopK:             topK,
+		Rewrite:          extractRewriteQuery(docs),
+		RewriteStrategy:  extractRewriteStrategy(docs),
+		RewriteApplied:   extractRewriteApplied(docs),
+		Routes:           resolveRetrieveRoutes(useHybrid),
+		Collection:       collection,
 		RetrieverVersion: "v1",
-		FinalCount:      len(items),
-		TruncatedCount:  searchMetrics.TruncatedCount,
-		ResultStatus:    resultStatus,
-		EmbeddingMs:     searchMetrics.EmbeddingMs,
-		SearchMs:        searchMetrics.SearchMs,
-		PostprocessMs:   searchMetrics.PostprocessMs,
-		DurationMs:      durationMs,
-		TimeoutMs:       retrieveTimeout.Milliseconds(),
+		FinalCount:       len(items),
+		TruncatedCount:   searchMetrics.TruncatedCount,
+		ResultStatus:     resultStatus,
+		EmbeddingMs:      searchMetrics.EmbeddingMs,
+		SearchMs:         searchMetrics.SearchMs,
+		PostprocessMs:    searchMetrics.PostprocessMs,
+		DurationMs:       durationMs,
+		TimeoutMs:        retrieveTimeout.Milliseconds(),
 	}
 	persistRetrieveLog(retrieveLog)
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] request_id=%s query=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d rewrite=%q routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] request_id=%s query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
 			req.Query,
+			retrieveLog.FinalQuery,
+			retrieveLog.Rewrite,
+			retrieveLog.RewriteStrategy,
+			retrieveLog.RewriteApplied,
 			userID,
 			kbIDs,
 			"global",
 			expr,
 			topK,
-			"",
-			"dense",
+			retrieveLog.Routes,
 			len(items),
 			searchMetrics.HitCount,
 			searchMetrics.TruncatedCount,
@@ -832,6 +867,58 @@ func resolveAppErrorCode(err error, fallback string) string {
 		return strings.ToLower(string(appErr.Code))
 	}
 	return fallback
+}
+
+func resolveRetrieveRoutes(useHybrid bool) string {
+	if useHybrid {
+		return "dense+sparse"
+	}
+	return "dense"
+}
+
+func resolvePrimaryRoute(useHybrid bool) string {
+	if useHybrid {
+		return "hybrid"
+	}
+	return "dense"
+}
+
+func extractFinalQuery(docs []*schema.Document) string {
+	return getStringMetadataFromDocs(docs, "final_query")
+}
+
+func extractRewriteQuery(docs []*schema.Document) string {
+	return getStringMetadataFromDocs(docs, "rewrite_query")
+}
+
+func extractRewriteStrategy(docs []*schema.Document) string {
+	return getStringMetadataFromDocs(docs, "rewrite_strategy")
+}
+
+func extractRewriteApplied(docs []*schema.Document) bool {
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		if value, ok := doc.MetaData["rewrite_applied"]; ok {
+			switch v := value.(type) {
+			case bool:
+				return v
+			case string:
+				return strings.EqualFold(strings.TrimSpace(v), "true")
+			}
+		}
+	}
+	return false
+}
+
+func getStringMetadataFromDocs(docs []*schema.Document, key string) string {
+	for _, doc := range docs {
+		if value := getStringMetadata(doc.MetaData, key); value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 func classifyRetrieveError(err error, retrieveCtx context.Context) (string, string) {

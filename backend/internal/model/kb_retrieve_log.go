@@ -7,11 +7,11 @@ import (
 type RetrieveResultStatus string
 
 const (
-	RetrieveResultStatusSuccess RetrieveResultStatus = "success"
-	RetrieveResultStatusNoResult RetrieveResultStatus = "no_result"
+	RetrieveResultStatusSuccess     RetrieveResultStatus = "success"
+	RetrieveResultStatusNoResult    RetrieveResultStatus = "no_result"
 	RetrieveResultStatusFilteredOut RetrieveResultStatus = "filtered_out"
-	RetrieveResultStatusError RetrieveResultStatus = "error"
-	RetrieveResultStatusTimeout RetrieveResultStatus = "timeout"
+	RetrieveResultStatusError       RetrieveResultStatus = "error"
+	RetrieveResultStatusTimeout     RetrieveResultStatus = "timeout"
 )
 
 var KBRetrieveLogDao _KBRetrieveLog
@@ -19,28 +19,31 @@ var KBRetrieveLogDao _KBRetrieveLog
 type (
 	_KBRetrieveLog struct{}
 	KBRetrieveLog  struct {
-		ID              uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
-		RequestID       string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
-		UserID          uint                 `json:"user_id" gorm:"index;not null"`
-		KBIDs           string               `json:"kb_ids" gorm:"size:500"`
-		Query           string               `json:"query" gorm:"size:2000;not null"`
-		Expr            string               `json:"expr" gorm:"size:2000"`
-		TopK            int                  `json:"top_k"`
-		Rewrite         string               `json:"rewrite" gorm:"size:1000"`
-		Routes          string               `json:"routes" gorm:"size:200"`
-		Collection      string               `json:"collection" gorm:"size:200"`
-		RetrieverVersion string              `json:"retriever_version" gorm:"size:50"`
-		FinalCount      int                  `json:"final_count"`
-		TruncatedCount  int                  `json:"truncated_count"`
-		ResultStatus    RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
-		ErrorCode       string               `json:"error_code" gorm:"size:64"`
-		ErrorMsg        string               `json:"error_msg" gorm:"size:1000"`
-		EmbeddingMs     int64                `json:"embedding_ms"`
-		SearchMs        int64                `json:"search_ms"`
-		PostprocessMs   int64                `json:"postprocess_ms"`
-		DurationMs      int64                `json:"duration_ms"`
-		TimeoutMs       int64                `json:"timeout_ms"`
-		CreatedAt       time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
+		ID               uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
+		RequestID        string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
+		UserID           uint                 `json:"user_id" gorm:"index;not null"`
+		KBIDs            string               `json:"kb_ids" gorm:"size:500"`
+		Query            string               `json:"query" gorm:"size:2000;not null"`
+		FinalQuery       string               `json:"final_query" gorm:"size:2000"`
+		Expr             string               `json:"expr" gorm:"size:2000"`
+		TopK             int                  `json:"top_k"`
+		Rewrite          string               `json:"rewrite" gorm:"size:1000"`
+		RewriteStrategy  string               `json:"rewrite_strategy" gorm:"size:255"`
+		RewriteApplied   bool                 `json:"rewrite_applied"`
+		Routes           string               `json:"routes" gorm:"size:200"`
+		Collection       string               `json:"collection" gorm:"size:200"`
+		RetrieverVersion string               `json:"retriever_version" gorm:"size:50"`
+		FinalCount       int                  `json:"final_count"`
+		TruncatedCount   int                  `json:"truncated_count"`
+		ResultStatus     RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
+		ErrorCode        string               `json:"error_code" gorm:"size:64"`
+		ErrorMsg         string               `json:"error_msg" gorm:"size:1000"`
+		EmbeddingMs      int64                `json:"embedding_ms"`
+		SearchMs         int64                `json:"search_ms"`
+		PostprocessMs    int64                `json:"postprocess_ms"`
+		DurationMs       int64                `json:"duration_ms"`
+		TimeoutMs        int64                `json:"timeout_ms"`
+		CreatedAt        time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
 	}
 )
 
