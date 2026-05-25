@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"log"
-	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -42,6 +41,8 @@ type HybridRetriever struct {
 // HybridRetrieverConfig controls mixed retrieval behavior in L1.
 type HybridRetrieverConfig struct {
 	CandidateTopK int
+	DenseWeight   float64
+	SparseWeight  float64
 	SparseConfig  *SparseRetrieverConfig
 	RerankerImpl  Reranker
 }
@@ -55,6 +56,12 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 	}
 	if config.CandidateTopK <= 0 {
 		config.CandidateTopK = 10
+	}
+	if config.DenseWeight <= 0 {
+		config.DenseWeight = 0.7
+	}
+	if config.SparseWeight <= 0 {
+		config.SparseWeight = 0.3
 	}
 
 	sparseRetriever, err := NewSparseRetriever(retriever.client, retriever.config.Collection, config.SparseConfig)
@@ -216,12 +223,35 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		return nil, fmt.Errorf("hybrid retrieval failed: dense=%v sparse=%v", denseErr, sparseErr)
 	}
 
-	merged := mergeRouteCandidates(denseDocs, sparseDocs)
+	rawCandidateCount := len(denseDocs) + len(sparseDocs)
+	if rawCandidateCount == 0 {
+		totalMS := time.Since(start).Milliseconds()
+		log.Printf(
+			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterRetrieve, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+		)
+		return []*schema.Document{}, nil
+	}
+
+	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
+		DenseWeight:  h.config.DenseWeight,
+		SparseWeight: h.config.SparseWeight,
+	})
+	if len(fused) == 0 {
+		totalMS := time.Since(start).Milliseconds()
+		log.Printf(
+			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+		)
+		return []*schema.Document{}, nil
+	}
+
+	merged := DeduplicateFusedDocuments(fused)
 	if len(merged) == 0 {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L1] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=empty-after-retrieve duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
 		return []*schema.Document{}, nil
 	}
@@ -233,13 +263,18 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		}
 	}
 
+	emptyReason := EmptyReasonNone
+	if len(merged) == 0 {
+		emptyReason = EmptyReasonAfterFilter
+	}
+
 	if len(merged) > req.TopK {
 		merged = merged[:req.TopK]
 	}
 
 	totalMS := time.Since(start).Milliseconds()
 	log.Printf(
-		"[RAG:L1] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.Query,
 		req.Query,
@@ -249,7 +284,7 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		len(denseDocs),
 		len(sparseDocs),
 		len(merged),
-		"none",
+		emptyReason,
 		totalMS,
 		denseMS,
 		sparseMS,
@@ -277,6 +312,7 @@ func (h *HybridRetriever) searchDense(ctx context.Context, req *HybridSearchRequ
 			doc.MetaData = make(map[string]interface{})
 		}
 		doc.MetaData["route"] = routeDense
+		doc.MetaData["dense_score"] = readDocScore(doc)
 	}
 	return docs, nil
 }
@@ -291,73 +327,18 @@ func (h *HybridRetriever) observeRouteMetric(route string, duration time.Duratio
 	metrics.ObserveRetrieveRoute(route, duration, status, errCode, hitCount)
 }
 
-func mergeRouteCandidates(denseDocs, sparseDocs []*schema.Document) []*schema.Document {
-	combined := make([]*schema.Document, 0, len(denseDocs)+len(sparseDocs))
-	combined = append(combined, denseDocs...)
-	combined = append(combined, sparseDocs...)
-	if len(combined) == 0 {
-		return []*schema.Document{}
-	}
-
-	type rankedDoc struct {
-		doc   *schema.Document
-		score float64
-	}
-	bestByKey := make(map[string]rankedDoc, len(combined))
-	for _, doc := range combined {
-		if doc == nil {
-			continue
-		}
-		key := strings.TrimSpace(doc.ID)
-		if key == "" {
-			key = buildPseudoDocID(doc)
-		}
-		if key == "" {
-			continue
-		}
-
-		score := readDocScore(doc)
-		existing, ok := bestByKey[key]
-		if !ok || score > existing.score {
-			bestByKey[key] = rankedDoc{doc: doc, score: score}
-		}
-	}
-
-	out := make([]*schema.Document, 0, len(bestByKey))
-	for _, item := range bestByKey {
-		out = append(out, item.doc)
-	}
-	sort.SliceStable(out, func(i, j int) bool {
-		left := readDocScore(out[i])
-		right := readDocScore(out[j])
-		if left == right {
-			return out[i].ID < out[j].ID
-		}
-		return left > right
-	})
-	return out
-}
-
 func readDocScore(doc *schema.Document) float64 {
 	if doc == nil || doc.MetaData == nil {
 		return 0
 	}
 	if value, ok := doc.MetaData["score"]; ok {
-		switch v := value.(type) {
-		case float64:
-			return v
-		case float32:
-			return float64(v)
-		case int:
-			return float64(v)
+		if score, ok := castScore(value); ok {
+			return score
 		}
 	}
 	if value, ok := doc.MetaData["sparse_score"]; ok {
-		switch v := value.(type) {
-		case float64:
-			return v
-		case float32:
-			return float64(v)
+		if score, ok := castScore(value); ok {
+			return score
 		}
 	}
 	return 0
