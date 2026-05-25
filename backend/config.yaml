@@ -1,4 +1,4 @@
-# 服务配置
+﻿# 服务配置
 host: '0.0.0.0'
 port: 8899
 
@@ -227,3 +227,5 @@ email:
   smtp_user: '${SMTP_USER}'
   smtp_pass: '${SMTP_PASS}'
   from_email: '${SMTP_FROM}'
+
+
