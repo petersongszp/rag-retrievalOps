@@ -94,10 +94,13 @@ func SearchWithExprAndMetrics(
 		collectionName = opts.Collection
 	}
 
-	// 构建搜索参数
-	searchParam, err := entity.NewIndexAUTOINDEXSearchParam(1)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create search param: %w", err)
+	// 构建搜索参数，优先使用调用方显式传入的索引参数。
+	searchParam := config.Sp
+	if searchParam == nil {
+		searchParam, err = entity.NewIndexAUTOINDEXSearchParam(1)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create search param: %w", err)
+		}
 	}
 
 	// 执行搜索

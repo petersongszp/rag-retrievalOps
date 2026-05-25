@@ -1,0 +1,50 @@
+[
+  {
+    "name": "phase1-hnsw-baseline",
+    "label": "Phase 1 HNSW baseline",
+    "family": "HNSW",
+    "metric_type": "COSINE",
+    "is_baseline": true,
+    "notes": "Current production-safe baseline before Phase 2 tuning.",
+    "hnsw": {
+      "m": 16,
+      "ef_construction": 200,
+      "ef_search": 64
+    }
+  },
+  {
+    "name": "phase2-hnsw-balanced",
+    "label": "Phase 2 HNSW balanced",
+    "family": "HNSW",
+    "metric_type": "COSINE",
+    "notes": "Balanced recall and latency candidate for general RAG traffic.",
+    "hnsw": {
+      "m": 24,
+      "ef_construction": 320,
+      "ef_search": 96
+    }
+  },
+  {
+    "name": "phase2-hnsw-high-recall",
+    "label": "Phase 2 HNSW high recall",
+    "family": "HNSW",
+    "metric_type": "COSINE",
+    "notes": "Aggressive recall profile for long-tail and entity-heavy queries.",
+    "hnsw": {
+      "m": 32,
+      "ef_construction": 360,
+      "ef_search": 128
+    }
+  },
+  {
+    "name": "phase2-ivf-balanced",
+    "label": "Phase 2 IVF balanced",
+    "family": "IVF_FLAT",
+    "metric_type": "COSINE",
+    "notes": "IVF option for lower memory footprint while maintaining acceptable recall.",
+    "ivf": {
+      "nlist": 2048,
+      "nprobe": 32
+    }
+  }
+]
