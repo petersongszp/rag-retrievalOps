@@ -112,14 +112,24 @@ func (d *_KBIngestJob) GetLatestByDocumentID(documentID uint64) (*KBIngestJob, e
 	return &job, nil
 }
 
-func (d *_KBIngestJob) ListByKbID(kbID uint64, page, pageSize int) ([]*KBIngestJob, int64, error) {
+func (d *_KBIngestJob) ListByKbID(kbID uint64, status *KBIngestJobStatus, page, pageSize int) ([]*KBIngestJob, int64, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
+	if page <= 0 {
+		page = 1
+	}
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
 	var list []*KBIngestJob
 	var total int64
 
 	query := getDB().Model(&KBIngestJob{}).Where("kb_id = ?", kbID)
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
@@ -456,6 +466,15 @@ func isKnownKBIngestJobStatus(status KBIngestJobStatus) bool {
 func ParseKBIngestJobStatus(raw string) (KBIngestJobStatus, bool) {
 	status := KBIngestJobStatus(raw)
 	return status, isKnownKBIngestJobStatus(status)
+}
+
+func (d *_KBIngestJob) CountByStatuses(statuses []KBIngestJobStatus) (int64, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var count int64
+	err := getDB().Model(&KBIngestJob{}).Where("status IN ?", statuses).Count(&count).Error
+	return count, err
 }
 
 func firstNonEmpty(values ...string) string {
