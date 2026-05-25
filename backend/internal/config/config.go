@@ -234,6 +234,8 @@ type RAGPhase2Config struct {
 	CandidateTopK        int     `yaml:"candidate_topk"`
 	MinTopK              int     `yaml:"min_topk"`
 	MaxTopK              int     `yaml:"max_topk"`
+	TokenBudget          int     `yaml:"token_budget"`
+	MinAnswerChunks      int     `yaml:"min_answer_chunks"`
 	RewriteTimeoutMS     int     `yaml:"rewrite_timeout_ms"`
 	RewriteMaxExpansions int     `yaml:"rewrite_max_expansions"`
 	RerankTimeoutMS      int     `yaml:"rerank_timeout_ms"`
@@ -392,6 +394,12 @@ func (c *Config) ValidateRAGPrerequisites() error {
 		if c.RAG.Phase2.CandidateTopK < c.RAG.Phase2.MaxTopK {
 			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.candidate_topk (%d) < rag.phase2.max_topk (%d)", c.RAG.Phase2.CandidateTopK, c.RAG.Phase2.MaxTopK)
 		}
+		if c.RAG.Phase2.TokenBudget < 0 {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.token_budget must be >= 0")
+		}
+		if c.RAG.Phase2.MinAnswerChunks <= 0 {
+			return fmt.Errorf("rag dynamic topk enabled but rag.phase2.min_answer_chunks must be > 0")
+		}
 	}
 	if c.RAG.FeatureFlags.EnableQueryRewrite {
 		if c.RAG.Phase2.RewriteTimeoutMS <= 0 {
@@ -448,6 +456,12 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if c.RAG.Phase2.MaxTopK <= 0 {
 		c.RAG.Phase2.MaxTopK = 8
+	}
+	if c.RAG.Phase2.TokenBudget < 0 {
+		c.RAG.Phase2.TokenBudget = 0
+	}
+	if c.RAG.Phase2.MinAnswerChunks <= 0 {
+		c.RAG.Phase2.MinAnswerChunks = 2
 	}
 	if c.RAG.Phase2.RewriteTimeoutMS <= 0 {
 		c.RAG.Phase2.RewriteTimeoutMS = 120
@@ -552,6 +566,16 @@ func (c *Config) applyRAGEnvOverrides() error {
 	} else if ok {
 		c.RAG.Phase2.MaxTopK = value
 	}
+	if value, ok, err := readEnvInt("RAG_TOKEN_BUDGET"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.TokenBudget = value
+	}
+	if value, ok, err := readEnvInt("RAG_MIN_ANSWER_CHUNKS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.MinAnswerChunks = value
+	}
 	if value, ok, err := readEnvInt("RAG_REWRITE_TIMEOUT_MS"); err != nil {
 		return err
 	} else if ok {
@@ -587,7 +611,7 @@ func (c *Config) LogRAGSnapshot() {
 		return
 	}
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -608,6 +632,8 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.Phase2.CandidateTopK,
 		c.RAG.Phase2.MinTopK,
 		c.RAG.Phase2.MaxTopK,
+		c.RAG.Phase2.TokenBudget,
+		c.RAG.Phase2.MinAnswerChunks,
 		c.RAG.Phase2.RewriteTimeoutMS,
 		c.RAG.Phase2.RewriteMaxExpansions,
 		c.RAG.Phase2.RerankTimeoutMS,

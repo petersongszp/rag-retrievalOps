@@ -18,33 +18,38 @@ const (
 	routeSparse = "sparse"
 )
 
-// HybridSearchRequest is the unified recall input contract for L1.
-// query/expr/topk/kb_scope/kb_id/request_id
 type HybridSearchRequest struct {
-	Query      string
-	Expr       string
-	TopK       int
-	KBScope    string
-	KBID       uint64
-	RequestID  string
-	Collection string
+	Query           string
+	OriginalQuery   string
+	RewriteQuery    string
+	FinalQuery      string
+	RewriteStrategy string
+	RewriteApplied  bool
+	Expr            string
+	TopK            int
+	KBScope         string
+	KBID            uint64
+	RequestID       string
+	Collection      string
+	CandidateTopK   int
 }
 
-// HybridRetriever orchestrates dense + sparse routes and keeps backward compatibility with Search(ctx, query, opts).
 type HybridRetriever struct {
 	retriever       *RetrieverService
 	sparseRetriever *SparseRetriever
 	reranker        Reranker
+	queryRewriter   QueryRewriter
 	config          *HybridRetrieverConfig
 }
 
-// HybridRetrieverConfig controls mixed retrieval behavior in L1.
 type HybridRetrieverConfig struct {
 	CandidateTopK int
 	DenseWeight   float64
 	SparseWeight  float64
 	SparseConfig  *SparseRetrieverConfig
 	RerankerImpl  Reranker
+	QueryRewriter QueryRewriter
+	DynamicTopK   DynamicTopKConfig
 }
 
 func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConfig) (*HybridRetriever, error) {
@@ -72,6 +77,7 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 	hr := &HybridRetriever{
 		retriever:       retriever,
 		sparseRetriever: sparseRetriever,
+		queryRewriter:   config.QueryRewriter,
 		config:          config,
 	}
 	if config.RerankerImpl != nil {
@@ -82,60 +88,66 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 	return hr, nil
 }
 
-// Search 混合检索器的对外搜索入口方法
-// 入参：上下文、用户查询词、检索配置
-// 返参：匹配的文档列表、错误信息
 func (h *HybridRetriever) Search(ctx context.Context, query string, opts *RetrieveOptions) ([]*schema.Document, error) {
-	// 1. 校验查询词是否为空
 	if strings.TrimSpace(query) == "" {
 		return nil, fmt.Errorf("query is empty")
 	}
 
-	// 2. 处理请求ID（RequestID）：优先使用配置中的，无则自动生成
 	requestID := ""
 	if opts != nil {
 		requestID = strings.TrimSpace(opts.RequestID)
 	}
 	if requestID == "" {
-		// 自动生成唯一RequestID：hyb-时间戳(纳秒)
 		requestID = fmt.Sprintf("hyb-%d", time.Now().UnixNano())
 	}
 
-	// 3. 处理返回结果数量（TopK）：优先使用配置中的，无则使用默认配置
-	topK := h.config.CandidateTopK
+	candidateTopK := h.config.CandidateTopK
+	if opts != nil && opts.CandidateTopK > 0 {
+		candidateTopK = opts.CandidateTopK
+	}
+	finalTopK := 0
 	if opts != nil && opts.TopK > 0 {
-		topK = opts.TopK
+		finalTopK = opts.TopK
 	}
 
-	// 4. 构建底层检索需要的请求对象
 	req := &HybridSearchRequest{
-		Query:      query,
-		TopK:       topK,
-		RequestID:  requestID,
-		Collection: h.retriever.config.Collection, // 默认使用检索器配置的集合
+		Query:         query,
+		OriginalQuery: query,
+		FinalQuery:    query,
+		TopK:          finalTopK,
+		RequestID:     requestID,
+		Collection:    h.retriever.config.Collection,
+		CandidateTopK: candidateTopK,
 	}
 
-	// 5. 如果传入了自定义配置opts，覆盖/填充请求对象的扩展字段
 	if opts != nil {
-		// 构建过滤表达式：优先使用自动生成的，空则兜底使用用户自定义的Expr
 		req.Expr = strings.TrimSpace(BuildFilterExpr(opts))
 		if req.Expr == "" {
 			req.Expr = strings.TrimSpace(opts.Expr)
 		}
-		// 填充知识库范围、全局知识库ID
 		req.KBScope = strings.TrimSpace(opts.KBScope)
 		req.KBID = opts.ActiveGlobalKBID
-		// 如果配置了自定义集合，覆盖默认集合
 		if strings.TrimSpace(opts.Collection) != "" {
 			req.Collection = strings.TrimSpace(opts.Collection)
 		}
+		if strings.TrimSpace(opts.OriginalQuery) != "" {
+			req.OriginalQuery = strings.TrimSpace(opts.OriginalQuery)
+		}
+		if strings.TrimSpace(opts.RewriteQuery) != "" {
+			req.RewriteQuery = strings.TrimSpace(opts.RewriteQuery)
+		}
+		if strings.TrimSpace(opts.FinalQuery) != "" {
+			req.FinalQuery = strings.TrimSpace(opts.FinalQuery)
+		}
+		if strings.TrimSpace(opts.RewriteStrategy) != "" {
+			req.RewriteStrategy = strings.TrimSpace(opts.RewriteStrategy)
+		}
+		req.RewriteApplied = opts.RewriteApplied
 	}
 
-	// 6. 调用底层真正执行混合检索的方法，返回结果
 	return h.SearchWithRequest(ctx, req)
 }
 
-// SearchWithRequest is the L1 hybrid recall entry.
 func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSearchRequest) ([]*schema.Document, error) {
 	if req == nil {
 		return nil, fmt.Errorf("hybrid search request is nil")
@@ -143,15 +155,27 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 	if strings.TrimSpace(req.Query) == "" {
 		return nil, fmt.Errorf("query is empty")
 	}
+	if strings.TrimSpace(req.OriginalQuery) == "" {
+		req.OriginalQuery = strings.TrimSpace(req.Query)
+	}
+	if strings.TrimSpace(req.FinalQuery) == "" {
+		req.FinalQuery = req.OriginalQuery
+	}
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = fmt.Sprintf("hyb-%d", time.Now().UnixNano())
 	}
+	if req.CandidateTopK <= 0 {
+		req.CandidateTopK = h.config.CandidateTopK
+	}
 	if req.TopK <= 0 {
-		req.TopK = h.config.CandidateTopK
+		req.TopK = req.CandidateTopK
 	}
 	if strings.TrimSpace(req.Collection) == "" {
 		req.Collection = h.retriever.config.Collection
 	}
+
+	req.applyControlledRewrite(ctx, h.queryRewriter)
+	topKDecision := DecideDynamicTopK(req.FinalQuery, req.CandidateTopK, req.TopK, h.config.DynamicTopK)
 
 	start := time.Now()
 	type routeResult struct {
@@ -169,24 +193,14 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		defer wg.Done()
 		routeStart := time.Now()
 		docs, err := h.searchDense(ctx, req)
-		resultCh <- routeResult{
-			route:    routeDense,
-			docs:     docs,
-			err:      err,
-			duration: time.Since(routeStart),
-		}
+		resultCh <- routeResult{route: routeDense, docs: docs, err: err, duration: time.Since(routeStart)}
 	}()
 
 	go func() {
 		defer wg.Done()
 		routeStart := time.Now()
 		docs, err := h.sparseRetriever.Search(ctx, req)
-		resultCh <- routeResult{
-			route:    routeSparse,
-			docs:     docs,
-			err:      err,
-			duration: time.Since(routeStart),
-		}
+		resultCh <- routeResult{route: routeSparse, docs: docs, err: err, duration: time.Since(routeStart)}
 	}()
 
 	wg.Wait()
@@ -217,8 +231,8 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 	if denseErr != nil && sparseErr != nil {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L1] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:0,sparse:0} final_count=0 empty_reason=empty-after-retrieve duration_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", totalMS, denseErr.Error(), sparseErr.Error(),
+			"[RAG:L1] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:0,sparse:0} final_count=0 empty_reason=empty-after-retrieve duration_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", totalMS, denseErr.Error(), sparseErr.Error(),
 		)
 		return nil, fmt.Errorf("hybrid retrieval failed: dense=%v sparse=%v", denseErr, sparseErr)
 	}
@@ -227,8 +241,8 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 	if rawCandidateCount == 0 {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterRetrieve, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterRetrieve, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
 		return []*schema.Document{}, nil
 	}
@@ -240,8 +254,8 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 	if len(fused) == 0 {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
 		return []*schema.Document{}, nil
 	}
@@ -250,14 +264,14 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 	if len(merged) == 0 {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.Query, req.Query, req.Expr, req.TopK, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
 		return []*schema.Document{}, nil
 	}
 
 	if h.reranker != nil {
-		reranked, err := h.reranker.Rerank(ctx, req.Query, merged)
+		reranked, err := h.reranker.Rerank(ctx, req.OriginalQuery, merged)
 		if err == nil && len(reranked) > 0 {
 			merged = reranked
 		}
@@ -268,22 +282,29 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 		emptyReason = EmptyReasonAfterFilter
 	}
 
-	if len(merged) > req.TopK {
-		merged = merged[:req.TopK]
-	}
+	beforeTruncateCount := len(merged)
+	merged, topKDecision = ApplyTokenBudgetGuard(merged, topKDecision, h.config.DynamicTopK)
+	truncatedCount := beforeTruncateCount - len(merged)
 
 	totalMS := time.Since(start).Milliseconds()
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q final_query=%q expr=%q topk=%d routes=%s route_hits={dense:%d,sparse:%d} final_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 		req.RequestID,
-		req.Query,
-		req.Query,
+		req.OriginalQuery,
+		req.RewriteQuery,
+		req.FinalQuery,
+		req.RewriteStrategy,
+		req.RewriteApplied,
 		req.Expr,
-		req.TopK,
+		topKDecision.CandidateTopK,
+		topKDecision.FinalTopK,
+		topKDecision.TokenBudget,
+		topKDecision.TruncateReason,
 		"dense+sparse",
 		len(denseDocs),
 		len(sparseDocs),
 		len(merged),
+		truncatedCount,
 		emptyReason,
 		totalMS,
 		denseMS,
@@ -297,13 +318,18 @@ func (h *HybridRetriever) SearchWithRequest(ctx context.Context, req *HybridSear
 func (h *HybridRetriever) searchDense(ctx context.Context, req *HybridSearchRequest) ([]*schema.Document, error) {
 	opts := &RetrieveOptions{
 		Expr:             req.Expr,
-		TopK:             req.TopK,
+		TopK:             req.CandidateTopK,
 		Collection:       req.Collection,
 		KBScope:          req.KBScope,
 		ActiveGlobalKBID: req.KBID,
 		RequestID:        req.RequestID,
+		OriginalQuery:    req.OriginalQuery,
+		RewriteQuery:     req.RewriteQuery,
+		FinalQuery:       req.FinalQuery,
+		RewriteStrategy:  req.RewriteStrategy,
+		RewriteApplied:   req.RewriteApplied,
 	}
-	docs, err := h.retriever.RetrieveWithOptions(ctx, req.Query, opts)
+	docs, err := h.retriever.RetrieveWithOptions(ctx, req.FinalQuery, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -313,6 +339,7 @@ func (h *HybridRetriever) searchDense(ctx context.Context, req *HybridSearchRequ
 		}
 		doc.MetaData["route"] = routeDense
 		doc.MetaData["dense_score"] = readDocScore(doc)
+		attachRewriteMetadata(doc, req)
 	}
 	return docs, nil
 }
@@ -325,6 +352,37 @@ func (h *HybridRetriever) observeRouteMetric(route string, duration time.Duratio
 		errCode = "route_failed"
 	}
 	metrics.ObserveRetrieveRoute(route, duration, status, errCode, hitCount)
+}
+
+func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewriter QueryRewriter) {
+	if req == nil {
+		return
+	}
+	if strings.TrimSpace(req.OriginalQuery) == "" {
+		req.OriginalQuery = strings.TrimSpace(req.Query)
+	}
+	if rewriter == nil {
+		req.Query = req.OriginalQuery
+		req.FinalQuery = req.OriginalQuery
+		req.RewriteQuery = ""
+		req.RewriteStrategy = RewriteStrategyNone
+		req.RewriteApplied = false
+		return
+	}
+
+	result := rewriter.Rewrite(ctx, req.OriginalQuery)
+	req.Query = req.OriginalQuery
+	req.RewriteQuery = strings.TrimSpace(result.RewriteQuery)
+	req.FinalQuery = strings.TrimSpace(result.FinalQuery)
+	if req.FinalQuery == "" {
+		req.FinalQuery = req.OriginalQuery
+	}
+	req.RewriteStrategy = formatRewriteStrategy(result)
+	req.RewriteApplied = result.Applied && !strings.EqualFold(req.FinalQuery, req.OriginalQuery)
+	if !req.RewriteApplied {
+		req.RewriteQuery = ""
+		req.FinalQuery = req.OriginalQuery
+	}
 }
 
 func readDocScore(doc *schema.Document) float64 {
@@ -349,4 +407,18 @@ func toLogError(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest) {
+	if doc == nil || req == nil {
+		return
+	}
+	if doc.MetaData == nil {
+		doc.MetaData = make(map[string]interface{})
+	}
+	doc.MetaData["original_query"] = req.OriginalQuery
+	doc.MetaData["rewrite_query"] = req.RewriteQuery
+	doc.MetaData["final_query"] = req.FinalQuery
+	doc.MetaData["rewrite_strategy"] = req.RewriteStrategy
+	doc.MetaData["rewrite_applied"] = req.RewriteApplied
 }

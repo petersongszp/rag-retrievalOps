@@ -157,6 +157,18 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		SparseConfig: &retrieval.SparseRetrieverConfig{
 			DefaultTopK: candidateTopK,
 		},
+		DynamicTopK: retrieval.DynamicTopKConfig{
+			Enabled:         cfg.RAG.FeatureFlags.EnableDynamicTopK,
+			MinTopK:         cfg.RAG.Phase2.MinTopK,
+			MaxTopK:         cfg.RAG.Phase2.MaxTopK,
+			TokenBudget:     cfg.RAG.Phase2.TokenBudget,
+			MinAnswerChunks: cfg.RAG.Phase2.MinAnswerChunks,
+		},
+	}
+	if cfg.RAG.FeatureFlags.EnableQueryRewrite {
+		hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
+			MaxExpansions: cfg.RAG.Phase2.RewriteMaxExpansions,
+		})
 	}
 	hybridRetriever, err := retrieval.NewHybridRetriever(retrieverService, hybridConfig)
 	if err != nil {

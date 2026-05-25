@@ -66,12 +66,15 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	if req == nil {
 		return nil, fmt.Errorf("hybrid search request is nil")
 	}
-	query := strings.TrimSpace(req.Query)
+	query := strings.TrimSpace(req.FinalQuery)
+	if query == "" {
+		query = strings.TrimSpace(req.Query)
+	}
 	if query == "" {
 		return nil, fmt.Errorf("query is empty")
 	}
 
-	topK := req.TopK
+	topK := req.CandidateTopK
 	if topK <= 0 {
 		topK = s.config.DefaultTopK
 	}
@@ -164,6 +167,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		doc.MetaData["route"] = routeSparse
 		doc.MetaData["sparse_score"] = hit.Score
 		doc.MetaData["score"] = hit.Score
+		attachRewriteMetadata(doc, req)
 		results = append(results, doc)
 	}
 

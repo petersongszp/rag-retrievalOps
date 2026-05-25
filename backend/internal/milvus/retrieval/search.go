@@ -14,11 +14,15 @@ import (
 
 // SearchMetrics 检索各阶段耗时统计
 type SearchMetrics struct {
-	EmbeddingMs   int64
-	SearchMs      int64
-	PostprocessMs int64
-	HitCount      int
+	EmbeddingMs    int64
+	SearchMs       int64
+	PostprocessMs  int64
+	HitCount       int
 	TruncatedCount int
+	CandidateTopK  int
+	FinalTopK      int
+	TokenBudget    int
+	TruncateReason string
 }
 
 // SearchResult 带指标的检索结果
