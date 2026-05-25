@@ -1,22 +1,113 @@
 [
-    {
-        "question": "请解释一下 Go 语言中的 goroutine 和 channel 的关系",
-        "context": "Go 语言并发编程的核心概念包括 goroutine（轻量级线程）和 channel（通道，用于 goroutine 之间的通信）。goroutine 通过 channel 进行数据交换和同步。",
-        "ground_truth": "Goroutine 是 Go 语言中的轻量级线程，由 Go 运行时管理。Channel 是 goroutine 之间通信的管道，遵循 CSP（Communicating Sequential Processes）模型。通过 channel，goroutine 可以安全地传递数据，避免共享内存带来的竞态条件。Channel 可以是有缓冲或无缓冲的，无缓冲 channel 会阻塞发送方直到接收方准备好接收。"
-    },
-    {
-        "question": "什么是 MySQL 的 MVCC 机制？",
-        "context": "MVCC（Multi-Version Concurrency Control，多版本并发控制）是 MySQL InnoDB 存储引擎实现事务隔离的关键技术。",
-        "ground_truth": "MVCC 通过保存数据的多个版本来实现并发控制。每个事务看到的是数据的一个快照版本，而不是最新版本。InnoDB 通过 undo log 和隐藏列（事务 ID、回滚指针）来实现 MVCC。这样可以在不加锁的情况下实现读操作，提高并发性能。MVCC 主要用于实现 READ COMMITTED 和 REPEATABLE READ 隔离级别。"
-    },
-    {
-        "question": "请描述 Redis 的持久化机制",
-        "context": "Redis 是内存数据库，但提供了持久化机制来保证数据不丢失。主要有 RDB 和 AOF 两种方式。",
-        "ground_truth": "Redis 提供两种持久化方式：1) RDB（Redis Database）：定期生成数据快照保存到磁盘，恢复速度快但可能丢失最后一次快照后的数据。2) AOF（Append Only File）：记录每个写操作到日志文件，数据更安全但文件较大、恢复较慢。可以同时启用两种方式，Redis 4.0 后支持混合持久化，结合两者优点。"
-    },
-    {
-        "question": "Kafka 如何保证消息不丢失？",
-        "context": "Kafka 的可靠性依赖生产者确认、Broker 副本与消费者位移提交。",
-        "ground_truth": "生产者端：acks=all 并处理发送失败重试；Broker 端：多副本与 ISR，min.insync.replicas；消费者端：先处理再提交 offset，避免重复消费与丢失。"
-    }
+  {
+    "id": "abbr-mvcc",
+    "question": "什么是 MySQL 的 MVCC 机制？",
+    "query": "MySQL MVCC 机制",
+    "context": "MVCC 是 Multi-Version Concurrency Control，用于 InnoDB 在并发场景下实现读写隔离。",
+    "ground_truth": "MVCC 通过保存多版本数据、结合 undo log 与事务可见性规则，让读操作通常不必阻塞写操作。",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-chunk-id-mysql-mvcc"
+    ],
+    "citation_targets": [
+      {
+        "chunk_id": "replace-with-real-chunk-id-mysql-mvcc"
+      }
+    ],
+    "query_type": "abbreviation",
+    "tags": [
+      "mysql",
+      "mvcc",
+      "abbreviation"
+    ]
+  },
+  {
+    "id": "entity-goroutine-channel",
+    "question": "请解释 Go 语言里 goroutine 和 channel 的关系。",
+    "query": "goroutine 和 channel 的关系",
+    "context": "goroutine 是 Go 的轻量并发执行单元，channel 是 goroutine 间通信的主要机制。",
+    "ground_truth": "goroutine 负责并发执行，channel 用于按 CSP 模式传递数据与同步，避免直接共享内存带来的复杂性。",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-chunk-id-go-goroutine-channel"
+    ],
+    "citation_targets": [
+      {
+        "chunk_id": "replace-with-real-chunk-id-go-goroutine-channel"
+      }
+    ],
+    "query_type": "entity",
+    "tags": [
+      "go",
+      "goroutine",
+      "channel",
+      "entity"
+    ]
+  },
+  {
+    "id": "synonym-redis-persistence",
+    "question": "请描述 Redis 的持久化机制。",
+    "query": "Redis 持久化方案",
+    "context": "Redis 常见持久化机制包括 RDB、AOF 以及二者组合使用。",
+    "ground_truth": "RDB 适合快照恢复，AOF 更强调写操作日志持久化，两者在恢复速度与数据安全上各有权衡。",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-chunk-id-redis-persistence"
+    ],
+    "citation_targets": [
+      {
+        "chunk_id": "replace-with-real-chunk-id-redis-persistence"
+      }
+    ],
+    "query_type": "synonym",
+    "tags": [
+      "redis",
+      "persistence",
+      "synonym"
+    ]
+  },
+  {
+    "id": "long-query-kafka-reliability",
+    "question": "Kafka 如何保证消息不丢失？请从生产者、Broker、副本和消费者 offset 提交几个角度展开。",
+    "query": "Kafka 如何保证消息不丢失 从生产者 broker 副本 消费者 offset 提交几个角度展开",
+    "context": "Kafka 的可靠性依赖生产者确认、副本同步策略和消费者提交时机。",
+    "ground_truth": "生产者侧常用 acks=all 与重试，Broker 侧依赖 ISR 与最小同步副本，消费者侧在处理成功后提交 offset。",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-chunk-id-kafka-reliability"
+    ],
+    "citation_targets": [
+      {
+        "chunk_id": "replace-with-real-chunk-id-kafka-reliability"
+      }
+    ],
+    "query_type": "long_query",
+    "tags": [
+      "kafka",
+      "reliability",
+      "long_query"
+    ]
+  },
+  {
+    "id": "ambiguous-cache-consistency",
+    "question": "缓存一致性怎么做？",
+    "query": "缓存一致性怎么做",
+    "context": "该问题可能落到缓存删除策略、延迟双删、订阅 binlog、读写路径设计等多个方向。",
+    "ground_truth": "回答至少应覆盖缓存与数据库双写的一致性风险，以及常见的旁路缓存、延迟双删或异步订阅方案。",
+    "top_k": 5,
+    "relevant_ids": [
+      "replace-with-real-chunk-id-cache-consistency"
+    ],
+    "citation_targets": [
+      {
+        "chunk_id": "replace-with-real-chunk-id-cache-consistency"
+      }
+    ],
+    "query_type": "ambiguous",
+    "tags": [
+      "cache",
+      "consistency",
+      "ambiguous"
+    ]
+  }
 ]

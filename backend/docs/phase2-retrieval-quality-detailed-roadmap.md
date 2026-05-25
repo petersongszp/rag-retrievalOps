@@ -288,6 +288,17 @@ Phase 2 按 9 条路线推进，按门禁顺序合流：
 4. 在 CI 或发布前流程加入“检索质量门禁”：低于阈值拒绝合并/发布。
 5. 固化回归报告模板：变更说明、指标变化、风险结论、回滚策略。
 
+### 当前实现落点
+
+1. 检索离线评测内核：`backend/internal/milvus/evaluation/`
+2. 可执行入口：`backend/cmd/retrieval-eval/main.go`
+3. 数据集与样例配置：
+   - `backend/scripts/evaluation/dataset.json`
+   - `backend/scripts/evaluation/retrieval_strategy_profiles.example.json`
+   - `backend/scripts/evaluation/retrieval_gate_thresholds.example.json`
+4. 统一脚本入口：`backend/scripts/evaluation/evaluate.py`
+5. 回归报告模板：`backend/docs/kb-l7-retrieval-regression-report-template.md`
+
 ### 验收
 
 1. 策略改动可自动产出对比报告。
