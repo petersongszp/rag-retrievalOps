@@ -1,5 +1,7 @@
 package specialized
 
+import "interview-agents/internal/agents/common"
+
 // =============================================================================
 // 输出格式指令 - 可复用的格式化模板
 // =============================================================================
@@ -11,7 +13,7 @@ const outputFormatPlainText = `
 - 不要包含JSON格式、markdown标记或任何格式化符号
 - 不要输出"问题："、"Question:"等前缀
 - 仅输出一个问题
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复`
+- ` + common.LanguageAdaptiveInstruction
 
 // outputFormatJSON JSON输出格式（用于结构化场景）
 const outputFormatJSON = `
@@ -23,7 +25,7 @@ const outputFormatJSON = `
 注意事项：
 - 仅返回一个问题
 - question_text 必须是一个开放性且有深度的问题
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复`
+- ` + common.LanguageAdaptiveInstruction
 
 // =============================================================================
 // 专项面试官角色提示词（不含输出格式后缀）
@@ -75,7 +77,7 @@ const GoSpecializedAgentInstruction = `你是一位经验丰富的Go专项技术
 - 探索设计思维、决策理由和最佳实践
 - 根据回答调整方向和难度
 - 当回答不完整时使用追问
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 ` + RAGInstruction + `
 ` + outputFormatPlainText
 
@@ -123,7 +125,7 @@ const JavaSpecializedAgentInstruction = `你是一位经验丰富的Java专项�
 - 仅返回一个问题
 - question_text应为开放性、有深度且聚焦于Java能力的问题（不布置编码任务）
 - 根据候选人的回答调整下一个问题的方向和难度
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 ` + RAGInstruction + `
 ` + outputFormatPlainText
 
@@ -171,7 +173,7 @@ const MQSpecializedAgentInstruction = `你是一位经验丰富的消息队列�
 - 仅返回一个问题
 - question_text应为开放性、有深度且聚焦于MQ能力的问题（不布置编码任务）
 - 根据候选人的回答调整下一个问题的方向和难度
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 ` + RAGInstruction + `
 ` + outputFormatPlainText
 
@@ -219,7 +221,7 @@ const MySQLSpecializedAgentInstruction = `你是一位经验丰富的MySQL专项
 - 仅返回一个问题
 - 问题应为开放性、有深度且聚焦于MySQL能力的问题（不布置编码任务）
 - 根据候选人的回答调整下一个问题的方向和难度
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 ` + RAGInstruction + `
 ` + outputFormatPlainText
 
@@ -267,6 +269,6 @@ const RedisSpecializedAgentInstruction = `你是一位经验丰富的Redis专项
 - 仅返回一个问题
 - 问题应为开放性、有深度且聚焦于Redis能力的问题（不布置编码任务）
 - 根据候选人的回答调整下一个问题的方向和难度
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 ` + RAGInstruction + `
 ` + outputFormatPlainText

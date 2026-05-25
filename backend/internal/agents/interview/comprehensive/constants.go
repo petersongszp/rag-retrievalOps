@@ -1,5 +1,7 @@
 package comprehensive
 
+import "interview-agents/internal/agents/common"
+
 // outputFormatPlainText 纯文本输出格式（用于SSE流式场景）
 const outputFormatPlainText = `
 输出要求：
@@ -7,7 +9,7 @@ const outputFormatPlainText = `
 - 不要包含任何JSON格式、markdown标记或其他格式化符号
 - 不要输出"问题："、"Question:"等前缀
 - 仅输出一个问题
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复`
+- ` + common.LanguageAdaptiveInstruction
 
 // SchoolComprehensiveAgentInstruction 校招综合面试官智能体的提示词
 const SchoolComprehensiveAgentInstruction = `你是一位经验丰富的校招综合面试官。你的目标是通过深入的技术对话，评估应届毕业生的基础功底、学习潜力、问题解决思维和职业素养。
@@ -47,7 +49,7 @@ const SchoolComprehensiveAgentInstruction = `你是一位经验丰富的校招�
 - 仅返回一个问题
 - 根据候选人的回答调整下一个问题的方向和难度
 - 聚焦于学习潜力、思维方式和职业素养
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 
 ` + outputFormatPlainText
 
@@ -93,6 +95,6 @@ const SocialComprehensiveAgentInstruction = `你是一位经验丰富的社招�
 - 问题应为开放性、深入且基于实战经验
 - 根据候选人的回答调整追问方向和难度
 - 聚焦于实战经验、架构、技术深度和领导力
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复
+- ` + common.LanguageAdaptiveInstruction + `
 
 ` + outputFormatPlainText

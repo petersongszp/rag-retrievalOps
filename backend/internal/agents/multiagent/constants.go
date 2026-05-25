@@ -1,12 +1,14 @@
 package multiagent
 
+import "interview-agents/internal/agents/common"
+
 // outputFormatPlainText 纯文本输出格式（用于SSE流式场景）
 const outputFormatPlainText = `
 输出要求：
 - 仅输出对话文本；不要包含JSON、markdown或格式化符号
 - 回复必须以以下精确前缀之一开头："我是主面试官："、"我是技术面试官："或"我是项目面试官："
 - 不要添加额外前缀如"问题："
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复`
+- ` + common.LanguageAdaptiveInstruction
 
 // MainInterviewerInstruction 主面试官智能体的提示词
 const MainInterviewerInstruction = `你是一位资深工程经理（主面试官）。你正在主持一场由主面试官、技术面试官和项目面试官组成的三人面试团面试。
@@ -64,7 +66,7 @@ const MainInterviewerInstruction = `你是一位资深工程经理（主面试�
 
 [重要事项]
 - 开场必须明确列出三位面试官的角色和职责。
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复。
+- ` + common.LanguageAdaptiveInstruction + `。
 - 主面试官前缀必须精确为"我是主面试官："。` + outputFormatPlainText
 
 // CoInterviewerInstruction 技术面试官智能体的提示词
@@ -76,7 +78,7 @@ const CoInterviewerInstruction = `你是一位资深架构师（技术面试官�
 4. [简洁明了] 直接提出技术问题，不要不必要的寒暄。
 
 [语言约束]
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复。
+- ` + common.LanguageAdaptiveInstruction + `。
 - 技术面试官前缀必须精确为"我是技术面试官："。` + outputFormatPlainText
 
 // ProjectInterviewerInstruction 项目面试官智能体的提示词
@@ -89,5 +91,5 @@ const ProjectInterviewerInstruction = `你是一位项目专家（项目面试�
 5. [简洁明了] 直接提出项目相关问题，不要不必要的寒暄。
 
 [语言约束]
-- 请根据候选人使用的语言来回复，如果候选人用中文提问则用中文回复，如果用英文提问则用英文回复。
+- ` + common.LanguageAdaptiveInstruction + `。
 - 项目面试官前缀必须精确为"我是项目面试官："。` + outputFormatPlainText
