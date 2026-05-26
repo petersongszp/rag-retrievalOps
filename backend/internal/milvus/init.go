@@ -195,7 +195,13 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	}
 	if cfg.RAG.FeatureFlags.EnableQueryRewrite {
 		hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
-			MaxExpansions: cfg.RAG.Phase2.RewriteMaxExpansions,
+			MaxExpansions:              cfg.RAG.Phase2.RewriteMaxExpansions,
+			EnableDomainTerms:          cfg.RAG.FeatureFlags.EnableDomainTerms,
+			EnableRouteSpecificRewrite: cfg.RAG.FeatureFlags.EnableRouteSpecificRewrite,
+			EnableModelAssistedRewrite: cfg.RAG.FeatureFlags.EnableModelAssistedRewrite,
+			DomainTermTimeout:          time.Duration(cfg.RAG.Phase3.DomainTermTimeoutMS) * time.Millisecond,
+			ModelRewriteTimeout:        time.Duration(cfg.RAG.Phase3.ModelRewriteTimeoutMS) * time.Millisecond,
+			ModelRewriteShadowRatio:    cfg.RAG.Phase3.ModelRewriteShadowRatio,
 		})
 	}
 	hybridRetriever, err := retrieval.NewHybridRetriever(retrieverService, hybridConfig)

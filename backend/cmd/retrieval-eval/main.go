@@ -173,7 +173,13 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 		}
 		if profile.EnableQueryRewrite {
 			hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
-				MaxExpansions: fallbackInt(profile.RewriteMaxExpansions, cfg.RAG.Phase2.RewriteMaxExpansions),
+				MaxExpansions:              fallbackInt(profile.RewriteMaxExpansions, cfg.RAG.Phase2.RewriteMaxExpansions),
+				EnableDomainTerms:          profile.EnableDomainTerms,
+				EnableRouteSpecificRewrite: profile.EnableRouteSpecificRewrite,
+				EnableModelAssistedRewrite: profile.EnableModelAssistedRewrite,
+				DomainTermTimeout:          time.Duration(fallbackInt(profile.DomainTermTimeoutMS, cfg.RAG.Phase3.DomainTermTimeoutMS)) * time.Millisecond,
+				ModelRewriteTimeout:        time.Duration(fallbackInt(profile.ModelRewriteTimeoutMS, cfg.RAG.Phase3.ModelRewriteTimeoutMS)) * time.Millisecond,
+				ModelRewriteShadowRatio:    fallbackFloat(profile.ModelRewriteShadowRatio, cfg.RAG.Phase3.ModelRewriteShadowRatio),
 			})
 		}
 		hybridRetriever, err := retrieval.NewHybridRetriever(manager.GetRetrieverService(), hybridConfig)

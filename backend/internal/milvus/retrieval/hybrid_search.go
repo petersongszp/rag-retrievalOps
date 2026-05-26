@@ -21,19 +21,31 @@ const (
 )
 
 type HybridSearchRequest struct {
-	Query           string
-	OriginalQuery   string
-	RewriteQuery    string
-	FinalQuery      string
-	RewriteStrategy string
-	RewriteApplied  bool
-	Expr            string
-	TopK            int
-	KBScope         string
-	KBID            uint64
-	RequestID       string
-	Collection      string
-	CandidateTopK   int
+	Query                 string
+	OriginalQuery         string
+	RewriteQuery          string
+	FinalQuery            string
+	DenseQuery            string
+	SparseQuery           string
+	RewriteStrategy       string
+	RewriteApplied        bool
+	RouteRewriteStrategy  map[string]string
+	Expr                  string
+	TopK                  int
+	KBScope               string
+	KBID                  uint64
+	Language              DocumentLanguage
+	Category              DocumentCategory
+	RequestID             string
+	Collection            string
+	CandidateTopK         int
+	TermDictScope         string
+	TermDictVersion       string
+	TermHits              []string
+	ModelRewriteApplied   bool
+	ModelRewriteShadow    bool
+	ModelRewriteRiskLevel string
+	ModelRewriteTerms     []string
 }
 
 type HybridRetriever struct {
@@ -128,13 +140,16 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 	}
 
 	req := &HybridSearchRequest{
-		Query:         query,
-		OriginalQuery: query,
-		FinalQuery:    query,
-		TopK:          finalTopK,
-		RequestID:     requestID,
-		Collection:    h.retriever.config.Collection,
-		CandidateTopK: candidateTopK,
+		Query:                query,
+		OriginalQuery:        query,
+		FinalQuery:           query,
+		DenseQuery:           query,
+		SparseQuery:          query,
+		RouteRewriteStrategy: map[string]string{},
+		TopK:                 finalTopK,
+		RequestID:            requestID,
+		Collection:           h.retriever.config.Collection,
+		CandidateTopK:        candidateTopK,
 	}
 	if opts != nil {
 		req.Expr = strings.TrimSpace(BuildFilterExpr(opts))
@@ -143,6 +158,8 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 		}
 		req.KBScope = strings.TrimSpace(opts.KBScope)
 		req.KBID = opts.ActiveGlobalKBID
+		req.Language = opts.Language
+		req.Category = opts.Category
 		if strings.TrimSpace(opts.Collection) != "" {
 			req.Collection = strings.TrimSpace(opts.Collection)
 		}
@@ -155,6 +172,8 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 		if strings.TrimSpace(opts.FinalQuery) != "" {
 			req.FinalQuery = strings.TrimSpace(opts.FinalQuery)
 		}
+		req.DenseQuery = firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+		req.SparseQuery = firstNonEmptyQuery(req.SparseQuery, req.FinalQuery, req.OriginalQuery)
 		if strings.TrimSpace(opts.RewriteStrategy) != "" {
 			req.RewriteStrategy = strings.TrimSpace(opts.RewriteStrategy)
 		}
@@ -184,6 +203,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	}
 	if strings.TrimSpace(req.FinalQuery) == "" {
 		req.FinalQuery = req.OriginalQuery
+	}
+	if strings.TrimSpace(req.DenseQuery) == "" {
+		req.DenseQuery = req.FinalQuery
+	}
+	if strings.TrimSpace(req.SparseQuery) == "" {
+		req.SparseQuery = req.FinalQuery
 	}
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = fmt.Sprintf("hyb-%d", time.Now().UnixNano())
@@ -543,7 +568,8 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 		RewriteStrategy:  req.RewriteStrategy,
 		RewriteApplied:   req.RewriteApplied,
 	}
-	result, err := h.retriever.RetrieveWithOptionsAndMetrics(ctx, req.FinalQuery, opts)
+	denseQuery := firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	result, err := h.retriever.RetrieveWithOptionsAndMetrics(ctx, denseQuery, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -562,7 +588,7 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 		}
 		doc.MetaData["source"] = source
 		annotateParentChildSource(doc)
-		attachRewriteMetadata(doc, req)
+		attachRewriteMetadata(doc, req, routeDense)
 	}
 	result.Metrics.RetrieverVersion = HybridRetrieverVersion
 	result.Metrics.Strategy = "phase2"
@@ -642,24 +668,48 @@ func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewr
 	if rewriter == nil {
 		req.Query = req.OriginalQuery
 		req.FinalQuery = req.OriginalQuery
+		req.DenseQuery = req.OriginalQuery
+		req.SparseQuery = req.OriginalQuery
 		req.RewriteQuery = ""
 		req.RewriteStrategy = RewriteStrategyNone
 		req.RewriteApplied = false
+		req.RouteRewriteStrategy = map[string]string{}
 		return
 	}
 
-	result := rewriter.Rewrite(ctx, req.OriginalQuery)
+	result := rewriter.Rewrite(ctx, QueryRewriteRequest{
+		Query:         req.OriginalQuery,
+		KBID:          req.KBID,
+		KBScope:       req.KBScope,
+		Language:      req.Language,
+		Category:      req.Category,
+		Collection:    req.Collection,
+		RequestID:     req.RequestID,
+		CandidateTopK: req.CandidateTopK,
+	})
 	req.Query = req.OriginalQuery
 	req.RewriteQuery = strings.TrimSpace(result.RewriteQuery)
 	req.FinalQuery = strings.TrimSpace(result.FinalQuery)
 	if req.FinalQuery == "" {
 		req.FinalQuery = req.OriginalQuery
 	}
+	req.DenseQuery = firstNonEmptyQuery(result.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	req.SparseQuery = firstNonEmptyQuery(result.SparseQuery, req.FinalQuery, req.OriginalQuery)
 	req.RewriteStrategy = formatRewriteStrategy(result)
-	req.RewriteApplied = result.Applied && !strings.EqualFold(req.FinalQuery, req.OriginalQuery)
+	req.RewriteApplied = result.Applied
+	req.RouteRewriteStrategy = cloneStringMap(result.RouteStrategies)
+	req.TermDictScope = result.TermDictScope
+	req.TermDictVersion = result.TermDictVersion
+	req.TermHits = append([]string(nil), result.TermHits...)
+	req.ModelRewriteApplied = result.ModelRewriteApplied
+	req.ModelRewriteShadow = result.ModelRewriteShadow
+	req.ModelRewriteRiskLevel = result.ModelRewriteRiskLevel
+	req.ModelRewriteTerms = append([]string(nil), result.ModelRewriteTerms...)
 	if !req.RewriteApplied {
 		req.RewriteQuery = ""
 		req.FinalQuery = req.OriginalQuery
+		req.DenseQuery = req.OriginalQuery
+		req.SparseQuery = req.OriginalQuery
 	}
 }
 
@@ -687,7 +737,7 @@ func toLogError(err error) string {
 	return err.Error()
 }
 
-func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest) {
+func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest, route string) {
 	if doc == nil || req == nil {
 		return
 	}
@@ -697,8 +747,72 @@ func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest) {
 	doc.MetaData["original_query"] = req.OriginalQuery
 	doc.MetaData["rewrite_query"] = req.RewriteQuery
 	doc.MetaData["final_query"] = req.FinalQuery
+	doc.MetaData["dense_query"] = req.DenseQuery
+	doc.MetaData["sparse_query"] = req.SparseQuery
+	doc.MetaData["route_final_query"] = resolveRouteQuery(req, route)
+	doc.MetaData["route_rewrite_strategy"] = resolveRouteRewriteStrategyFromRequest(req, route)
 	doc.MetaData["rewrite_strategy"] = req.RewriteStrategy
 	doc.MetaData["rewrite_applied"] = req.RewriteApplied
+	if req.TermDictScope != "" {
+		doc.MetaData["term_dict_scope"] = req.TermDictScope
+	}
+	if req.TermDictVersion != "" {
+		doc.MetaData["term_dict_version"] = req.TermDictVersion
+	}
+	if len(req.TermHits) > 0 {
+		doc.MetaData["term_hits"] = append([]string(nil), req.TermHits...)
+	}
+	if req.ModelRewriteApplied {
+		doc.MetaData["model_rewrite_applied"] = true
+	}
+	if req.ModelRewriteShadow {
+		doc.MetaData["model_rewrite_shadow"] = true
+	}
+	if req.ModelRewriteRiskLevel != "" {
+		doc.MetaData["model_rewrite_risk_level"] = req.ModelRewriteRiskLevel
+	}
+	if len(req.ModelRewriteTerms) > 0 {
+		doc.MetaData["model_rewrite_terms"] = append([]string(nil), req.ModelRewriteTerms...)
+	}
+}
+
+func resolveRouteQuery(req *HybridSearchRequest, route string) string {
+	if req == nil {
+		return ""
+	}
+	switch strings.TrimSpace(strings.ToLower(route)) {
+	case routeSparse:
+		return firstNonEmptyQuery(req.SparseQuery, req.FinalQuery, req.OriginalQuery)
+	default:
+		return firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	}
+}
+
+func resolveRouteRewriteStrategyFromRequest(req *HybridSearchRequest, route string) string {
+	if req == nil || len(req.RouteRewriteStrategy) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(req.RouteRewriteStrategy[strings.TrimSpace(strings.ToLower(route))])
+}
+
+func firstNonEmptyQuery(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return map[string]string{}
+	}
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func getStringMetadata(metadata map[string]interface{}, key string) string {
