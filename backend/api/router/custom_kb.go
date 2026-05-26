@@ -40,6 +40,13 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.POST("/ingest/resume", kb.ResumeIngest)
 	group.GET("/ingest/status", kb.GetIngestStatus)
 	if adminOnly {
+		group.GET("/eval/datasets", kb.ListEvalDatasets)
+		group.POST("/eval/datasets", kb.CreateEvalDataset)
+		group.GET("/eval/datasets/:dataset_id/items", kb.ListEvalCases)
+		group.POST("/eval/datasets/:dataset_id/items", kb.CreateEvalCase)
+		group.POST("/eval/datasets/:dataset_id/items/import", kb.ImportEvalCases)
+		group.GET("/eval/datasets/:dataset_id/items/export", kb.ExportEvalCases)
+		group.POST("/eval/datasets/:dataset_id/validate", kb.ValidateEvalDataset)
 		group.GET("/release/status", kb.GetReleaseStatus)
 		group.GET("/release/summary", kb.GetReleaseSummary)
 		group.POST("/release/rollback", kb.RollbackRelease)
