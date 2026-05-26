@@ -121,11 +121,21 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 				DefaultTopK: candidateTopK,
 			},
 			DynamicTopK: retrieval.DynamicTopKConfig{
-				Enabled:         profile.EnableDynamicTopK,
-				MinTopK:         fallbackInt(profile.MinTopK, cfg.RAG.Phase2.MinTopK),
-				MaxTopK:         fallbackInt(profile.MaxTopK, cfg.RAG.Phase2.MaxTopK),
-				TokenBudget:     fallbackInt(profile.TokenBudget, cfg.RAG.Phase2.TokenBudget),
-				MinAnswerChunks: fallbackInt(profile.MinAnswerChunks, cfg.RAG.Phase2.MinAnswerChunks),
+				Enabled:              profile.EnableDynamicTopK,
+				MinTopK:              fallbackInt(profile.MinTopK, cfg.RAG.Phase2.MinTopK),
+				MaxTopK:              fallbackInt(profile.MaxTopK, cfg.RAG.Phase2.MaxTopK),
+				TokenBudget:          fallbackInt(profile.TokenBudget, cfg.RAG.Phase2.TokenBudget),
+				MinAnswerChunks:      fallbackInt(profile.MinAnswerChunks, cfg.RAG.Phase2.MinAnswerChunks),
+				StrategicEnabled:     profile.EnableStrategicTopK,
+				StrategicMinTopK:     fallbackInt(profile.StrategicTopKMinK, cfg.RAG.Phase3.StrategicTopKMinK),
+				StrategicMaxTopK:     fallbackInt(profile.StrategicTopKMaxK, cfg.RAG.Phase3.StrategicTopKMaxK),
+				StrategicBudgetRatio: fallbackFloat(profile.StrategicTopKBudgetRatio, cfg.RAG.Phase3.StrategicTopKBudgetRatio),
+			},
+			ParentChild: retrieval.ParentChildConfig{
+				Enabled:      profile.EnableParentChildRetrieval,
+				FillStrategy: firstNonEmpty(profile.ParentChildFillStrategy, cfg.RAG.Phase3.ParentChildFillStrategy),
+				WindowSize:   fallbackInt(profile.ParentChildWindowSize, cfg.RAG.Phase3.ParentChildWindowSize),
+				MaxTokens:    fallbackInt(profile.ParentChildMaxTokens, cfg.RAG.Phase3.ParentChildMaxTokens),
 			},
 		}
 		hybridConfig.RerankerImpl = retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
@@ -263,6 +273,13 @@ func firstKBID(ids []uint64) uint64 {
 }
 
 func fallbackInt(primary, fallback int) int {
+	if primary > 0 {
+		return primary
+	}
+	return fallback
+}
+
+func fallbackFloat(primary, fallback float64) float64 {
 	if primary > 0 {
 		return primary
 	}

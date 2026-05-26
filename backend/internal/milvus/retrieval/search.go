@@ -40,6 +40,13 @@ type SearchMetrics struct {
 	SparseHits         int
 	DenseContribution  int
 	SparseContribution int
+	TopKPolicyVersion  string
+	ScoreDistribution  string
+	RerankGap          float64
+	EvidenceDensity    float64
+	TopKDecisionReason string
+	TokenBudgetRemain  int
+	ContextTokens      int
 }
 
 // SearchResult bundles documents with observable metrics.

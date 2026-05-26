@@ -17,7 +17,10 @@ const (
 	// EmptyReasonAfterFusion 表示召回有结果，但融合/去重后被全部淘空。
 	EmptyReasonAfterFusion = "Empty-After-Fusion"
 	// EmptyReasonAfterFilter 表示后续重排/过滤/截断后结果为空。
-	EmptyReasonAfterFilter = "Empty-After-Filter"
+	EmptyReasonAfterFilter        = "Empty-After-Filter"
+	EmptyReasonAfterChildRetrieve = "Empty-After-Child-Retrieve"
+	EmptyReasonAfterParentFill    = "Empty-After-Parent-Fill"
+	EmptyReasonAfterParentBudget  = "Empty-After-Parent-Budget"
 )
 
 // FusionConfig 控制多路候选的归一化与加权融合行为。
