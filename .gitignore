@@ -17,6 +17,8 @@ backend/studyDocs/
 .trae
 # 忽略 phase1 记录文档
 admin/docs/phase1-记录/
+# 忽略 phase2 记录文档
+admin/docs/phase2-记录/
 admin/.next-dev*.log
 admin/.next-dev*.err.log
 admin/.next-dev-*-cache/

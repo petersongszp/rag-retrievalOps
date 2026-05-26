@@ -47,8 +47,11 @@ COPY --from=builder /app/main .
 # 复制配置文件
 COPY config.yaml .
 
-# 创建日志目录
-RUN mkdir -p logs && chown -R appuser:appuser /app
+# 复制 go.mod（resolveBackendRoot 需要以此定位项目根目录）
+COPY go.mod .
+
+# 创建日志和报告目录
+RUN mkdir -p logs runtime/eval-reports && chown -R appuser:appuser /app
 
 # 切换到非root用户
 USER appuser
