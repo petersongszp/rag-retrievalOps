@@ -20,6 +20,8 @@ export interface KBDocument {
   chunk_count: number;
   error_msg?: string;
   deleted: number;
+  last_ingest_job_id?: number;
+  ingest_duration_ms?: number;
   created_at: string;
   updated_at: string;
 }
@@ -28,9 +30,15 @@ export interface KBIngestJob {
   id: number;
   kb_id: number;
   document_id: number;
+  user_id: number;
   status: 'pending' | 'processing' | 'completed' | 'failed' | 'retrying' | 'dead' | 'canceled';
   retry_count: number;
   error_msg?: string;
+  last_error_code?: string;
+  last_error_detail?: string;
+  operation?: string;
+  operation_reason?: string;
+  operated_at?: string;
   started_at?: string;
   finished_at?: string;
   created_at: string;

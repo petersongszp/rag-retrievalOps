@@ -149,3 +149,12 @@ func (d *_KBKnowledgeBase) DeleteByID(id uint64) error {
 	}
 	return getDB().Where("id = ?", id).Delete(&KBKnowledgeBase{}).Error
 }
+
+func (d *_KBKnowledgeBase) Count() (int64, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var count int64
+	err := getDB().Model(&KBKnowledgeBase{}).Count(&count).Error
+	return count, err
+}

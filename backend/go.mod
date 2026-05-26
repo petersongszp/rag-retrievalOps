@@ -135,6 +135,7 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/alexcesaro/quotedprintable.v3 v3.0.0-20150716171945-2caba252f4dc // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
+	github.com/cloudwego/eino-ext/libs/acl/openai v0.1.15
 )
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.13.0

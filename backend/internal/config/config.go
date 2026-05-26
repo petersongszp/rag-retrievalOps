@@ -822,21 +822,22 @@ func expandEnvInBytes(data []byte) []byte {
 
 // EmbeddingConfig Embedding鏈嶅姟閰嶇疆
 type EmbeddingConfig struct {
-	// 璁よ瘉閰嶇疆锛堜簩閫変竴锛?
-	APIKey    string `yaml:"APIKey"`    // 浣跨敤 API Key 璁よ瘉
-	AccessKey string `yaml:"AccessKey"` // 浣跨敤 AK 璁よ瘉
-	SecretKey string `yaml:"SecretKey"` // 浣跨敤 SK 璁よ瘉
+	// 认证配置（二选一）
+	APIKey    string `yaml:"APIKey"`    // 使用 API Key 认证
+	AccessKey string `yaml:"AccessKey"` // 使用 AK 认证 (ark 专用)
+	SecretKey string `yaml:"SecretKey"` // 使用 SK 认证 (ark 专用)
 
-	// 鏈嶅姟閰嶇疆
-	Model   string `yaml:"Model"`   // Ark 骞冲彴鐨勭鐐?ID
-	BaseURL string `yaml:"BaseURL"` // API 鍩虹 URL
-	Region  string `yaml:"Region"`  // 鏈嶅姟鍖哄煙
+	// 服务配置
+	Provider string `yaml:"Provider"` // 向量模型提供商: ark, openai, ollama (默认 ark)
+	Model   string `yaml:"Model"`   // 模型 ID
+	BaseURL string `yaml:"BaseURL"` // API 基础 URL
+	Region  string `yaml:"Region"`  // 服务区域 (ark 专用)
 
-	// 楂樼骇閰嶇疆
-	Timeout    time.Duration `yaml:"Timeout"`    // 璇锋眰瓒呮椂鏃堕棿
-	RetryTimes int           `yaml:"RetryTimes"` // 閲嶈瘯娆℃暟
-	Dimensions int           `yaml:"Dimensions"` // 杈撳嚭鍚戦噺缁村害
-	User       string        `yaml:"User"`       // 鐢ㄦ埛鏍囪瘑
+	// 高级配置
+	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
+	RetryTimes int           `yaml:"RetryTimes"` // 重试次数
+	Dimensions int           `yaml:"Dimensions"` // 输出向量维度
+	User       string        `yaml:"User"`       // 用户标识
 }
 
 // MilvusConfig Milvus鍚戦噺鏁版嵁搴撻厤缃?
