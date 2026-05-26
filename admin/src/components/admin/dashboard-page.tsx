@@ -1,14 +1,23 @@
 'use client';
 
 import Link from 'next/link';
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useEffect, useState } from 'react';
 import {
+  ReloadOutlined,
   SyncOutlined,
   WarningOutlined,
 } from '@ant-design/icons';
-import { Alert, Card, Col, Empty, Row, Statistic, Typography } from 'antd';
+import { Alert, Button, Card, Col, Empty, Row, Segmented, Space, Statistic, Typography } from 'antd';
+import apiClient from '@/services/api/client';
 import { KB_ADMIN_API } from '@/config/api';
+import type {
+  MetricsOverview,
+  MetricsOverviewBucketCount,
+  MetricsOverviewBucketP95,
+  MetricsOverviewBucketRate,
+  MetricsRange,
+} from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
 const { Paragraph, Text, Title } = Typography;
@@ -20,12 +29,128 @@ interface DashboardStats {
   failed_job_count: number;
 }
 
-const PHASE1_METRICS = [
-  { title: '入库成功率趋势', api: '/api/admin/kb/metrics/ingest-success-rate' },
-  { title: '检索 P50/P95 趋势', api: '/api/admin/kb/metrics/retrieve-latency' },
-  { title: '空结果率趋势', api: '/api/admin/kb/metrics/empty-result-rate' },
-  { title: '失败类型 TopN', api: '/api/admin/kb/metrics/failure-topn' },
-];
+type NumericPoint = {
+  label: string;
+  value: number;
+};
+
+function formatBucketLabel(bucket: string, range: MetricsRange) {
+  const date = new Date(bucket);
+  if (range === '7d') {
+    return `${date.getUTCMonth() + 1}/${date.getUTCDate()} ${String(date.getUTCHours()).padStart(2, '0')}:00`;
+  }
+  return `${String(date.getUTCHours()).padStart(2, '0')}:${String(date.getUTCMinutes()).padStart(2, '0')}`;
+}
+
+function formatPercent(value: number) {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+function buildPolyline(points: NumericPoint[]) {
+  if (points.length === 0) {
+    return '';
+  }
+
+  const width = 220;
+  const height = 88;
+  const padding = 8;
+  const values = points.map((point) => point.value);
+  const max = Math.max(...values);
+  const min = Math.min(...values);
+  const span = max - min || 1;
+
+  return points
+    .map((point, index) => {
+      const x = padding + (index * (width - padding * 2)) / Math.max(points.length - 1, 1);
+      const y = height - padding - ((point.value - min) / span) * (height - padding * 2);
+      return `${x},${y}`;
+    })
+    .join(' ');
+}
+
+function TrendSparkline({ data, color }: { data: NumericPoint[]; color: string }) {
+  if (data.length === 0) {
+    return (
+      <div className="flex h-[88px] items-center justify-center rounded-xl bg-slate-50 text-sm text-slate-400">
+        暂无数据
+      </div>
+    );
+  }
+
+  const polyline = buildPolyline(data);
+  const lastValue = data[data.length - 1];
+
+  return (
+    <div className="space-y-2">
+      <svg viewBox="0 0 220 88" className="h-[88px] w-full rounded-xl bg-slate-50">
+        <polyline fill="none" stroke={color} strokeWidth="3" points={polyline} strokeLinecap="round" />
+      </svg>
+      <div className="flex items-center justify-between text-xs text-slate-500">
+        <span>{data[0]?.label}</span>
+        <span className="font-medium text-slate-700">
+          {lastValue.label} · {lastValue.value.toFixed(1)}
+        </span>
+      </div>
+    </div>
+  );
+}
+
+function TrendMetricCard({
+  title,
+  value,
+  helper,
+  data,
+  color,
+}: {
+  title: string;
+  value: string;
+  helper: string;
+  data: NumericPoint[];
+  color: string;
+}) {
+  return (
+    <Card bodyStyle={{ padding: 20 }} className="h-full">
+      <Space direction="vertical" size={14} className="w-full">
+        <div>
+          <Text type="secondary">{title}</Text>
+          <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
+          <Text type="secondary">{helper}</Text>
+        </div>
+        <TrendSparkline data={data} color={color} />
+      </Space>
+    </Card>
+  );
+}
+
+function ErrorTopNCard({ metrics }: { metrics: MetricsOverview | null }) {
+  const items = metrics?.error_type_topn ?? [];
+
+  return (
+    <Card title="失败类型 TopN" className="h-full">
+      {items.length === 0 ? (
+        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗内没有失败日志" />
+      ) : (
+        <Space direction="vertical" size={14} className="w-full">
+          {items.map((item, index) => {
+            const max = items[0]?.count || 1;
+            const width = `${Math.max((item.count / max) * 100, 10)}%`;
+            return (
+              <div key={`${item.error_code}-${index}`} className="space-y-2">
+                <div className="flex items-center justify-between gap-3">
+                  <Text strong>{item.error_code}</Text>
+                  <Text type="secondary">{item.count}</Text>
+                </div>
+                <div className="h-2 rounded-full bg-slate-100">
+                  <div className="h-2 rounded-full bg-rose-500" style={{ width }} />
+                </div>
+              </div>
+            );
+          })}
+        </Space>
+      )}
+    </Card>
+  );
+}
 
 export function DashboardPage() {
   const router = useRouter();
@@ -34,49 +159,124 @@ export function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [statsError, setStatsError] = useState<string | null>(null);
   const [statsPermissionDenied, setStatsPermissionDenied] = useState(false);
+  const [metricsRange, setMetricsRange] = useState<MetricsRange>('24h');
+  const [metrics, setMetrics] = useState<MetricsOverview | null>(null);
+  const [metricsLoading, setMetricsLoading] = useState(false);
+  const [metricsError, setMetricsError] = useState<string | null>(null);
 
   useEffect(() => {
-    setLoading(true);
-    setStatsError(null);
-    setStatsPermissionDenied(false);
+    const loadStats = async () => {
+      try {
+        setLoading(true);
+        setStatsError(null);
+        setStatsPermissionDenied(false);
+        const data = (await apiClient.get(KB_ADMIN_API.DASHBOARD_STATS)) as DashboardStats;
+        setStats(data);
+      } catch (error) {
+        const nextError = error instanceof Error ? error.message : '加载概览数据失败';
+        setStatsError(nextError);
+        setStatsPermissionDenied(
+          Boolean(
+            error &&
+              typeof error === 'object' &&
+              'response' in error &&
+              error.response &&
+              typeof error.response === 'object' &&
+              'status' in error.response &&
+              error.response.status === 403
+          )
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
 
-    fetch(KB_ADMIN_API.DASHBOARD_STATS)
-      .then(async (r) => {
-        if (r.status === 403) {
-          setStatsPermissionDenied(true);
-          setStatsError('权限不足，无法加载概览数据（403）');
-          return;
-        }
-        if (!r.ok) {
-          setStatsError(`加载概览数据失败（HTTP ${r.status}）`);
-          return;
-        }
-        const data = await r.json() as { data?: DashboardStats };
-        if (data?.data) {
-          setStats(data.data);
-        } else {
-          setStatsError('概览数据结构异常，请检查后端响应格式');
-        }
-      })
-      .catch(() => {
-        setStatsError('网络错误，无法连接到后端服务');
-      })
-      .finally(() => setLoading(false));
+    void loadStats();
   }, []);
 
-  const jobsHref = selectedBase
-    ? `/knowledge-bases/${selectedBase.id}`
-    : '/knowledge-bases';
+  useEffect(() => {
+    const loadMetrics = async () => {
+      try {
+        setMetricsLoading(true);
+        setMetricsError(null);
+        const data = (await apiClient.get(KB_ADMIN_API.METRICS_OVERVIEW, {
+          params: {
+            range: metricsRange,
+            ...(selectedBase?.id ? { kb_id: selectedBase.id } : {}),
+          },
+        })) as MetricsOverview;
+        setMetrics(data);
+      } catch (error) {
+        setMetricsError(error instanceof Error ? error.message : '加载监控指标失败');
+        setMetrics(null);
+      } finally {
+        setMetricsLoading(false);
+      }
+    };
+
+    void loadMetrics();
+  }, [metricsRange, selectedBase?.id]);
+
+  const jobsHref = selectedBase ? `/knowledge-bases/${selectedBase.id}` : '/knowledge-bases';
+
+  const ingestSuccessSeries = useMemo(
+    () =>
+      (metrics?.ingest_success_rate ?? []).map((item: MetricsOverviewBucketRate) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: Number((item.rate * 100).toFixed(1)),
+      })),
+    [metrics?.ingest_success_rate, metricsRange]
+  );
+
+  const requestCountSeries = useMemo(
+    () =>
+      (metrics?.retrieve_request_count ?? []).map((item: MetricsOverviewBucketCount) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: item.count,
+      })),
+    [metrics?.retrieve_request_count, metricsRange]
+  );
+
+  const p95Series = useMemo(
+    () =>
+      (metrics?.retrieve_p95_ms ?? []).map((item: MetricsOverviewBucketP95) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: item.p95_ms,
+      })),
+    [metrics?.retrieve_p95_ms, metricsRange]
+  );
+
+  const emptyRateSeries = useMemo(
+    () =>
+      (metrics?.retrieve_empty_rate ?? []).map((item: MetricsOverviewBucketRate) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: Number((item.rate * 100).toFixed(1)),
+      })),
+    [metrics?.retrieve_empty_rate, metricsRange]
+  );
+
+  const latestIngestRate = metrics?.ingest_success_rate.at(-1)?.rate ?? 0;
+  const totalRequests = (metrics?.retrieve_request_count ?? []).reduce(
+    (sum, item) => sum + item.count,
+    0
+  );
+  const latestP95 = metrics?.retrieve_p95_ms.at(-1)?.p95_ms ?? 0;
+  const latestEmptyRate = metrics?.retrieve_empty_rate.at(-1)?.rate ?? 0;
 
   return (
     <div className="space-y-6">
-      <div>
-        <Title level={2} style={{ marginBottom: 8 }}>
-          概览
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          当前知识库：{selectedBase?.name ?? '未选择'}
-        </Paragraph>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <Title level={2} style={{ marginBottom: 8 }}>
+            概览
+          </Title>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            当前知识库：{selectedBase?.name ?? '未选择'}
+          </Paragraph>
+        </div>
+        <Button icon={<ReloadOutlined />} onClick={() => router.refresh()}>
+          刷新页面
+        </Button>
       </div>
 
       {isPermissionDenied && (
@@ -88,9 +288,7 @@ export function DashboardPage() {
         />
       )}
 
-      {statsError && !statsPermissionDenied && (
-        <Alert type="error" showIcon message={statsError} />
-      )}
+      {statsError && !statsPermissionDenied ? <Alert type="error" showIcon message={statsError} /> : null}
 
       {statsPermissionDenied && (
         <Alert
@@ -101,46 +299,25 @@ export function DashboardPage() {
         />
       )}
 
-      {/* 最小状态卡片 */}
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>
-          <Card
-            hoverable
-            style={{ cursor: 'pointer' }}
-            onClick={() => router.push('/knowledge-bases')}
-          >
-            <Statistic
-              title="知识库"
-              value={stats?.kb_count ?? 0}
-              loading={loading}
-            />
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/knowledge-bases')}>
+            <Statistic title="知识库" value={stats?.kb_count ?? 0} loading={loading} />
             <Text type="secondary" style={{ fontSize: 12 }}>
               点击管理知识库
             </Text>
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card
-            hoverable
-            style={{ cursor: 'pointer' }}
-            onClick={() => router.push('/knowledge-bases')}
-          >
-            <Statistic
-              title="文档"
-              value={stats?.document_count ?? 0}
-              loading={loading}
-            />
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/knowledge-bases')}>
+            <Statistic title="文档" value={stats?.document_count ?? 0} loading={loading} />
             <Text type="secondary" style={{ fontSize: 12 }}>
               点击查看文档列表
             </Text>
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card
-            hoverable
-            style={{ cursor: 'pointer' }}
-            onClick={() => router.push(jobsHref)}
-          >
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push(jobsHref)}>
             <Statistic
               title="处理中任务"
               value={stats?.processing_job_count ?? 0}
@@ -153,11 +330,7 @@ export function DashboardPage() {
           </Card>
         </Col>
         <Col xs={12} md={6}>
-          <Card
-            hoverable
-            style={{ cursor: 'pointer' }}
-            onClick={() => router.push(jobsHref)}
-          >
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push(jobsHref)}>
             <Statistic
               title="失败任务"
               value={stats?.failed_job_count ?? 0}
@@ -172,7 +345,6 @@ export function DashboardPage() {
         </Col>
       </Row>
 
-      {/* 快捷入口 */}
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
           <Card title="知识库管理" extra={<Link href="/knowledge-bases">打开</Link>}>
@@ -190,35 +362,76 @@ export function DashboardPage() {
         </Col>
       </Row>
 
-      {/* Phase 1 指标区域（预留，P0 仅展示空状态） */}
-      <div>
-        <Title level={4} style={{ marginBottom: 4 }}>
-          监控指标（Phase 1）
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 16 }}>
-          以下指标将在 Phase 1 接入，当前仅预留位置。所需 API 端点已标注。
-        </Paragraph>
-        <Row gutter={[16, 16]}>
-          {PHASE1_METRICS.map((metric) => (
-            <Col key={metric.title} xs={24} md={12} xl={6}>
-              <Card title={metric.title} style={{ minHeight: 160 }}>
-                <Empty
-                  image={Empty.PRESENTED_IMAGE_SIMPLE}
-                  description={
-                    <span>
-                      待接入
-                      <br />
-                      <Text type="secondary" style={{ fontSize: 11 }}>
-                        {metric.api}
-                      </Text>
-                    </span>
-                  }
+      <Card>
+        <div className="flex flex-wrap items-start justify-between gap-4">
+          <div>
+            <Title level={4} style={{ marginBottom: 4 }}>
+              监控指标
+            </Title>
+            <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+              基于结构化日志聚合生成，支持 1h / 24h / 7d 时间窗。
+            </Paragraph>
+          </div>
+          <Segmented<MetricsRange>
+            options={[
+              { label: '1h', value: '1h' },
+              { label: '24h', value: '24h' },
+              { label: '7d', value: '7d' },
+            ]}
+            value={metricsRange}
+            onChange={(value) => setMetricsRange(value)}
+          />
+        </div>
+
+        <div className="mt-6 space-y-4">
+          {metricsError ? <Alert type="error" showIcon message={metricsError} /> : null}
+          {metricsLoading ? (
+            <div className="py-12 text-center text-slate-500">监控指标加载中...</div>
+          ) : (
+            <Row gutter={[16, 16]}>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="入库成功率"
+                  value={formatPercent(latestIngestRate)}
+                  helper="终态任务中 completed 的占比"
+                  data={ingestSuccessSeries}
+                  color="#0f766e"
                 />
-              </Card>
-            </Col>
-          ))}
-        </Row>
-      </div>
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="检索请求量"
+                  value={String(totalRequests)}
+                  helper="当前时间窗内的总检索次数"
+                  data={requestCountSeries}
+                  color="#1d4ed8"
+                />
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="检索 P95"
+                  value={`${latestP95} ms`}
+                  helper="按时间桶计算的 P95 耗时"
+                  data={p95Series}
+                  color="#c2410c"
+                />
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="空结果率"
+                  value={formatPercent(latestEmptyRate)}
+                  helper="result_status = no_result 的占比"
+                  data={emptyRateSeries}
+                  color="#7c3aed"
+                />
+              </Col>
+              <Col xs={24}>
+                <ErrorTopNCard metrics={metrics} />
+              </Col>
+            </Row>
+          )}
+        </div>
+      </Card>
     </div>
   );
 }

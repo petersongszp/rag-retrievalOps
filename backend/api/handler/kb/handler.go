@@ -1105,6 +1105,21 @@ func getPagination(c *app.RequestContext) (int, int) {
 	return page, pageSize
 }
 
+func parseOptionalRFC3339Query(c *app.RequestContext, field string) (*time.Time, error) {
+	raw := strings.TrimSpace(string(c.Query(field)))
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be a valid RFC3339 timestamp", field)
+	}
+
+	parsed = parsed.UTC()
+	return &parsed, nil
+}
+
 func clampTopK(topK int) int {
 	if topK <= 0 {
 		return defaultRetrieveTopK
@@ -1482,6 +1497,227 @@ func percentileInt64(values []int64, q float64) int64 {
 	return sorted[index]
 }
 
+func resolveMetricsOverviewRange(rangeName string) (time.Duration, time.Duration, int, bool) {
+	switch rangeName {
+	case "1h":
+		return time.Hour, 5 * time.Minute, 12, true
+	case "24h":
+		return 24 * time.Hour, time.Hour, 24, true
+	case "7d":
+		return 7 * 24 * time.Hour, 6 * time.Hour, 28, true
+	default:
+		return 0, 0, 0, false
+	}
+}
+
+func alignTimeBucket(ts time.Time, bucketSize time.Duration) time.Time {
+	if bucketSize <= 0 {
+		return ts.UTC()
+	}
+
+	utc := ts.UTC()
+	seconds := int64(bucketSize / time.Second)
+	if seconds <= 0 {
+		return utc
+	}
+	return time.Unix((utc.Unix()/seconds)*seconds, 0).UTC()
+}
+
+func buildIngestSuccessRateSeries(jobs []*model.KBIngestJob, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	if len(jobs) == 0 {
+		return []metricsOverviewBucketRate{}
+	}
+
+	type aggregate struct {
+		total   int
+		success int
+	}
+
+	aggregates := make([]aggregate, bucketCount)
+	for _, job := range jobs {
+		if job == nil {
+			continue
+		}
+		index := bucketIndex(job.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		switch job.Status {
+		case model.KBIngestJobStatusCompleted:
+			aggregates[index].total++
+			aggregates[index].success++
+		case model.KBIngestJobStatusFailed, model.KBIngestJobStatusDead:
+			aggregates[index].total++
+		}
+	}
+
+	series := make([]metricsOverviewBucketRate, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		rate := 0.0
+		if aggregates[i].total > 0 {
+			rate = float64(aggregates[i].success) / float64(aggregates[i].total)
+		}
+		series = append(series, metricsOverviewBucketRate{
+			Bucket:  start.Add(time.Duration(i) * bucketSize),
+			Rate:    rate,
+			Total:   aggregates[i].total,
+			Success: aggregates[i].success,
+		})
+	}
+	return series
+}
+
+func buildRetrieveRequestCountSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketCount {
+	if len(logs) == 0 {
+		return []metricsOverviewBucketCount{}
+	}
+
+	counts := make([]int, bucketCount)
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		index := bucketIndex(logEntry.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index >= 0 {
+			counts[index]++
+		}
+	}
+
+	series := make([]metricsOverviewBucketCount, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		series = append(series, metricsOverviewBucketCount{
+			Bucket: start.Add(time.Duration(i) * bucketSize),
+			Count:  counts[i],
+		})
+	}
+	return series
+}
+
+func buildRetrieveP95Series(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketP95 {
+	if len(logs) == 0 {
+		return []metricsOverviewBucketP95{}
+	}
+
+	valuesByBucket := make([][]int64, bucketCount)
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		index := bucketIndex(logEntry.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index >= 0 {
+			valuesByBucket[index] = append(valuesByBucket[index], logEntry.DurationMs)
+		}
+	}
+
+	series := make([]metricsOverviewBucketP95, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		series = append(series, metricsOverviewBucketP95{
+			Bucket: start.Add(time.Duration(i) * bucketSize),
+			P95Ms:  percentileInt64(valuesByBucket[i], 0.95),
+		})
+	}
+	return series
+}
+
+func buildRetrieveEmptyRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	if len(logs) == 0 {
+		return []metricsOverviewBucketRate{}
+	}
+
+	type aggregate struct {
+		total int
+		empty int
+	}
+
+	aggregates := make([]aggregate, bucketCount)
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		index := bucketIndex(logEntry.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		aggregates[index].total++
+		if logEntry.ResultStatus == model.RetrieveResultStatusNoResult {
+			aggregates[index].empty++
+		}
+	}
+
+	series := make([]metricsOverviewBucketRate, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		rate := 0.0
+		if aggregates[i].total > 0 {
+			rate = float64(aggregates[i].empty) / float64(aggregates[i].total)
+		}
+		series = append(series, metricsOverviewBucketRate{
+			Bucket: start.Add(time.Duration(i) * bucketSize),
+			Rate:   rate,
+			Total:  aggregates[i].total,
+			Empty:  aggregates[i].empty,
+		})
+	}
+	return series
+}
+
+func buildRetrieveErrorTopN(logs []*model.KBRetrieveLog) []metricsOverviewErrorType {
+	if len(logs) == 0 {
+		return []metricsOverviewErrorType{}
+	}
+
+	counts := make(map[string]int)
+	for _, logEntry := range logs {
+		if logEntry == nil || logEntry.ResultStatus != model.RetrieveResultStatusError {
+			continue
+		}
+		errorCode := strings.TrimSpace(logEntry.ErrorCode)
+		if errorCode == "" {
+			errorCode = "unknown"
+		}
+		counts[errorCode]++
+	}
+	if len(counts) == 0 {
+		return []metricsOverviewErrorType{}
+	}
+
+	items := make([]metricsOverviewErrorType, 0, len(counts))
+	for errorCode, count := range counts {
+		items = append(items, metricsOverviewErrorType{
+			ErrorCode: errorCode,
+			Count:     count,
+		})
+	}
+
+	for i := 0; i < len(items); i++ {
+		for j := i + 1; j < len(items); j++ {
+			if items[j].Count > items[i].Count || (items[j].Count == items[i].Count && items[j].ErrorCode < items[i].ErrorCode) {
+				items[i], items[j] = items[j], items[i]
+			}
+		}
+	}
+	if len(items) > 5 {
+		items = items[:5]
+	}
+	return items
+}
+
+func bucketIndex(ts, start time.Time, bucketSize time.Duration, bucketCount int) int {
+	if ts.Before(start) {
+		return -1
+	}
+
+	offset := ts.Sub(start)
+	if offset < 0 {
+		return -1
+	}
+
+	index := int(offset / bucketSize)
+	if index >= bucketCount {
+		return -1
+	}
+	return index
+}
+
 func requireAdmin(ctx context.Context, c *app.RequestContext) bool {
 	if middleware.GetUserID(c) == 0 {
 		response.Unauthorized(ctx, c, "Authorization token is required")
@@ -1527,6 +1763,43 @@ type retrieveAuditListResponse struct {
 	PageSize int                    `json:"page_size"`
 }
 
+type metricsOverviewBucketRate struct {
+	Bucket  time.Time `json:"bucket"`
+	Rate    float64   `json:"rate"`
+	Total   int       `json:"total"`
+	Success int       `json:"success,omitempty"`
+	Empty   int       `json:"empty,omitempty"`
+}
+
+type metricsOverviewBucketCount struct {
+	Bucket time.Time `json:"bucket"`
+	Count  int       `json:"count"`
+}
+
+type metricsOverviewBucketP95 struct {
+	Bucket time.Time `json:"bucket"`
+	P95Ms  int64     `json:"p95_ms"`
+}
+
+type metricsOverviewErrorType struct {
+	ErrorCode string `json:"error_code"`
+	Count     int    `json:"count"`
+}
+
+type metricsOverviewResponse struct {
+	Range                string                       `json:"range"`
+	IngestSuccessRate    []metricsOverviewBucketRate  `json:"ingest_success_rate"`
+	RetrieveRequestCount []metricsOverviewBucketCount `json:"retrieve_request_count"`
+	RetrieveP95Ms        []metricsOverviewBucketP95   `json:"retrieve_p95_ms"`
+	RetrieveEmptyRate    []metricsOverviewBucketRate  `json:"retrieve_empty_rate"`
+	ErrorTypeTopN        []metricsOverviewErrorType   `json:"error_type_topn"`
+}
+
+type ingestLogDetailResponse struct {
+	Job           *model.KBIngestJob         `json:"job"`
+	OperationLogs []*model.KBJobOperationLog `json:"operation_logs"`
+}
+
 func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -1536,28 +1809,66 @@ func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 
 	page, pageSize := getPagination(c)
 
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
 	statusRaw := strings.TrimSpace(string(c.Query("result_status")))
+	var status *model.RetrieveResultStatus
 	if statusRaw != "" {
-		status, ok := model.ParseRetrieveResultStatus(statusRaw)
+		parsed, ok := model.ParseRetrieveResultStatus(statusRaw)
 		if !ok {
 			response.BadRequest(ctx, c, "result_status is invalid")
 			return
 		}
-		items, total, err := model.KBRetrieveLogDao.ListByStatus(status, page, pageSize)
-		if err != nil {
-			response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
-			return
-		}
-		response.Success(ctx, c, retrieveAuditListResponse{
-			Items:    items,
-			Total:    total,
-			Page:     page,
-			PageSize: pageSize,
-		})
+		status = &parsed
+	}
+
+	startTime, err := parseOptionalRFC3339Query(c, "start_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	endTime, err := parseOptionalRFC3339Query(c, "end_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	if startTime != nil && endTime != nil && startTime.After(*endTime) {
+		response.BadRequest(ctx, c, "start_time cannot be later than end_time")
 		return
 	}
 
-	items, total, err := model.KBRetrieveLogDao.ListByUserID(userID, page, pageSize)
+	queryKeywordRaw := strings.TrimSpace(string(c.Query("query_keyword")))
+	var queryKeyword *string
+	if queryKeywordRaw != "" {
+		queryKeyword = &queryKeywordRaw
+	}
+
+	requestIDRaw := strings.TrimSpace(string(c.Query("request_id")))
+	var requestID *string
+	if requestIDRaw != "" {
+		requestID = &requestIDRaw
+	}
+
+	items, total, err := model.KBRetrieveLogDao.ListWithFilter(model.KBRetrieveLogListFilter{
+		UserID:       &userID,
+		KBID:         kbID,
+		ResultStatus: status,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		QueryKeyword: queryKeyword,
+		RequestID:    requestID,
+		Page:         page,
+		PageSize:     pageSize,
+	})
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
 		return
@@ -1568,6 +1879,165 @@ func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 		Total:    total,
 		Page:     page,
 		PageSize: pageSize,
+	})
+}
+
+func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
+	rangeName := strings.TrimSpace(string(c.Query("range")))
+	if rangeName == "" {
+		rangeName = "24h"
+	}
+	window, bucketSize, bucketCount, ok := resolveMetricsOverviewRange(rangeName)
+	if !ok {
+		response.BadRequest(ctx, c, "range must be one of 1h, 24h, 7d")
+		return
+	}
+
+	endExclusive := alignTimeBucket(time.Now().UTC(), bucketSize).Add(bucketSize)
+	startInclusive := endExclusive.Add(-window)
+	queryEnd := endExclusive.Add(-time.Nanosecond)
+
+	retrieveLogs, err := model.KBRetrieveLogDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load retrieve logs for metrics overview", err))
+		return
+	}
+
+	ingestJobs, err := model.KBIngestJobDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load ingest jobs for metrics overview", err))
+		return
+	}
+
+	response.Success(ctx, c, metricsOverviewResponse{
+		Range:                rangeName,
+		IngestSuccessRate:    buildIngestSuccessRateSeries(ingestJobs, startInclusive, bucketSize, bucketCount),
+		RetrieveRequestCount: buildRetrieveRequestCountSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RetrieveP95Ms:        buildRetrieveP95Series(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RetrieveEmptyRate:    buildRetrieveEmptyRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		ErrorTypeTopN:        buildRetrieveErrorTopN(retrieveLogs),
+	})
+}
+
+func ListIngestLogs(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
+	var status *model.KBIngestJobStatus
+	statusRaw := strings.TrimSpace(string(c.Query("status")))
+	if statusRaw != "" {
+		parsed, ok := model.ParseKBIngestJobStatus(statusRaw)
+		if !ok {
+			response.BadRequest(ctx, c, "status is invalid")
+			return
+		}
+		status = &parsed
+	}
+
+	errorCodeRaw := strings.TrimSpace(string(c.Query("error_code")))
+	var errorCode *string
+	if errorCodeRaw != "" {
+		errorCode = &errorCodeRaw
+	}
+
+	startTime, err := parseOptionalRFC3339Query(c, "start_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	endTime, err := parseOptionalRFC3339Query(c, "end_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	if startTime != nil && endTime != nil && startTime.After(*endTime) {
+		response.BadRequest(ctx, c, "start_time cannot be later than end_time")
+		return
+	}
+
+	page, pageSize := getPagination(c)
+	items, total, err := model.KBIngestJobDao.ListWithFilter(model.KBIngestJobListFilter{
+		KBID:      kbID,
+		Status:    status,
+		ErrorCode: errorCode,
+		StartTime: startTime,
+		EndTime:   endTime,
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list ingest logs", err))
+		return
+	}
+
+	response.Success(ctx, c, jobListResponse{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func GetIngestLogDetail(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	jobID, err := parseUint64(c.Param("job_id"), "job_id")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "job not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get ingest log detail", err))
+		return
+	}
+
+	operationLogs, err := model.KBJobOperationLogDao.ListByJobID(jobID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get ingest operation logs", err))
+		return
+	}
+
+	response.Success(ctx, c, ingestLogDetailResponse{
+		Job:           job,
+		OperationLogs: operationLogs,
 	})
 }
 

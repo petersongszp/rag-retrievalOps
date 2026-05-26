@@ -3,6 +3,7 @@ package model
 import (
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"gorm.io/gorm"
@@ -22,6 +23,17 @@ const (
 
 var KBIngestJobDao _KBIngestJob
 var ErrInvalidKBIngestJobTransition = errors.New("invalid kb ingest job status transition")
+
+type KBIngestJobListFilter struct {
+	UserID    *uint
+	KBID      *uint64
+	Status    *KBIngestJobStatus
+	ErrorCode *string
+	StartTime *time.Time
+	EndTime   *time.Time
+	Page      int
+	PageSize  int
+}
 
 var kbIngestJobTransitions = map[KBIngestJobStatus]map[KBIngestJobStatus]struct{}{
 	KBIngestJobStatusPending: {
@@ -113,29 +125,35 @@ func (d *_KBIngestJob) GetLatestByDocumentID(documentID uint64) (*KBIngestJob, e
 }
 
 func (d *_KBIngestJob) ListByKbID(kbID uint64, status *KBIngestJobStatus, page, pageSize int) ([]*KBIngestJob, int64, error) {
+	return d.ListWithFilter(KBIngestJobListFilter{
+		KBID:     &kbID,
+		Status:   status,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func (d *_KBIngestJob) ListWithFilter(filter KBIngestJobListFilter) ([]*KBIngestJob, int64, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
-	if page <= 0 {
-		page = 1
+	if filter.Page <= 0 {
+		filter.Page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 10
+	if filter.PageSize <= 0 {
+		filter.PageSize = 10
 	}
 
 	var list []*KBIngestJob
 	var total int64
 
-	query := getDB().Model(&KBIngestJob{}).Where("kb_id = ?", kbID)
-	if status != nil {
-		query = query.Where("status = ?", *status)
-	}
+	query := applyKBIngestJobFilters(getDB().Model(&KBIngestJob{}), filter)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	err := query.Offset((page - 1) * pageSize).
-		Limit(pageSize).
+	err := query.Offset((filter.Page - 1) * filter.PageSize).
+		Limit(filter.PageSize).
 		Order("created_at DESC").
 		Find(&list).Error
 	if err != nil {
@@ -145,67 +163,39 @@ func (d *_KBIngestJob) ListByKbID(kbID uint64, status *KBIngestJobStatus, page, 
 }
 
 func (d *_KBIngestJob) ListByUserID(userID uint, status *KBIngestJobStatus, page, pageSize int) ([]*KBIngestJob, int64, error) {
-	if getDB == nil {
-		panic("getDB function not initialized, please call model.SetDBGetter first")
-	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
-
-	var list []*KBIngestJob
-	var total int64
-
-	query := getDB().Model(&KBIngestJob{}).Where("user_id = ?", userID)
-	if status != nil {
-		query = query.Where("status = ?", *status)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	err := query.Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Order("created_at DESC").
-		Find(&list).Error
-	if err != nil {
-		return nil, 0, err
-	}
-	return list, total, nil
+	return d.ListWithFilter(KBIngestJobListFilter{
+		UserID:   &userID,
+		Status:   status,
+		Page:     page,
+		PageSize: pageSize,
+	})
 }
 
 func (d *_KBIngestJob) List(status *KBIngestJobStatus, page, pageSize int) ([]*KBIngestJob, int64, error) {
+	return d.ListWithFilter(KBIngestJobListFilter{
+		Status:   status,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func (d *_KBIngestJob) ListByCreatedAt(startTime, endTime time.Time, kbID *uint64) ([]*KBIngestJob, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 10
-	}
 
 	var list []*KBIngestJob
-	var total int64
-
-	query := getDB().Model(&KBIngestJob{})
-	if status != nil {
-		query = query.Where("status = ?", *status)
+	query := getDB().Model(&KBIngestJob{}).
+		Where("created_at >= ? AND created_at <= ?", startTime, endTime)
+	if kbID != nil {
+		query = query.Where("kb_id = ?", *kbID)
 	}
 
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-	err := query.Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Order("created_at DESC").
-		Find(&list).Error
+	err := query.Order("created_at ASC").Find(&list).Error
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return list, total, nil
+	return list, nil
 }
 
 func (d *_KBIngestJob) ListPendingJobs(limit int) ([]*KBIngestJob, error) {
@@ -475,6 +465,31 @@ func (d *_KBIngestJob) CountByStatuses(statuses []KBIngestJobStatus) (int64, err
 	var count int64
 	err := getDB().Model(&KBIngestJob{}).Where("status IN ?", statuses).Count(&count).Error
 	return count, err
+}
+
+func applyKBIngestJobFilters(query *gorm.DB, filter KBIngestJobListFilter) *gorm.DB {
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.KBID != nil {
+		query = query.Where("kb_id = ?", *filter.KBID)
+	}
+	if filter.Status != nil {
+		query = query.Where("status = ?", *filter.Status)
+	}
+	if filter.ErrorCode != nil {
+		errorCode := strings.TrimSpace(*filter.ErrorCode)
+		if errorCode != "" {
+			query = query.Where("last_error_code = ?", errorCode)
+		}
+	}
+	if filter.StartTime != nil {
+		query = query.Where("created_at >= ?", *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		query = query.Where("created_at <= ?", *filter.EndTime)
+	}
+	return query
 }
 
 func firstNonEmpty(values ...string) string {

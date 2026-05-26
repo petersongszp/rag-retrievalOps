@@ -27,6 +27,7 @@ type NavItem = {
   href?: string;
   icon: React.ReactNode;
   disabled?: boolean;
+  children?: NavItem[];
 };
 
 const navItems: NavItem[] = [
@@ -43,21 +44,46 @@ const navItems: NavItem[] = [
     href: '/retrieval-lab',
     icon: <ExperimentOutlined />,
   },
-  { key: '/trace-logs', label: '追踪日志', icon: <FileSearchOutlined />, disabled: true },
+  {
+    key: '/trace-logs',
+    label: '追踪日志',
+    href: '/trace-logs',
+    icon: <FileSearchOutlined />,
+    children: [
+      { key: '/trace-logs/retrieval', label: '检索日志', href: '/trace-logs/retrieval', icon: null },
+      { key: '/trace-logs/ingest', label: '入库日志', href: '/trace-logs/ingest', icon: null },
+    ],
+  },
   { key: '/evaluation', label: '评测', icon: <BookOutlined />, disabled: true },
   { key: '/strategy-center', label: '策略中心', icon: <SettingOutlined />, disabled: true },
-  { key: '/quality-monitor', label: '质量监控', icon: <AppstoreOutlined />, disabled: true },
+  { key: '/quality-monitor', label: '质量监控', href: '/quality-monitor', icon: <AppstoreOutlined /> },
   { key: '/cost-ops', label: '成本运营', icon: <WalletOutlined />, disabled: true },
   { key: '/audit', label: '审计', icon: <FolderOpenOutlined />, disabled: true },
 ];
 
 function getSelectedNavKey(pathname: string): string {
+  if (pathname.startsWith('/trace-logs/ingest')) {
+    return '/trace-logs/ingest';
+  }
+
+  if (pathname.startsWith('/trace-logs/retrieval')) {
+    return '/trace-logs/retrieval';
+  }
+
+  if (pathname.startsWith('/quality-monitor')) {
+    return '/quality-monitor';
+  }
+
   if (pathname.startsWith('/knowledge-bases')) {
     return '/knowledge-bases';
   }
 
   if (pathname.startsWith('/retrieval-lab')) {
     return '/retrieval-lab';
+  }
+
+  if (pathname.startsWith('/trace-logs')) {
+    return '/trace-logs';
   }
 
   return '/dashboard';
@@ -69,13 +95,17 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const { bases, selectedBase, setSelectedBaseId } = useKnowledgeBaseContext();
 
   const menuItems = useMemo<MenuProps['items']>(
-    () =>
-      navItems.map((item) => ({
+    () => {
+      const toMenuItem = (item: NavItem): NonNullable<MenuProps['items']>[number] => ({
         key: item.key,
         disabled: item.disabled,
-        icon: item.icon,
+        icon: item.icon ?? undefined,
         label: item.href ? <Link href={item.href}>{item.label}</Link> : item.label,
-      })),
+        children: item.children?.map((child) => toMenuItem(child)),
+      });
+
+      return navItems.map((item) => toMenuItem(item));
+    },
     []
   );
 
@@ -94,6 +124,30 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
     if (pathname.startsWith('/retrieval-lab')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '检索实验室' }];
+    }
+
+    if (pathname.startsWith('/trace-logs/retrieval')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/trace-logs">追踪日志</Link> },
+        { title: '检索日志' },
+      ];
+    }
+
+    if (pathname.startsWith('/trace-logs/ingest')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/trace-logs">追踪日志</Link> },
+        { title: '入库日志' },
+      ];
+    }
+
+    if (pathname.startsWith('/trace-logs')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '追踪日志' }];
+    }
+
+    if (pathname.startsWith('/quality-monitor')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '质量监控' }];
     }
 
     return [{ title: '概览' }];
@@ -125,7 +179,12 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             </Space>
           </div>
           <div className="flex-1 px-3 py-4">
-            <Menu mode="inline" selectedKeys={[getSelectedNavKey(pathname)]} items={menuItems} />
+            <Menu
+              mode="inline"
+              selectedKeys={[getSelectedNavKey(pathname)]}
+              defaultOpenKeys={pathname.startsWith('/trace-logs') ? ['/trace-logs'] : []}
+              items={menuItems}
+            />
           </div>
           <div className="border-t border-slate-200 px-5 py-4">
             <Text type="secondary">

@@ -1,7 +1,11 @@
 package model
 
 import (
+	"strconv"
+	"strings"
 	"time"
+
+	"gorm.io/gorm"
 )
 
 type RetrieveResultStatus string
@@ -15,6 +19,18 @@ const (
 )
 
 var KBRetrieveLogDao _KBRetrieveLog
+
+type KBRetrieveLogListFilter struct {
+	UserID       *uint
+	KBID         *uint64
+	ResultStatus *RetrieveResultStatus
+	StartTime    *time.Time
+	EndTime      *time.Time
+	QueryKeyword *string
+	RequestID    *string
+	Page         int
+	PageSize     int
+}
 
 type (
 	_KBRetrieveLog struct{}
@@ -85,26 +101,42 @@ func (d *_KBRetrieveLog) GetByRequestID(requestID string) (*KBRetrieveLog, error
 }
 
 func (d *_KBRetrieveLog) ListByUserID(userID uint, page, pageSize int) ([]*KBRetrieveLog, int64, error) {
+	return d.ListWithFilter(KBRetrieveLogListFilter{
+		UserID:   &userID,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func (d *_KBRetrieveLog) ListByStatus(resultStatus RetrieveResultStatus, page, pageSize int) ([]*KBRetrieveLog, int64, error) {
+	return d.ListWithFilter(KBRetrieveLogListFilter{
+		ResultStatus: &resultStatus,
+		Page:         page,
+		PageSize:     pageSize,
+	})
+}
+
+func (d *_KBRetrieveLog) ListWithFilter(filter KBRetrieveLogListFilter) ([]*KBRetrieveLog, int64, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
-	if page <= 0 {
-		page = 1
+	if filter.Page <= 0 {
+		filter.Page = 1
 	}
-	if pageSize <= 0 {
-		pageSize = 20
+	if filter.PageSize <= 0 {
+		filter.PageSize = 20
 	}
 
 	var list []*KBRetrieveLog
 	var total int64
 
-	query := getDB().Model(&KBRetrieveLog{}).Where("user_id = ?", userID)
+	query := applyKBRetrieveLogFilters(getDB().Model(&KBRetrieveLog{}), filter)
 	if err := query.Count(&total).Error; err != nil {
 		return nil, 0, err
 	}
 
-	err := query.Offset((page - 1) * pageSize).
-		Limit(pageSize).
+	err := query.Offset((filter.Page - 1) * filter.PageSize).
+		Limit(filter.PageSize).
 		Order("created_at DESC").
 		Find(&list).Error
 	if err != nil {
@@ -113,33 +145,67 @@ func (d *_KBRetrieveLog) ListByUserID(userID uint, page, pageSize int) ([]*KBRet
 	return list, total, nil
 }
 
-func (d *_KBRetrieveLog) ListByStatus(resultStatus RetrieveResultStatus, page, pageSize int) ([]*KBRetrieveLog, int64, error) {
+func (d *_KBRetrieveLog) ListByCreatedAt(startTime, endTime time.Time, kbID *uint64) ([]*KBRetrieveLog, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
 	}
-	if page <= 0 {
-		page = 1
-	}
-	if pageSize <= 0 {
-		pageSize = 20
+
+	filter := KBRetrieveLogListFilter{
+		KBID:      kbID,
+		StartTime: &startTime,
+		EndTime:   &endTime,
 	}
 
 	var list []*KBRetrieveLog
-	var total int64
-
-	query := getDB().Model(&KBRetrieveLog{}).Where("result_status = ?", resultStatus)
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	err := query.Offset((page - 1) * pageSize).
-		Limit(pageSize).
-		Order("created_at DESC").
+	err := applyKBRetrieveLogFilters(getDB().Model(&KBRetrieveLog{}), filter).
+		Order("created_at ASC").
 		Find(&list).Error
 	if err != nil {
-		return nil, 0, err
+		return nil, err
 	}
-	return list, total, nil
+	return list, nil
+}
+
+func applyKBRetrieveLogFilters(query *gorm.DB, filter KBRetrieveLogListFilter) *gorm.DB {
+	if filter.UserID != nil {
+		query = query.Where("user_id = ?", *filter.UserID)
+	}
+	if filter.KBID != nil {
+		query = applyCommaSeparatedUint64Filter(query, "kb_ids", *filter.KBID)
+	}
+	if filter.ResultStatus != nil {
+		query = query.Where("result_status = ?", *filter.ResultStatus)
+	}
+	if filter.StartTime != nil {
+		query = query.Where("created_at >= ?", *filter.StartTime)
+	}
+	if filter.EndTime != nil {
+		query = query.Where("created_at <= ?", *filter.EndTime)
+	}
+	if filter.QueryKeyword != nil {
+		keyword := strings.TrimSpace(*filter.QueryKeyword)
+		if keyword != "" {
+			query = query.Where("query LIKE ?", "%"+keyword+"%")
+		}
+	}
+	if filter.RequestID != nil {
+		requestID := strings.TrimSpace(*filter.RequestID)
+		if requestID != "" {
+			query = query.Where("request_id = ?", requestID)
+		}
+	}
+	return query
+}
+
+func applyCommaSeparatedUint64Filter(query *gorm.DB, column string, value uint64) *gorm.DB {
+	target := strconv.FormatUint(value, 10)
+	return query.Where(
+		column+" = ? OR "+column+" LIKE ? OR "+column+" LIKE ? OR "+column+" LIKE ?",
+		target,
+		target+",%",
+		"%,"+target+",%",
+		"%,"+target,
+	)
 }
 
 func ParseRetrieveResultStatus(raw string) (RetrieveResultStatus, bool) {

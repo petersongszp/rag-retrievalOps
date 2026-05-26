@@ -154,8 +154,6 @@ services:
     build:
       context: backend
       dockerfile: Dockerfile
-      cache_from:
-        - type=local,src=/tmp/.buildx-cache/backend
     ports:
       - '8899:8899'
     container_name: app-backend
@@ -190,8 +188,6 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: /api
-      cache_from:
-        - type=local,src=/tmp/.buildx-cache/frontend
     ports:
       - '3000:3000'
     container_name: app-frontend
@@ -212,8 +208,6 @@ services:
       args:
         NEXT_PUBLIC_API_BASE_URL: /api
         API_PROXY_TARGET: http://backend:8899/api
-      cache_from:
-        - type=local,src=/tmp/.buildx-cache/admin
     ports:
       - '3002:3001'
     container_name: app-admin
