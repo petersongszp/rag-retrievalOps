@@ -9,15 +9,38 @@ import (
 )
 
 func LoadDataset(path string) ([]DatasetCase, error) {
-	data, err := os.ReadFile(path)
+	bundle, err := LoadDatasetBundle(path)
 	if err != nil {
 		return nil, err
 	}
-	var dataset []DatasetCase
-	if err := json.Unmarshal(data, &dataset); err != nil {
-		return nil, fmt.Errorf("parse dataset %s: %w", path, err)
+	return bundle.Cases, nil
+}
+
+func LoadDatasetBundle(path string) (DatasetBundle, error) {
+	var bundle DatasetBundle
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return bundle, err
 	}
-	return dataset, nil
+
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return bundle, fmt.Errorf("parse dataset %s: empty payload", path)
+	}
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &bundle.Cases); err != nil {
+			return bundle, fmt.Errorf("parse dataset %s: %w", path, err)
+		}
+		bundle.DatasetVersion = "legacy-array"
+		return bundle, nil
+	}
+	if err := json.Unmarshal(trimmed, &bundle); err != nil {
+		return bundle, fmt.Errorf("parse dataset %s: %w", path, err)
+	}
+	if bundle.DatasetVersion == "" {
+		bundle.DatasetVersion = "unspecified"
+	}
+	return bundle, nil
 }
 
 func LoadProfiles(path string) ([]StrategyProfile, error) {
@@ -61,6 +84,9 @@ func RenderMarkdownReport(report *Report) string {
 	buf.WriteString("# L7 检索离线回归报告\n\n")
 	buf.WriteString(fmt.Sprintf("- 生成时间: `%s`\n", report.GeneratedAt.Format("2006-01-02 15:04:05")))
 	buf.WriteString(fmt.Sprintf("- 评测样本数: `%d`\n", report.DatasetSize))
+	if strings.TrimSpace(report.DatasetVersion) != "" {
+		buf.WriteString(fmt.Sprintf("- Dataset Version: `%s`\n", report.DatasetVersion))
+	}
 	buf.WriteString(fmt.Sprintf("- Baseline: `%s`\n", report.Baseline))
 	buf.WriteString(fmt.Sprintf("- Candidate: `%s`\n\n", report.Candidate))
 

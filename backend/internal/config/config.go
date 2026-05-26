@@ -209,17 +209,25 @@ type RAGConfig struct {
 	FeatureFlags RAGFeatureFlags  `yaml:"feature_flags"`
 	Thresholds   RAGThresholds    `yaml:"thresholds"`
 	Phase2       RAGPhase2Config  `yaml:"phase2"`
+	Phase3       RAGPhase3Config  `yaml:"phase3"`
 	Release      RAGReleaseConfig `yaml:"release"`
 }
 
 type RAGFeatureFlags struct {
-	EnableProdGuard       bool `yaml:"enable_prod_guard"`
-	EnableIngestRetry     bool `yaml:"enable_ingest_retry"`
-	EnableRetrieveAudit   bool `yaml:"enable_retrieve_audit"`
-	EnableHybridRetrieval bool `yaml:"enable_hybrid_retrieval"`
-	EnableQueryRewrite    bool `yaml:"enable_query_rewrite"`
-	EnableDynamicTopK     bool `yaml:"enable_dynamic_topk"`
-	EnableAdvancedRerank  bool `yaml:"enable_advanced_rerank"`
+	EnableProdGuard            bool `yaml:"enable_prod_guard"`
+	EnableIngestRetry          bool `yaml:"enable_ingest_retry"`
+	EnableRetrieveAudit        bool `yaml:"enable_retrieve_audit"`
+	EnableHybridRetrieval      bool `yaml:"enable_hybrid_retrieval"`
+	EnableQueryRewrite         bool `yaml:"enable_query_rewrite"`
+	EnableDynamicTopK          bool `yaml:"enable_dynamic_topk"`
+	EnableAdvancedRerank       bool `yaml:"enable_advanced_rerank"`
+	EnableParentChildRetrieval bool `yaml:"enable_parent_child_retrieval"`
+	EnableStrategicTopK        bool `yaml:"enable_strategic_topk"`
+	EnableEvidenceRefusal      bool `yaml:"enable_evidence_refusal"`
+	EnableCitationConsistency  bool `yaml:"enable_citation_consistency"`
+	EnableDomainTerms          bool `yaml:"enable_domain_terms"`
+	EnableRouteSpecificRewrite bool `yaml:"enable_route_specific_rewrite"`
+	EnableModelAssistedRewrite bool `yaml:"enable_model_assisted_rewrite"`
 }
 
 type RAGThresholds struct {
@@ -241,6 +249,23 @@ type RAGPhase2Config struct {
 	RewriteMaxExpansions int     `yaml:"rewrite_max_expansions"`
 	RerankTimeoutMS      int     `yaml:"rerank_timeout_ms"`
 	RerankModel          string  `yaml:"rerank_model"`
+}
+
+type RAGPhase3Config struct {
+	ParentChildFillStrategy     string  `yaml:"parent_child_fill_strategy"`
+	ParentChildWindowSize       int     `yaml:"parent_child_window_size"`
+	ParentChildMaxTokens        int     `yaml:"parent_child_max_tokens"`
+	StrategicTopKMinK           int     `yaml:"strategic_topk_min_k"`
+	StrategicTopKMaxK           int     `yaml:"strategic_topk_max_k"`
+	StrategicTopKBudgetRatio    float64 `yaml:"strategic_topk_budget_ratio"`
+	EvidenceMinRerankScore      float64 `yaml:"evidence_min_rerank_score"`
+	EvidenceMinDensity          float64 `yaml:"evidence_min_density"`
+	EvidenceMinCitationCoverage float64 `yaml:"evidence_min_citation_coverage"`
+	CitationCheckThreshold      float64 `yaml:"citation_check_threshold"`
+	CitationCheckVersion        string  `yaml:"citation_check_version"`
+	DomainTermTimeoutMS         int     `yaml:"domain_term_timeout_ms"`
+	ModelRewriteTimeoutMS       int     `yaml:"model_rewrite_timeout_ms"`
+	ModelRewriteShadowRatio     float64 `yaml:"model_rewrite_shadow_ratio"`
 }
 
 type RAGReleaseConfig struct {
@@ -320,6 +345,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	cfg.applyRAGDefaults()
 	cfg.ConfigVersion = cfg.buildConfigVersion()
 	if err := cfg.writePhase1BaselineSnapshot(configPath); err != nil {
+		return nil, err
+	}
+	if err := cfg.writePhase2BaselineSnapshot(configPath); err != nil {
 		return nil, err
 	}
 
@@ -427,6 +455,63 @@ func (c *Config) ValidateRAGPrerequisites() error {
 			return fmt.Errorf("rag advanced rerank enabled but rag.phase2.rerank_model is empty")
 		}
 	}
+	if c.RAG.FeatureFlags.EnableParentChildRetrieval {
+		if !isValidParentChildFillStrategy(c.RAG.Phase3.ParentChildFillStrategy) {
+			return fmt.Errorf("rag parent-child retrieval enabled but rag.phase3.parent_child_fill_strategy must be one of parent_only/sibling_window/section_window/child_first_with_parent_summary, got %q", c.RAG.Phase3.ParentChildFillStrategy)
+		}
+		if c.RAG.Phase3.ParentChildWindowSize < 0 {
+			return fmt.Errorf("rag parent-child retrieval enabled but rag.phase3.parent_child_window_size must be >= 0")
+		}
+		if c.RAG.Phase3.ParentChildMaxTokens <= 0 {
+			return fmt.Errorf("rag parent-child retrieval enabled but rag.phase3.parent_child_max_tokens must be > 0")
+		}
+	}
+	if c.RAG.FeatureFlags.EnableStrategicTopK {
+		if c.RAG.Phase3.StrategicTopKMinK <= 0 {
+			return fmt.Errorf("rag strategic topk enabled but rag.phase3.strategic_topk_min_k must be > 0")
+		}
+		if c.RAG.Phase3.StrategicTopKMaxK <= 0 {
+			return fmt.Errorf("rag strategic topk enabled but rag.phase3.strategic_topk_max_k must be > 0")
+		}
+		if c.RAG.Phase3.StrategicTopKMinK > c.RAG.Phase3.StrategicTopKMaxK {
+			return fmt.Errorf("rag strategic topk enabled but rag.phase3.strategic_topk_min_k (%d) > rag.phase3.strategic_topk_max_k (%d)", c.RAG.Phase3.StrategicTopKMinK, c.RAG.Phase3.StrategicTopKMaxK)
+		}
+		if c.RAG.Phase3.StrategicTopKBudgetRatio <= 0 || c.RAG.Phase3.StrategicTopKBudgetRatio > 1 {
+			return fmt.Errorf("rag strategic topk enabled but rag.phase3.strategic_topk_budget_ratio must be within (0,1], got %.4f", c.RAG.Phase3.StrategicTopKBudgetRatio)
+		}
+	}
+	if c.RAG.FeatureFlags.EnableEvidenceRefusal {
+		if !isNormalizedRatio(c.RAG.Phase3.EvidenceMinRerankScore) {
+			return fmt.Errorf("rag evidence refusal enabled but rag.phase3.evidence_min_rerank_score must be within [0,1], got %.4f", c.RAG.Phase3.EvidenceMinRerankScore)
+		}
+		if !isNormalizedRatio(c.RAG.Phase3.EvidenceMinDensity) {
+			return fmt.Errorf("rag evidence refusal enabled but rag.phase3.evidence_min_density must be within [0,1], got %.4f", c.RAG.Phase3.EvidenceMinDensity)
+		}
+		if !isNormalizedRatio(c.RAG.Phase3.EvidenceMinCitationCoverage) {
+			return fmt.Errorf("rag evidence refusal enabled but rag.phase3.evidence_min_citation_coverage must be within [0,1], got %.4f", c.RAG.Phase3.EvidenceMinCitationCoverage)
+		}
+	}
+	if c.RAG.FeatureFlags.EnableCitationConsistency {
+		if !isNormalizedRatio(c.RAG.Phase3.CitationCheckThreshold) {
+			return fmt.Errorf("rag citation consistency enabled but rag.phase3.citation_check_threshold must be within [0,1], got %.4f", c.RAG.Phase3.CitationCheckThreshold)
+		}
+		if strings.TrimSpace(c.RAG.Phase3.CitationCheckVersion) == "" {
+			return fmt.Errorf("rag citation consistency enabled but rag.phase3.citation_check_version is empty")
+		}
+	}
+	if c.RAG.FeatureFlags.EnableDomainTerms {
+		if c.RAG.Phase3.DomainTermTimeoutMS <= 0 {
+			return fmt.Errorf("rag domain terms enabled but rag.phase3.domain_term_timeout_ms must be > 0")
+		}
+	}
+	if c.RAG.FeatureFlags.EnableModelAssistedRewrite {
+		if c.RAG.Phase3.ModelRewriteTimeoutMS <= 0 {
+			return fmt.Errorf("rag model-assisted rewrite enabled but rag.phase3.model_rewrite_timeout_ms must be > 0")
+		}
+		if c.RAG.Phase3.ModelRewriteShadowRatio < 0 || c.RAG.Phase3.ModelRewriteShadowRatio > 1 {
+			return fmt.Errorf("rag model-assisted rewrite enabled but rag.phase3.model_rewrite_shadow_ratio must be within [0,1], got %.4f", c.RAG.Phase3.ModelRewriteShadowRatio)
+		}
+	}
 	if c.RAG.Release.Enabled {
 		if !isValidRAGReleaseStage(c.RAG.Release.Stage) {
 			return fmt.Errorf("rag release enabled but rag.release.stage must be one of phase1/internal/small_flow/batch/full, got %q", c.RAG.Release.Stage)
@@ -514,6 +599,48 @@ func (c *Config) applyRAGDefaults() {
 	if c.RAG.Release.BatchPercent <= 0 {
 		c.RAG.Release.BatchPercent = 25
 	}
+	if strings.TrimSpace(c.RAG.Phase3.ParentChildFillStrategy) == "" {
+		c.RAG.Phase3.ParentChildFillStrategy = "section_window"
+	}
+	if c.RAG.Phase3.ParentChildWindowSize < 0 {
+		c.RAG.Phase3.ParentChildWindowSize = 0
+	}
+	if c.RAG.Phase3.ParentChildMaxTokens <= 0 {
+		c.RAG.Phase3.ParentChildMaxTokens = 1200
+	}
+	if c.RAG.Phase3.StrategicTopKMinK <= 0 {
+		c.RAG.Phase3.StrategicTopKMinK = 2
+	}
+	if c.RAG.Phase3.StrategicTopKMaxK <= 0 {
+		c.RAG.Phase3.StrategicTopKMaxK = 8
+	}
+	if c.RAG.Phase3.StrategicTopKBudgetRatio <= 0 {
+		c.RAG.Phase3.StrategicTopKBudgetRatio = 0.6
+	}
+	if c.RAG.Phase3.EvidenceMinRerankScore <= 0 {
+		c.RAG.Phase3.EvidenceMinRerankScore = 0.55
+	}
+	if c.RAG.Phase3.EvidenceMinDensity <= 0 {
+		c.RAG.Phase3.EvidenceMinDensity = 0.2
+	}
+	if c.RAG.Phase3.EvidenceMinCitationCoverage <= 0 {
+		c.RAG.Phase3.EvidenceMinCitationCoverage = 0.5
+	}
+	if c.RAG.Phase3.CitationCheckThreshold <= 0 {
+		c.RAG.Phase3.CitationCheckThreshold = 0.7
+	}
+	if strings.TrimSpace(c.RAG.Phase3.CitationCheckVersion) == "" {
+		c.RAG.Phase3.CitationCheckVersion = "phase3-citation-v1"
+	}
+	if c.RAG.Phase3.DomainTermTimeoutMS <= 0 {
+		c.RAG.Phase3.DomainTermTimeoutMS = 80
+	}
+	if c.RAG.Phase3.ModelRewriteTimeoutMS <= 0 {
+		c.RAG.Phase3.ModelRewriteTimeoutMS = 150
+	}
+	if c.RAG.Phase3.ModelRewriteShadowRatio <= 0 {
+		c.RAG.Phase3.ModelRewriteShadowRatio = 0.1
+	}
 }
 
 func (c *Config) applyRAGEnvOverrides() error {
@@ -559,6 +686,41 @@ func (c *Config) applyRAGEnvOverrides() error {
 		return err
 	} else if ok {
 		c.RAG.FeatureFlags.EnableAdvancedRerank = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_PARENT_CHILD_RETRIEVAL"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableParentChildRetrieval = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_STRATEGIC_TOPK"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableStrategicTopK = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_EVIDENCE_REFUSAL"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableEvidenceRefusal = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_CITATION_CONSISTENCY"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableCitationConsistency = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_DOMAIN_TERMS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableDomainTerms = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_ROUTE_SPECIFIC_REWRITE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableRouteSpecificRewrite = value
+	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_MODEL_ASSISTED_REWRITE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableModelAssistedRewrite = value
 	}
 	if value, ok, err := readEnvInt("RAG_MAX_RETRY_COUNT"); err != nil {
 		return err
@@ -633,6 +795,72 @@ func (c *Config) applyRAGEnvOverrides() error {
 	if value, ok := os.LookupEnv("RAG_RERANK_MODEL"); ok {
 		c.RAG.Phase2.RerankModel = strings.TrimSpace(value)
 	}
+	if value, ok := os.LookupEnv("RAG_PARENT_CHILD_FILL_STRATEGY"); ok {
+		c.RAG.Phase3.ParentChildFillStrategy = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("RAG_PARENT_CHILD_WINDOW_SIZE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.ParentChildWindowSize = value
+	}
+	if value, ok, err := readEnvInt("RAG_PARENT_CHILD_MAX_TOKENS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.ParentChildMaxTokens = value
+	}
+	if value, ok, err := readEnvInt("RAG_STRATEGIC_TOPK_MIN_K"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.StrategicTopKMinK = value
+	}
+	if value, ok, err := readEnvInt("RAG_STRATEGIC_TOPK_MAX_K"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.StrategicTopKMaxK = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_STRATEGIC_TOPK_BUDGET_RATIO"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.StrategicTopKBudgetRatio = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_EVIDENCE_MIN_RERANK_SCORE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.EvidenceMinRerankScore = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_EVIDENCE_MIN_DENSITY"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.EvidenceMinDensity = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_EVIDENCE_MIN_CITATION_COVERAGE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.EvidenceMinCitationCoverage = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_CITATION_CHECK_THRESHOLD"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.CitationCheckThreshold = value
+	}
+	if value, ok := os.LookupEnv("RAG_CITATION_CHECK_VERSION"); ok {
+		c.RAG.Phase3.CitationCheckVersion = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("RAG_DOMAIN_TERM_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.DomainTermTimeoutMS = value
+	}
+	if value, ok, err := readEnvInt("RAG_MODEL_REWRITE_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.ModelRewriteTimeoutMS = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_MODEL_REWRITE_SHADOW_RATIO"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase3.ModelRewriteShadowRatio = value
+	}
 	if value, ok, err := readEnvBool("RAG_RELEASE_ENABLED"); err != nil {
 		return err
 	} else if ok {
@@ -676,7 +904,7 @@ func (c *Config) LogRAGSnapshot() {
 		return
 	}
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -688,6 +916,13 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.FeatureFlags.EnableQueryRewrite,
 		c.RAG.FeatureFlags.EnableDynamicTopK,
 		c.RAG.FeatureFlags.EnableAdvancedRerank,
+		c.RAG.FeatureFlags.EnableParentChildRetrieval,
+		c.RAG.FeatureFlags.EnableStrategicTopK,
+		c.RAG.FeatureFlags.EnableEvidenceRefusal,
+		c.RAG.FeatureFlags.EnableCitationConsistency,
+		c.RAG.FeatureFlags.EnableDomainTerms,
+		c.RAG.FeatureFlags.EnableRouteSpecificRewrite,
+		c.RAG.FeatureFlags.EnableModelAssistedRewrite,
 		c.RAG.Thresholds.MaxRetryCount,
 		c.RAG.Thresholds.RetryBackoffMS,
 		c.RAG.Thresholds.RetrieveTimeoutMS,
@@ -703,6 +938,20 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.Phase2.RewriteMaxExpansions,
 		c.RAG.Phase2.RerankTimeoutMS,
 		c.RAG.Phase2.RerankModel,
+		c.RAG.Phase3.ParentChildFillStrategy,
+		c.RAG.Phase3.ParentChildWindowSize,
+		c.RAG.Phase3.ParentChildMaxTokens,
+		c.RAG.Phase3.StrategicTopKMinK,
+		c.RAG.Phase3.StrategicTopKMaxK,
+		c.RAG.Phase3.StrategicTopKBudgetRatio,
+		c.RAG.Phase3.EvidenceMinRerankScore,
+		c.RAG.Phase3.EvidenceMinDensity,
+		c.RAG.Phase3.EvidenceMinCitationCoverage,
+		c.RAG.Phase3.CitationCheckThreshold,
+		c.RAG.Phase3.CitationCheckVersion,
+		c.RAG.Phase3.DomainTermTimeoutMS,
+		c.RAG.Phase3.ModelRewriteTimeoutMS,
+		c.RAG.Phase3.ModelRewriteShadowRatio,
 		c.RAG.Release.Enabled,
 		normalizeRAGReleaseStage(c.RAG.Release.Stage),
 		strings.Join(c.RAG.Release.InternalRoles, ","),
@@ -804,6 +1053,7 @@ func (c *Config) buildRAGStrategyDigest() string {
 		"flags":      c.RAG.FeatureFlags,
 		"thresholds": c.RAG.Thresholds,
 		"phase2":     c.RAG.Phase2,
+		"phase3":     c.RAG.Phase3,
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -868,6 +1118,88 @@ func (c *Config) writePhase1BaselineSnapshot(configPath string) error {
 	}
 	log.Printf("[RAG:L0] phase1 baseline snapshot created: %s", snapshotPath)
 	return nil
+}
+
+func (c *Config) writePhase2BaselineSnapshot(configPath string) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	baseDir := filepath.Dir(configPath)
+	snapshotDir := filepath.Join(baseDir, "docs", "baseline", "phase2")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		return fmt.Errorf("failed to create phase2 baseline dir: %w", err)
+	}
+	snapshotPath := filepath.Join(snapshotDir, "baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check phase2 baseline snapshot: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"snapshot_type":   "phase2_baseline",
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"config_version":  c.ConfigVersion,
+		"strategy_digest": c.buildRAGStrategyDigest(),
+		"rag": map[string]interface{}{
+			"enabled":       c.RAG.Enabled,
+			"environment":   c.RAG.Environment,
+			"feature_flags": c.RAG.FeatureFlags,
+			"thresholds":    c.RAG.Thresholds,
+			"phase2":        c.RAG.Phase2,
+			"phase3":        c.RAG.Phase3,
+			"release":       c.RAG.Release,
+		},
+		"evaluation_baseline": map[string]interface{}{
+			"dataset_path":      "scripts/evaluation/dataset.json",
+			"profile_path":      "scripts/evaluation/retrieval_strategy_profiles.example.json",
+			"baseline_profile":  "phase2_baseline",
+			"candidate_profile": "parent_child+advanced_rewrite",
+			"experiment_groups": []string{
+				"phase2_baseline",
+				"parent_child",
+				"parent_child+strategic_topk",
+				"parent_child+refusal",
+				"parent_child+advanced_rewrite",
+			},
+		},
+		"metrics_snapshot": map[string]interface{}{
+			"recall_at_k":        nil,
+			"mrr":                nil,
+			"ndcg":               nil,
+			"citation_precision": nil,
+			"retrieval_p95_ms":   nil,
+			"context_avg_tokens": nil,
+			"notes":              "Fill in after the frozen Phase 2 regression run completes.",
+		},
+		"rollback_contract": map[string]interface{}{
+			"phase2_main_path_unchanged": true,
+			"phase3_flags_independent":   true,
+			"rollback_target":            "phase2_baseline",
+		},
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase2 baseline snapshot: %w", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write phase2 baseline snapshot: %w", err)
+	}
+	log.Printf("[RAG:L0] phase2 baseline snapshot created: %s", snapshotPath)
+	return nil
+}
+
+func isValidParentChildFillStrategy(strategy string) bool {
+	switch strings.TrimSpace(strategy) {
+	case "parent_only", "sibling_window", "section_window", "child_first_with_parent_summary":
+		return true
+	default:
+		return false
+	}
+}
+
+func isNormalizedRatio(value float64) bool {
+	return value >= 0 && value <= 1
 }
 
 func normalizeRAGEnv(env string) string {
@@ -959,9 +1291,9 @@ type EmbeddingConfig struct {
 
 	// 服务配置
 	Provider string `yaml:"Provider"` // 向量模型提供商: ark, openai, ollama (默认 ark)
-	Model   string `yaml:"Model"`   // 模型 ID
-	BaseURL string `yaml:"BaseURL"` // API 基础 URL
-	Region  string `yaml:"Region"`  // 服务区域 (ark 专用)
+	Model    string `yaml:"Model"`    // 模型 ID
+	BaseURL  string `yaml:"BaseURL"`  // API 基础 URL
+	Region   string `yaml:"Region"`   // 服务区域 (ark 专用)
 
 	// 高级配置
 	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
