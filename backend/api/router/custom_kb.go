@@ -33,6 +33,7 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.POST("/retrieve", kb.Retrieve)
 	group.GET("/retrieve/audit/:request_id", kb.GetRetrieveAuditLog)
 	group.GET("/retrieve/audit", kb.ListRetrieveAuditLogs)
+	group.GET("/metrics/overview", kb.GetMetricsOverview)
 	group.POST("/ingest/pause", kb.PauseIngest)
 	group.POST("/ingest/resume", kb.ResumeIngest)
 	group.GET("/ingest/status", kb.GetIngestStatus)

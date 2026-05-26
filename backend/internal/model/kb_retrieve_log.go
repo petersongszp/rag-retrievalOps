@@ -145,6 +145,27 @@ func (d *_KBRetrieveLog) ListWithFilter(filter KBRetrieveLogListFilter) ([]*KBRe
 	return list, total, nil
 }
 
+func (d *_KBRetrieveLog) ListByCreatedAt(startTime, endTime time.Time, kbID *uint64) ([]*KBRetrieveLog, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+
+	filter := KBRetrieveLogListFilter{
+		KBID:      kbID,
+		StartTime: &startTime,
+		EndTime:   &endTime,
+	}
+
+	var list []*KBRetrieveLog
+	err := applyKBRetrieveLogFilters(getDB().Model(&KBRetrieveLog{}), filter).
+		Order("created_at ASC").
+		Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func applyKBRetrieveLogFilters(query *gorm.DB, filter KBRetrieveLogListFilter) *gorm.DB {
 	if filter.UserID != nil {
 		query = query.Where("user_id = ?", *filter.UserID)

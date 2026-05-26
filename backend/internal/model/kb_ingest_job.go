@@ -208,6 +208,25 @@ func (d *_KBIngestJob) List(status *KBIngestJobStatus, page, pageSize int) ([]*K
 	return list, total, nil
 }
 
+func (d *_KBIngestJob) ListByCreatedAt(startTime, endTime time.Time, kbID *uint64) ([]*KBIngestJob, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+
+	var list []*KBIngestJob
+	query := getDB().Model(&KBIngestJob{}).
+		Where("created_at >= ? AND created_at <= ?", startTime, endTime)
+	if kbID != nil {
+		query = query.Where("kb_id = ?", *kbID)
+	}
+
+	err := query.Order("created_at ASC").Find(&list).Error
+	if err != nil {
+		return nil, err
+	}
+	return list, nil
+}
+
 func (d *_KBIngestJob) ListPendingJobs(limit int) ([]*KBIngestJob, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
