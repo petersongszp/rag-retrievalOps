@@ -5,17 +5,13 @@ import '../styles/globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: '面试吧 - 知识库管理后台',
-  description: '知识库管理后台，用于管理面试吧的知识库内容',
+  title: '面试吧管理后台',
+  description: 'RAG 知识库管理控制台。',
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <html lang="zh-CN">
+    <html lang="en">
       <body className={inter.className}>{children}</body>
     </html>
   );

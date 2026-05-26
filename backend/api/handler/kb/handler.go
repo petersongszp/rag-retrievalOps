@@ -397,8 +397,27 @@ func ListJobs(ctx context.Context, c *app.RequestContext) {
 		status = &parsed
 	}
 
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
 	page, pageSize := getPagination(c)
-	items, total, err := model.KBIngestJobDao.List(status, page, pageSize)
+
+	var items []*model.KBIngestJob
+	var total int64
+	var err error
+	if kbID != nil {
+		items, total, err = model.KBIngestJobDao.ListByKbID(*kbID, status, page, pageSize)
+	} else {
+		items, total, err = model.KBIngestJobDao.List(status, page, pageSize)
+	}
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list jobs", err))
 		return
@@ -1748,4 +1767,56 @@ func GetIngestStatus(ctx context.Context, c *app.RequestContext) {
 
 	paused := mq.IsKnowledgeIngestPaused()
 	response.Success(ctx, c, map[string]interface{}{"paused": paused})
+}
+
+type dashboardStatsResponse struct {
+	KBCount            int64 `json:"kb_count"`
+	DocumentCount      int64 `json:"document_count"`
+	ProcessingJobCount int64 `json:"processing_job_count"`
+	FailedJobCount     int64 `json:"failed_job_count"`
+}
+
+func GetDashboardStats(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	kbCount, err := model.KBKnowledgeBaseDao.Count()
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count knowledge bases", err))
+		return
+	}
+
+	docCount, err := model.KBDocumentDao.CountNonDeleted()
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count documents", err))
+		return
+	}
+
+	processingCount, err := model.KBIngestJobDao.CountByStatuses([]model.KBIngestJobStatus{
+		model.KBIngestJobStatusPending,
+		model.KBIngestJobStatusProcessing,
+		model.KBIngestJobStatusRetrying,
+	})
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count processing jobs", err))
+		return
+	}
+
+	failedCount, err := model.KBIngestJobDao.CountByStatuses([]model.KBIngestJobStatus{
+		model.KBIngestJobStatusFailed,
+		model.KBIngestJobStatusDead,
+	})
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count failed jobs", err))
+		return
+	}
+
+	response.Success(ctx, c, dashboardStatsResponse{
+		KBCount:            kbCount,
+		DocumentCount:      docCount,
+		ProcessingJobCount: processingCount,
+		FailedJobCount:     failedCount,
+	})
 }

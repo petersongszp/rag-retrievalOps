@@ -31,13 +31,14 @@ func getTestConfig() *config.Config {
 	// 如果加载失败，返回基于环境变量的默认配置
 	return &config.Config{
 		Embedding: config.EmbeddingConfig{
-			APIKey:     getEnvOrDefault("EMBEDDING_API_KEY", ""), // 移除硬编码 Key
+			APIKey:     getEnvOrDefault("EMBEDDING_API_KEY", ""),
+			Provider:   getEnvOrDefault("EMBEDDING_PROVIDER", "ark"),
 			Model:      getEnvOrDefault("EMBEDDING_MODEL", "doubao-embedding-text-240715"),
 			BaseURL:    getEnvOrDefault("EMBEDDING_BASE_URL", "https://ark.cn-beijing.volces.com/api/v3/"),
 			Region:     getEnvOrDefault("EMBEDDING_REGION", "cn-beijing"),
 			Timeout:    30 * time.Second,
 			RetryTimes: 3,
-			Dimensions: 2560,
+			Dimensions: 2048,
 		},
 		DocumentSplitter: config.SplitterConfig{
 			ChunkSize:   500,

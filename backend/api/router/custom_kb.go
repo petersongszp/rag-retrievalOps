@@ -20,6 +20,7 @@ func registerKnowledgeBaseRoutes(r *server.Hertz) {
 }
 
 func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
+	group.GET("/dashboard/stats", kb.GetDashboardStats)
 	group.POST("/bases", kb.CreateKnowledgeBase)
 	group.GET("/bases", kb.ListKnowledgeBases)
 	group.POST("/documents/upload", kb.UploadDocument)
