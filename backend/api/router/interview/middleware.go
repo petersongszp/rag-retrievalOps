@@ -44,8 +44,10 @@ func AuthSkipper() serviceMiddleware.JWTSkipper {
 
 		// 临时让admin接口也跳过认证，方便创建测试数据
 		if strings.HasPrefix(path, "/api/admin/") {
-			// 在上下文中设置一个默认的测试用户ID
+			// 在上下文中设置一个默认的测试用户（admin 角色）
 			ctx.Set("user_id", uint(1))
+			ctx.Set("role", "admin")
+			ctx.Set("username", "admin")
 			return true
 		}
 

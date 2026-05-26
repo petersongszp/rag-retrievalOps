@@ -204,11 +204,12 @@ type LLMConfig struct {
 
 // RAGConfig RAG 鑳藉姏鎬诲紑鍏?
 type RAGConfig struct {
-	Enabled      bool            `yaml:"enabled"`
-	Environment  string          `yaml:"environment"`
-	FeatureFlags RAGFeatureFlags `yaml:"feature_flags"`
-	Thresholds   RAGThresholds   `yaml:"thresholds"`
-	Phase2       RAGPhase2Config `yaml:"phase2"`
+	Enabled      bool             `yaml:"enabled"`
+	Environment  string           `yaml:"environment"`
+	FeatureFlags RAGFeatureFlags  `yaml:"feature_flags"`
+	Thresholds   RAGThresholds    `yaml:"thresholds"`
+	Phase2       RAGPhase2Config  `yaml:"phase2"`
+	Release      RAGReleaseConfig `yaml:"release"`
 }
 
 type RAGFeatureFlags struct {
@@ -240,6 +241,15 @@ type RAGPhase2Config struct {
 	RewriteMaxExpansions int     `yaml:"rewrite_max_expansions"`
 	RerankTimeoutMS      int     `yaml:"rerank_timeout_ms"`
 	RerankModel          string  `yaml:"rerank_model"`
+}
+
+type RAGReleaseConfig struct {
+	Enabled       bool     `yaml:"enabled"`
+	Stage         string   `yaml:"stage"`
+	InternalRoles []string `yaml:"internal_roles"`
+	CanaryPercent int      `yaml:"canary_percent"`
+	BatchPercent  int      `yaml:"batch_percent"`
+	UserAllowlist []uint   `yaml:"user_allowlist"`
 }
 
 // RateLimitModelConfig 鍗曚釜妯″瀷鐨勯檺娴侀厤缃?
@@ -417,6 +427,23 @@ func (c *Config) ValidateRAGPrerequisites() error {
 			return fmt.Errorf("rag advanced rerank enabled but rag.phase2.rerank_model is empty")
 		}
 	}
+	if c.RAG.Release.Enabled {
+		if !isValidRAGReleaseStage(c.RAG.Release.Stage) {
+			return fmt.Errorf("rag release enabled but rag.release.stage must be one of phase1/internal/small_flow/batch/full, got %q", c.RAG.Release.Stage)
+		}
+		if c.RAG.Release.CanaryPercent < 0 || c.RAG.Release.CanaryPercent > 100 {
+			return fmt.Errorf("rag release enabled but rag.release.canary_percent must be within [0,100], got %d", c.RAG.Release.CanaryPercent)
+		}
+		if c.RAG.Release.BatchPercent < 0 || c.RAG.Release.BatchPercent > 100 {
+			return fmt.Errorf("rag release enabled but rag.release.batch_percent must be within [0,100], got %d", c.RAG.Release.BatchPercent)
+		}
+		if normalizeRAGReleaseStage(c.RAG.Release.Stage) == "small_flow" && c.RAG.Release.CanaryPercent <= 0 {
+			return fmt.Errorf("rag release enabled but rag.release.canary_percent must be > 0 when stage=small_flow")
+		}
+		if normalizeRAGReleaseStage(c.RAG.Release.Stage) == "batch" && c.RAG.Release.BatchPercent <= 0 {
+			return fmt.Errorf("rag release enabled but rag.release.batch_percent must be > 0 when stage=batch")
+		}
+	}
 
 	return nil
 }
@@ -474,6 +501,18 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if strings.TrimSpace(c.RAG.Phase2.RerankModel) == "" {
 		c.RAG.Phase2.RerankModel = "jaccard-v1"
+	}
+	if strings.TrimSpace(c.RAG.Release.Stage) == "" {
+		c.RAG.Release.Stage = "full"
+	}
+	if len(c.RAG.Release.InternalRoles) == 0 {
+		c.RAG.Release.InternalRoles = []string{"admin"}
+	}
+	if c.RAG.Release.CanaryPercent <= 0 {
+		c.RAG.Release.CanaryPercent = 5
+	}
+	if c.RAG.Release.BatchPercent <= 0 {
+		c.RAG.Release.BatchPercent = 25
 	}
 }
 
@@ -594,6 +633,32 @@ func (c *Config) applyRAGEnvOverrides() error {
 	if value, ok := os.LookupEnv("RAG_RERANK_MODEL"); ok {
 		c.RAG.Phase2.RerankModel = strings.TrimSpace(value)
 	}
+	if value, ok, err := readEnvBool("RAG_RELEASE_ENABLED"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Release.Enabled = value
+	}
+	if value, ok := os.LookupEnv("RAG_RELEASE_STAGE"); ok {
+		c.RAG.Release.Stage = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("RAG_RELEASE_CANARY_PERCENT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Release.CanaryPercent = value
+	}
+	if value, ok, err := readEnvInt("RAG_RELEASE_BATCH_PERCENT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Release.BatchPercent = value
+	}
+	if value, ok := os.LookupEnv("RAG_RELEASE_INTERNAL_ROLES"); ok {
+		c.RAG.Release.InternalRoles = readEnvCSVStrings(value)
+	}
+	if values, ok, err := readEnvUintSlice("RAG_RELEASE_USER_ALLOWLIST"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Release.UserAllowlist = values
+	}
 	return nil
 }
 
@@ -611,7 +676,7 @@ func (c *Config) LogRAGSnapshot() {
 		return
 	}
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -638,6 +703,12 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.Phase2.RewriteMaxExpansions,
 		c.RAG.Phase2.RerankTimeoutMS,
 		c.RAG.Phase2.RerankModel,
+		c.RAG.Release.Enabled,
+		normalizeRAGReleaseStage(c.RAG.Release.Stage),
+		strings.Join(c.RAG.Release.InternalRoles, ","),
+		c.RAG.Release.CanaryPercent,
+		c.RAG.Release.BatchPercent,
+		len(c.RAG.Release.UserAllowlist),
 		maskAddress(c.Milvus.Address),
 		c.Milvus.DatabaseName,
 		c.Milvus.CollectionName,
@@ -691,6 +762,38 @@ func readEnvFloat64(key string) (float64, bool, error) {
 	return value, true, nil
 }
 
+func readEnvUintSlice(key string) ([]uint, bool, error) {
+	raw, ok := os.LookupEnv(key)
+	if !ok {
+		return nil, false, nil
+	}
+	values := readEnvCSVStrings(raw)
+	if len(values) == 0 {
+		return []uint{}, true, nil
+	}
+	result := make([]uint, 0, len(values))
+	for _, value := range values {
+		parsed, err := strconv.ParseUint(value, 10, 64)
+		if err != nil {
+			return nil, true, fmt.Errorf("invalid uint list env %s=%q: %w", key, raw, err)
+		}
+		result = append(result, uint(parsed))
+	}
+	return result, true, nil
+}
+
+func readEnvCSVStrings(raw string) []string {
+	parts := strings.Split(raw, ",")
+	result := make([]string, 0, len(parts))
+	for _, part := range parts {
+		value := strings.TrimSpace(part)
+		if value != "" {
+			result = append(result, value)
+		}
+	}
+	return result
+}
+
 func (c *Config) buildRAGStrategyDigest() string {
 	if c == nil {
 		return "unknown"
@@ -739,6 +842,7 @@ func (c *Config) writePhase1BaselineSnapshot(configPath string) error {
 			"feature_flags": c.RAG.FeatureFlags,
 			"thresholds":    c.RAG.Thresholds,
 			"phase2":        c.RAG.Phase2,
+			"release":       c.RAG.Release,
 		},
 		"metrics_snapshot": map[string]interface{}{
 			"recall_at_10":       nil,
@@ -785,6 +889,32 @@ func normalizeRAGEnv(env string) string {
 func isValidRAGEnv(env string) bool {
 	switch normalizeRAGEnv(env) {
 	case "dev", "staging", "prod":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeRAGReleaseStage(stage string) string {
+	switch strings.ToLower(strings.TrimSpace(stage)) {
+	case "", "full", "all":
+		return "full"
+	case "phase1", "rollback", "off":
+		return "phase1"
+	case "internal":
+		return "internal"
+	case "small_flow", "small-flow", "canary":
+		return "small_flow"
+	case "batch", "batch_flow", "batch-flow":
+		return "batch"
+	default:
+		return strings.ToLower(strings.TrimSpace(stage))
+	}
+}
+
+func isValidRAGReleaseStage(stage string) bool {
+	switch normalizeRAGReleaseStage(stage) {
+	case "phase1", "internal", "small_flow", "batch", "full":
 		return true
 	default:
 		return false

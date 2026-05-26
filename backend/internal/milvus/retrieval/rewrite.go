@@ -224,16 +224,41 @@ func tokenizeRewriteTerms(text string) []string {
 	if strings.TrimSpace(text) == "" {
 		return nil
 	}
-	parts := strings.FieldsFunc(strings.ToLower(text), func(r rune) bool {
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			return false
+	lower := strings.ToLower(text)
+	// 先按非字母数字字符拆分，再在中英文边界处拆分
+	var tokens []string
+	var current strings.Builder
+	var prevIsCJK bool
+	for _, r := range lower {
+		if !unicode.IsLetter(r) && !unicode.IsNumber(r) {
+			// 非字母数字字符：拆分
+			if current.Len() > 0 {
+				tokens = append(tokens, current.String())
+				current.Reset()
+			}
+			prevIsCJK = false
+			continue
 		}
-		return true
-	})
-	seen := make(map[string]struct{}, len(parts))
-	out := make([]string, 0, len(parts))
-	for _, part := range parts {
-		normalized := normalizeRewriteTerm(part)
+		isCJK := isCJKUnified(r)
+		if isCJK && !prevIsCJK && current.Len() > 0 {
+			// 英文 → 中文边界：拆分
+			tokens = append(tokens, current.String())
+			current.Reset()
+		} else if !isCJK && prevIsCJK && current.Len() > 0 {
+			// 中文 → 英文边界：拆分
+			tokens = append(tokens, current.String())
+			current.Reset()
+		}
+		current.WriteRune(r)
+		prevIsCJK = isCJK
+	}
+	if current.Len() > 0 {
+		tokens = append(tokens, current.String())
+	}
+	seen := make(map[string]struct{}, len(tokens))
+	out := make([]string, 0, len(tokens))
+	for _, token := range tokens {
+		normalized := normalizeRewriteTerm(token)
 		if normalized == "" {
 			continue
 		}
@@ -244,6 +269,14 @@ func tokenizeRewriteTerms(text string) []string {
 		out = append(out, normalized)
 	}
 	return out
+}
+
+// isCJKUnified 检测是否为 CJK 统一汉字（包括扩展）
+func isCJKUnified(r rune) bool {
+	return (r >= 0x4E00 && r <= 0x9FFF) || // CJK Unified Ideographs
+		(r >= 0x3400 && r <= 0x4DBF) || // CJK Unified Ideographs Extension A
+		(r >= 0x20000 && r <= 0x2A6DF) || // CJK Unified Ideographs Extension B
+		(r >= 0xF900 && r <= 0xFAFF) // CJK Compatibility Ideographs
 }
 
 func normalizeRewriteTerm(term string) string {

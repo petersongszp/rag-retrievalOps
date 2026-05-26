@@ -21,6 +21,12 @@ var (
 	retrieveRouteRequests *prometheus.CounterVec
 	retrieveRouteDuration *prometheus.HistogramVec
 	retrieveRouteHits     *prometheus.HistogramVec
+	retrieveStrategyTotal *prometheus.CounterVec
+	retrieveEmptyReason   *prometheus.CounterVec
+	retrieveRewriteTotal  *prometheus.CounterVec
+	retrieveRerankLatency *prometheus.HistogramVec
+	retrieveRouteContrib  *prometheus.CounterVec
+	releaseRollbackTotal  *prometheus.CounterVec
 
 	ingestJobsTotal *prometheus.CounterVec
 	ingestDuration  *prometheus.HistogramVec
@@ -83,6 +89,49 @@ func registerCollectors() {
 			},
 			[]string{"route"},
 		)
+		retrieveStrategyTotal = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_retrieve_strategy_total",
+				Help: "Total retrieve requests by effective strategy, release stage and decision reason.",
+			},
+			[]string{"strategy", "release_stage", "reason", "status"},
+		)
+		retrieveEmptyReason = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_retrieve_empty_reason_total",
+				Help: "Empty-result reasons by strategy and release stage.",
+			},
+			[]string{"strategy", "release_stage", "empty_reason"},
+		)
+		retrieveRewriteTotal = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_retrieve_rewrite_total",
+				Help: "Rewrite applied counters by release stage and strategy.",
+			},
+			[]string{"strategy", "release_stage", "applied"},
+		)
+		retrieveRerankLatency = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "rag_retrieve_rerank_duration_seconds",
+				Help:    "Rerank latency in seconds by release stage, model and status.",
+				Buckets: []float64{0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.2, 0.35, 0.5, 0.75, 1, 1.5, 2},
+			},
+			[]string{"release_stage", "strategy", "model", "status"},
+		)
+		retrieveRouteContrib = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_retrieve_route_contribution_total",
+				Help: "Final result contribution by route, strategy and release stage.",
+			},
+			[]string{"route", "strategy", "release_stage"},
+		)
+		releaseRollbackTotal = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_release_rollback_total",
+				Help: "Runtime release rollback and recovery actions.",
+			},
+			[]string{"action", "target_stage"},
+		)
 		ingestJobsTotal = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "rag_ingest_jobs_total",
@@ -134,6 +183,12 @@ func registerCollectors() {
 			retrieveRouteRequests,
 			retrieveRouteDuration,
 			retrieveRouteHits,
+			retrieveStrategyTotal,
+			retrieveEmptyReason,
+			retrieveRewriteTotal,
+			retrieveRerankLatency,
+			retrieveRouteContrib,
+			releaseRollbackTotal,
 			ingestJobsTotal,
 			ingestDuration,
 			errorTotal,
@@ -171,6 +226,68 @@ func ObserveRetrieveRoute(route string, duration time.Duration, status, errorCod
 	if e != "none" {
 		errorTotal.WithLabelValues("retrieve_route", e).Inc()
 	}
+}
+
+func ObserveRetrieveStrategy(strategy, releaseStage, reason, status string) {
+	registerCollectors()
+	retrieveStrategyTotal.WithLabelValues(
+		sanitizeLabel(strategy, "unknown"),
+		sanitizeLabel(releaseStage, "unknown"),
+		sanitizeLabel(reason, "none"),
+		sanitizeLabel(status, "unknown"),
+	).Inc()
+}
+
+func ObserveRetrieveEmptyReason(strategy, releaseStage, emptyReason string) {
+	registerCollectors()
+	retrieveEmptyReason.WithLabelValues(
+		sanitizeLabel(strategy, "unknown"),
+		sanitizeLabel(releaseStage, "unknown"),
+		sanitizeLabel(emptyReason, "none"),
+	).Inc()
+}
+
+func ObserveRetrieveRewrite(strategy, releaseStage string, applied bool) {
+	registerCollectors()
+	appliedLabel := "false"
+	if applied {
+		appliedLabel = "true"
+	}
+	retrieveRewriteTotal.WithLabelValues(
+		sanitizeLabel(strategy, "unknown"),
+		sanitizeLabel(releaseStage, "unknown"),
+		appliedLabel,
+	).Inc()
+}
+
+func ObserveRetrieveRerank(strategy, releaseStage, model, status string, duration time.Duration) {
+	registerCollectors()
+	retrieveRerankLatency.WithLabelValues(
+		sanitizeLabel(releaseStage, "unknown"),
+		sanitizeLabel(strategy, "unknown"),
+		sanitizeLabel(model, "none"),
+		sanitizeLabel(status, "none"),
+	).Observe(duration.Seconds())
+}
+
+func ObserveRetrieveRouteContribution(route, strategy, releaseStage string, count int) {
+	registerCollectors()
+	if count <= 0 {
+		return
+	}
+	retrieveRouteContrib.WithLabelValues(
+		sanitizeLabel(route, "unknown"),
+		sanitizeLabel(strategy, "unknown"),
+		sanitizeLabel(releaseStage, "unknown"),
+	).Add(float64(count))
+}
+
+func ObserveReleaseRollback(action, targetStage string) {
+	registerCollectors()
+	releaseRollbackTotal.WithLabelValues(
+		sanitizeLabel(action, "unknown"),
+		sanitizeLabel(targetStage, "unknown"),
+	).Inc()
 }
 
 func ObserveIngest(duration time.Duration, status, errorCode string) {

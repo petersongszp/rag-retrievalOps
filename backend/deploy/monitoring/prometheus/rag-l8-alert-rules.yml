@@ -1,0 +1,56 @@
+groups:
+- name: rag-l8-release-alerts
+  rules:
+  - alert: RAGReleaseP95LatencyHigh
+    expr: |
+      histogram_quantile(0.95, sum(rate(rag_retrieve_duration_seconds_bucket[10m])) by (le)) > 2
+    for: 10m
+    labels:
+      severity: p2
+      service: rag
+      layer: l8
+    annotations:
+      summary: "RAG release P95 latency is high"
+      description: "Retrieve P95 latency is above 2s for 10m. Consider /api/admin/kb/release/summary and rollback."
+
+  - alert: RAGReleaseEmptyAfterFilterHigh
+    expr: |
+      sum(rate(rag_retrieve_empty_reason_total{empty_reason="empty_after_filter"}[10m]))
+      /
+      clamp_min(sum(rate(rag_retrieve_strategy_total{strategy="phase2"}[10m])), 0.001)
+      > 0.15
+    for: 10m
+    labels:
+      severity: p1
+      service: rag
+      layer: l8
+    annotations:
+      summary: "RAG phase2 Empty-After-Filter ratio is high"
+      description: "Phase2 Empty-After-Filter ratio is above 15% for 10m. Roll back hybrid/rewrite/topk if this persists."
+
+  - alert: RAGReleaseRerankLatencyHigh
+    expr: |
+      histogram_quantile(0.95, sum(rate(rag_retrieve_rerank_duration_seconds_bucket{strategy="phase2"}[10m])) by (le)) > 0.8
+    for: 10m
+    labels:
+      severity: p2
+      service: rag
+      layer: l8
+    annotations:
+      summary: "RAG rerank P95 latency is high"
+      description: "Phase2 rerank P95 latency is above 800ms for 10m. Consider disabling advanced rerank."
+
+  - alert: RAGReleasePhase2ErrorRateHigh
+    expr: |
+      sum(rate(rag_retrieve_strategy_total{strategy="phase2",status=~"error|timeout"}[5m]))
+      /
+      clamp_min(sum(rate(rag_retrieve_strategy_total{strategy="phase2"}[5m])), 0.001)
+      > 0.03
+    for: 5m
+    labels:
+      severity: p1
+      service: rag
+      layer: l8
+    annotations:
+      summary: "RAG phase2 error rate is high"
+      description: "Phase2 error or timeout rate is above 3% for 5m. Use runtime rollback if needed."

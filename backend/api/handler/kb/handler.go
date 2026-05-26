@@ -26,6 +26,7 @@ import (
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
+	"interview-agents/internal/rag/release"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
 
@@ -37,12 +38,14 @@ import (
 )
 
 const (
-	defaultKBPageSize      = 10
-	defaultRetrieveTopK    = 5
-	defaultRetrieveTimeout = 3 * time.Second
-	maxRetrieveTopK        = 20
-	maxKnowledgeFileSize   = 20 * 1024 * 1024
-	knowledgeUploadFormKey = "file"
+	defaultKBPageSize            = 10
+	defaultRetrieveTopK          = 5
+	defaultRetrieveTimeout       = 3 * time.Second
+	maxRetrieveTopK              = 20
+	maxKnowledgeFileSize         = 20 * 1024 * 1024
+	knowledgeUploadFormKey       = "file"
+	defaultReleaseSummaryMinutes = 60
+	maxReleaseSummaryMinutes     = 7 * 24 * 60
 )
 
 var (
@@ -115,6 +118,32 @@ type retrieveItem struct {
 type retrieveResponse struct {
 	RequestID string         `json:"request_id"`
 	Items     []retrieveItem `json:"items"`
+}
+
+type releaseStatusResponse struct {
+	Config          config.RAGReleaseConfig `json:"config"`
+	RuntimeOverride release.RuntimeOverride `json:"runtime_override"`
+	EffectiveStage  string                  `json:"effective_stage"`
+	CurrentStrategy string                  `json:"current_strategy"`
+	StagePlan       []string                `json:"stage_plan"`
+	RollbackPlan    []string                `json:"rollback_plan"`
+}
+
+type releaseSummaryResponse struct {
+	WindowMinutes       int            `json:"window_minutes"`
+	Since               time.Time      `json:"since"`
+	TotalRequests       int            `json:"total_requests"`
+	StrategyCounts      map[string]int `json:"strategy_counts"`
+	ReleaseStageCounts  map[string]int `json:"release_stage_counts"`
+	ResultStatusCounts  map[string]int `json:"result_status_counts"`
+	EmptyReasonCounts   map[string]int `json:"empty_reason_counts"`
+	RouteContribution   map[string]int `json:"route_contribution"`
+	RewriteAppliedRate  float64        `json:"rewrite_applied_rate"`
+	P95DurationMs       int64          `json:"p95_duration_ms"`
+	P95RerankMs         int64          `json:"p95_rerank_ms"`
+	RollbackRecommended bool           `json:"rollback_recommended"`
+	Risks               []string       `json:"risks"`
+	AcceptanceTemplate  string         `json:"acceptance_template"`
 }
 
 func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
@@ -687,7 +716,9 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.Error(ctx, c, 503, "Retriever is not initialized")
 		return
 	}
-	useHybrid := config.Global.RAG.FeatureFlags.EnableHybridRetrieval && manager.GetHybridRetriever() != nil
+	phase2Available := config.Global.RAG.FeatureFlags.EnableHybridRetrieval && manager.GetHybridRetriever() != nil
+	releaseDecision := release.Decide(config.Global.RAG, phase2Available, userID, middleware.GetUserRole(c))
+	useHybrid := releaseDecision.UsePhase2 && manager.GetHybridRetriever() != nil
 
 	topK := clampTopK(req.TopK)
 	activeKBIDs, err := model.KBKnowledgeBaseDao.ListIDsByStatus(model.KBKnowledgeBaseStatusActive)
@@ -723,7 +754,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchErr    error
 	)
 	if useHybrid {
-		docs, hybridErr := manager.GetHybridRetriever().Search(retrieveCtx, req.Query, &retrieval.RetrieveOptions{
+		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, &retrieval.RetrieveOptions{
 			TopK:             topK,
 			Collection:       collection,
 			KBScope:          "global",
@@ -731,41 +762,60 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			RequestID:        requestID,
 			OriginalQuery:    req.Query,
 		})
-		searchResult = &retrieval.SearchResult{
-			Documents: docs,
-			Metrics: retrieval.SearchMetrics{
-				SearchMs:      time.Since(start).Milliseconds(),
-				HitCount:      len(docs),
-				FinalTopK:     topK,
-				CandidateTopK: topK,
-			},
-		}
-		searchErr = hybridErr
 	} else {
 		searchResult, searchErr = retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	}
 	durationMs := time.Since(start).Milliseconds()
+	if searchResult == nil {
+		searchResult = &retrieval.SearchResult{}
+	}
+	searchResult.Metrics.Strategy = releaseDecision.Strategy
+	searchResult.Metrics.ReleaseStage = releaseDecision.Stage
+	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
+	if searchResult.Metrics.RetrieverVersion == "" {
+		if useHybrid {
+			searchResult.Metrics.RetrieverVersion = retrieval.HybridRetrieverVersion
+		} else {
+			searchResult.Metrics.RetrieverVersion = retrieval.DenseRetrieverVersion
+		}
+	}
 	if searchErr != nil {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(searchErr, retrieveCtx)
+		metrics.ObserveRetrieveStrategy(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, releaseDecision.Reason, metricsStatus)
+		metrics.ObserveRetrieveEmptyReason(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve))
 		persistRetrieveLog(&model.KBRetrieveLog{
-			RequestID:      requestID,
-			UserID:         userID,
-			KBIDs:          formatKBIDs(kbIDs),
-			Query:          req.Query,
-			FinalQuery:     req.Query,
-			Expr:           expr,
-			TopK:           topK,
-			CandidateTopK:  searchResult.Metrics.CandidateTopK,
-			FinalTopK:      searchResult.Metrics.FinalTopK,
-			TokenBudget:    searchResult.Metrics.TokenBudget,
-			TruncateReason: searchResult.Metrics.TruncateReason,
-			Routes:         resolveRetrieveRoutes(useHybrid),
-			Collection:     collection,
-			ResultStatus:   classifyRetrieveResultStatus(metricsStatus),
-			ErrorCode:      metricsErrorCode,
-			ErrorMsg:       searchErr.Error(),
-			DurationMs:     durationMs,
-			TimeoutMs:      retrieveTimeout.Milliseconds(),
+			RequestID:          requestID,
+			UserID:             userID,
+			KBIDs:              formatKBIDs(kbIDs),
+			Query:              req.Query,
+			FinalQuery:         req.Query,
+			Expr:               expr,
+			TopK:               topK,
+			CandidateTopK:      searchResult.Metrics.CandidateTopK,
+			FinalTopK:          searchResult.Metrics.FinalTopK,
+			TokenBudget:        searchResult.Metrics.TokenBudget,
+			TruncateReason:     searchResult.Metrics.TruncateReason,
+			Strategy:           searchResult.Metrics.Strategy,
+			ReleaseStage:       searchResult.Metrics.ReleaseStage,
+			ReleaseReason:      searchResult.Metrics.ReleaseReason,
+			Routes:             resolveRetrieveRoutes(useHybrid),
+			Collection:         collection,
+			RetrieverVersion:   searchResult.Metrics.RetrieverVersion,
+			EmptyReason:        firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
+			ResultStatus:       classifyRetrieveResultStatus(metricsStatus),
+			ErrorCode:          metricsErrorCode,
+			ErrorMsg:           searchErr.Error(),
+			EmbeddingMs:        searchResult.Metrics.EmbeddingMs,
+			SearchMs:           searchResult.Metrics.SearchMs,
+			PostprocessMs:      searchResult.Metrics.PostprocessMs,
+			RerankMs:           searchResult.Metrics.RerankMs,
+			RerankModel:        searchResult.Metrics.RerankModel,
+			DenseHits:          searchResult.Metrics.DenseHits,
+			SparseHits:         searchResult.Metrics.SparseHits,
+			DenseContribution:  searchResult.Metrics.DenseContribution,
+			SparseContribution: searchResult.Metrics.SparseContribution,
+			DurationMs:         durationMs,
+			TimeoutMs:          retrieveTimeout.Milliseconds(),
 		})
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
@@ -773,6 +823,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	docs := searchResult.Documents
 	searchMetrics := searchResult.Metrics
+	annotateRetrieveDocs(docs, collection, searchMetrics.RetrieverVersion, useHybrid)
 
 	allowedKBs := make(map[uint64]struct{}, len(kbIDs))
 	for _, id := range kbIDs {
@@ -812,54 +863,82 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			},
 			Source: source{
 				Route:            route,
-				Collection:       collection,
-				RetrieverVersion: "v1",
+				Collection:       firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
+				RetrieverVersion: firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
 			},
 		})
 	}
 
 	resultStatus := model.RetrieveResultStatusSuccess
+	emptyReason := searchMetrics.EmptyReason
 	if len(items) == 0 {
 		if searchMetrics.HitCount > 0 {
 			resultStatus = model.RetrieveResultStatusFilteredOut
+			emptyReason = firstNonEmptyString(emptyReason, retrieval.EmptyReasonAfterFilter)
 		} else {
 			resultStatus = model.RetrieveResultStatusNoResult
+			emptyReason = firstNonEmptyString(emptyReason, retrieval.EmptyReasonAfterRetrieve)
 		}
+	} else {
+		emptyReason = firstNonEmptyString(emptyReason, retrieval.EmptyReasonNone)
 	}
+	searchMetrics.EmptyReason = emptyReason
+
+	metrics.ObserveRetrieveStrategy(searchMetrics.Strategy, searchMetrics.ReleaseStage, searchMetrics.ReleaseReason, string(resultStatus))
+	metrics.ObserveRetrieveEmptyReason(searchMetrics.Strategy, searchMetrics.ReleaseStage, emptyReason)
+	metrics.ObserveRetrieveRewrite(searchMetrics.Strategy, searchMetrics.ReleaseStage, searchMetrics.RewriteApplied || extractRewriteApplied(docs))
+	if searchMetrics.RerankMs > 0 {
+		metrics.ObserveRetrieveRerank(searchMetrics.Strategy, searchMetrics.ReleaseStage, firstNonEmptyString(searchMetrics.RerankModel, "none"), "ok", time.Duration(searchMetrics.RerankMs)*time.Millisecond)
+	}
+	metrics.ObserveRetrieveRouteContribution("dense", searchMetrics.Strategy, searchMetrics.ReleaseStage, countRoute(items, "dense"))
+	metrics.ObserveRetrieveRouteContribution("sparse", searchMetrics.Strategy, searchMetrics.ReleaseStage, countRoute(items, "sparse"))
 
 	retrieveLog := &model.KBRetrieveLog{
-		RequestID:        requestID,
-		UserID:           userID,
-		KBIDs:            formatKBIDs(kbIDs),
-		Query:            req.Query,
-		FinalQuery:       firstNonEmptyString(extractFinalQuery(docs), req.Query),
-		Expr:             expr,
-		TopK:             topK,
-		CandidateTopK:    searchMetrics.CandidateTopK,
-		FinalTopK:        searchMetrics.FinalTopK,
-		TokenBudget:      searchMetrics.TokenBudget,
-		TruncateReason:   searchMetrics.TruncateReason,
-		Rewrite:          extractRewriteQuery(docs),
-		RewriteStrategy:  extractRewriteStrategy(docs),
-		RewriteApplied:   extractRewriteApplied(docs),
-		Routes:           resolveRetrieveRoutes(useHybrid),
-		Collection:       collection,
-		RetrieverVersion: "v1",
-		FinalCount:       len(items),
-		TruncatedCount:   searchMetrics.TruncatedCount,
-		ResultStatus:     resultStatus,
-		EmbeddingMs:      searchMetrics.EmbeddingMs,
-		SearchMs:         searchMetrics.SearchMs,
-		PostprocessMs:    searchMetrics.PostprocessMs,
-		DurationMs:       durationMs,
-		TimeoutMs:        retrieveTimeout.Milliseconds(),
+		RequestID:          requestID,
+		UserID:             userID,
+		KBIDs:              formatKBIDs(kbIDs),
+		Query:              req.Query,
+		FinalQuery:         firstNonEmptyString(extractFinalQuery(docs), req.Query),
+		Expr:               expr,
+		TopK:               topK,
+		CandidateTopK:      searchMetrics.CandidateTopK,
+		FinalTopK:          searchMetrics.FinalTopK,
+		TokenBudget:        searchMetrics.TokenBudget,
+		TruncateReason:     searchMetrics.TruncateReason,
+		Rewrite:            extractRewriteQuery(docs),
+		RewriteStrategy:    extractRewriteStrategy(docs),
+		RewriteApplied:     searchMetrics.RewriteApplied || extractRewriteApplied(docs),
+		Strategy:           searchMetrics.Strategy,
+		ReleaseStage:       searchMetrics.ReleaseStage,
+		ReleaseReason:      searchMetrics.ReleaseReason,
+		Routes:             resolveRetrieveRoutes(useHybrid),
+		Collection:         collection,
+		RetrieverVersion:   searchMetrics.RetrieverVersion,
+		EmptyReason:        emptyReason,
+		FinalCount:         len(items),
+		TruncatedCount:     searchMetrics.TruncatedCount,
+		DenseHits:          searchMetrics.DenseHits,
+		SparseHits:         searchMetrics.SparseHits,
+		DenseContribution:  searchMetrics.DenseContribution,
+		SparseContribution: searchMetrics.SparseContribution,
+		ResultStatus:       resultStatus,
+		EmbeddingMs:        searchMetrics.EmbeddingMs,
+		SearchMs:           searchMetrics.SearchMs,
+		PostprocessMs:      searchMetrics.PostprocessMs,
+		RerankMs:           searchMetrics.RerankMs,
+		RerankModel:        searchMetrics.RerankModel,
+		DurationMs:         durationMs,
+		TimeoutMs:          retrieveTimeout.Milliseconds(),
 	}
 	persistRetrieveLog(retrieveLog)
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] request_id=%s query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%q final_count=%d hit_count=%d truncated_count=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
+			retrieveLog.Strategy,
+			retrieveLog.ReleaseStage,
+			retrieveLog.ReleaseReason,
 			req.Query,
 			retrieveLog.FinalQuery,
 			retrieveLog.Rewrite,
@@ -878,6 +957,12 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			len(items),
 			searchMetrics.HitCount,
 			searchMetrics.TruncatedCount,
+			retrieveLog.EmptyReason,
+			retrieveLog.DenseHits,
+			retrieveLog.SparseHits,
+			retrieveLog.DenseContribution,
+			retrieveLog.SparseContribution,
+			retrieveLog.RerankMs,
 			durationMs,
 			searchMetrics.EmbeddingMs,
 			searchMetrics.SearchMs,
@@ -1345,6 +1430,70 @@ func formatKBIDs(ids []uint64) string {
 	return strings.Join(parts, ",")
 }
 
+func annotateRetrieveDocs(docs []*schema.Document, collection, retrieverVersion string, useHybrid bool) {
+	for _, doc := range docs {
+		if doc == nil {
+			continue
+		}
+		if doc.MetaData == nil {
+			doc.MetaData = make(map[string]interface{})
+		}
+		doc.MetaData["collection"] = firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection)
+		doc.MetaData["retriever_version"] = firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), retrieverVersion)
+		if getStringMetadata(doc.MetaData, "route") == "" {
+			if useHybrid {
+				doc.MetaData["route"] = "hybrid"
+			} else {
+				doc.MetaData["route"] = "dense"
+			}
+		}
+	}
+}
+
+func countRoute(items []retrieveItem, route string) int {
+	total := 0
+	for _, item := range items {
+		if strings.EqualFold(strings.TrimSpace(item.Source.Route), route) {
+			total++
+		}
+	}
+	return total
+}
+
+func percentileInt64(values []int64, q float64) int64 {
+	if len(values) == 0 {
+		return 0
+	}
+	if q <= 0 {
+		q = 0
+	}
+	if q >= 1 {
+		q = 1
+	}
+	sorted := append([]int64(nil), values...)
+	for i := 0; i < len(sorted); i++ {
+		for j := i + 1; j < len(sorted); j++ {
+			if sorted[j] < sorted[i] {
+				sorted[i], sorted[j] = sorted[j], sorted[i]
+			}
+		}
+	}
+	index := int(float64(len(sorted)-1) * q)
+	return sorted[index]
+}
+
+func requireAdmin(ctx context.Context, c *app.RequestContext) bool {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return false
+	}
+	if !strings.EqualFold(strings.TrimSpace(middleware.GetUserRole(c)), "admin") {
+		response.Error(ctx, c, 403, "admin role required")
+		return false
+	}
+	return true
+}
+
 func GetRetrieveAuditLog(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -1420,6 +1569,174 @@ func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 		Page:     page,
 		PageSize: pageSize,
 	})
+}
+
+func GetReleaseStatus(ctx context.Context, c *app.RequestContext) {
+	if !requireAdmin(ctx, c) {
+		return
+	}
+
+	stage := config.Global.RAG.Release.Stage
+	strategy := release.StrategyPhase1
+	if config.Global.RAG.FeatureFlags.EnableHybridRetrieval {
+		strategy = release.StrategyPhase2
+	}
+	override := release.GetRuntimeOverride()
+	if override.Active {
+		stage = override.Stage
+		if release.NormalizeStage(stage) == release.StagePhase1 {
+			strategy = release.StrategyPhase1
+		}
+	} else if !config.Global.RAG.Release.Enabled {
+		stage = "legacy_full"
+	} else if release.NormalizeStage(stage) == release.StagePhase1 {
+		strategy = release.StrategyPhase1
+	}
+
+	response.Success(ctx, c, releaseStatusResponse{
+		Config:          config.Global.RAG.Release,
+		RuntimeOverride: override,
+		EffectiveStage:  stage,
+		CurrentStrategy: strategy,
+		StagePlan:       release.StagePlan(stage, config.Global.RAG.Release),
+		RollbackPlan:    release.RollbackPlan(),
+	})
+}
+
+func RollbackRelease(ctx context.Context, c *app.RequestContext) {
+	if !requireAdmin(ctx, c) {
+		return
+	}
+
+	userID := middleware.GetUserID(c)
+	reason := firstNonEmptyString(strings.TrimSpace(string(c.Query("reason"))), strings.TrimSpace(c.PostForm("reason")), "manual_rollback")
+	override := release.SetRuntimeOverride(release.StagePhase1, reason, userID)
+	metrics.ObserveReleaseRollback("rollback", release.StagePhase1)
+	response.Success(ctx, c, map[string]interface{}{
+		"rolled_back":      true,
+		"runtime_override": override,
+		"rollback_plan":    release.RollbackPlan(),
+	})
+}
+
+func ActivateRelease(ctx context.Context, c *app.RequestContext) {
+	if !requireAdmin(ctx, c) {
+		return
+	}
+
+	release.ClearRuntimeOverride()
+	metrics.ObserveReleaseRollback("resume", release.NormalizeStage(config.Global.RAG.Release.Stage))
+	response.Success(ctx, c, map[string]interface{}{
+		"rolled_back":      false,
+		"runtime_override": release.GetRuntimeOverride(),
+		"stage_plan":       release.StagePlan(config.Global.RAG.Release.Stage, config.Global.RAG.Release),
+	})
+}
+
+func GetReleaseSummary(ctx context.Context, c *app.RequestContext) {
+	if !requireAdmin(ctx, c) {
+		return
+	}
+
+	minutes := getIntWithDefault(string(c.Query("minutes")), defaultReleaseSummaryMinutes)
+	if minutes <= 0 {
+		minutes = defaultReleaseSummaryMinutes
+	}
+	if minutes > maxReleaseSummaryMinutes {
+		minutes = maxReleaseSummaryMinutes
+	}
+
+	since := time.Now().Add(-time.Duration(minutes) * time.Minute)
+	var logs []*model.KBRetrieveLog
+	if err := repository.GetDB().Where("created_at >= ?", since).Order("created_at DESC").Find(&logs).Error; err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load release summary logs", err))
+		return
+	}
+
+	summary := buildReleaseSummary(minutes, since, logs)
+	response.Success(ctx, c, summary)
+}
+
+func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveLog) releaseSummaryResponse {
+	summary := releaseSummaryResponse{
+		WindowMinutes:      minutes,
+		Since:              since,
+		StrategyCounts:     map[string]int{},
+		ReleaseStageCounts: map[string]int{},
+		ResultStatusCounts: map[string]int{},
+		EmptyReasonCounts:  map[string]int{},
+		RouteContribution: map[string]int{
+			"dense":  0,
+			"sparse": 0,
+		},
+		AcceptanceTemplate: "backend/docs/kb-l8-phase2-rollout-acceptance-template.md",
+	}
+	if len(logs) == 0 {
+		return summary
+	}
+
+	rewriteApplied := 0
+	durationValues := make([]int64, 0, len(logs))
+	rerankValues := make([]int64, 0, len(logs))
+	phase2Requests := 0
+	phase2Failures := 0
+	phase2EmptyAfterFilter := 0
+
+	for _, item := range logs {
+		if item == nil {
+			continue
+		}
+		summary.TotalRequests++
+		summary.StrategyCounts[firstNonEmptyString(item.Strategy, "unknown")]++
+		summary.ReleaseStageCounts[firstNonEmptyString(item.ReleaseStage, "unknown")]++
+		summary.ResultStatusCounts[string(item.ResultStatus)]++
+		summary.EmptyReasonCounts[firstNonEmptyString(item.EmptyReason, retrieval.EmptyReasonNone)]++
+		summary.RouteContribution["dense"] += item.DenseContribution
+		summary.RouteContribution["sparse"] += item.SparseContribution
+		if item.RewriteApplied {
+			rewriteApplied++
+		}
+		if item.DurationMs > 0 {
+			durationValues = append(durationValues, item.DurationMs)
+		}
+		if item.RerankMs > 0 {
+			rerankValues = append(rerankValues, item.RerankMs)
+		}
+		if item.Strategy == release.StrategyPhase2 {
+			phase2Requests++
+			if item.ResultStatus == model.RetrieveResultStatusError || item.ResultStatus == model.RetrieveResultStatusTimeout {
+				phase2Failures++
+			}
+			if item.EmptyReason == retrieval.EmptyReasonAfterFilter {
+				phase2EmptyAfterFilter++
+			}
+		}
+	}
+
+	summary.RewriteAppliedRate = float64(rewriteApplied) / float64(len(logs))
+	summary.P95DurationMs = percentileInt64(durationValues, 0.95)
+	summary.P95RerankMs = percentileInt64(rerankValues, 0.95)
+	if phase2Requests > 0 {
+		errorRate := float64(phase2Failures) / float64(phase2Requests)
+		emptyAfterFilterRate := float64(phase2EmptyAfterFilter) / float64(phase2Requests)
+		if errorRate > 0.03 {
+			summary.RollbackRecommended = true
+			summary.Risks = append(summary.Risks, fmt.Sprintf("phase2 error rate %.2f%% exceeds 3%%", errorRate*100))
+		}
+		if emptyAfterFilterRate > 0.15 {
+			summary.RollbackRecommended = true
+			summary.Risks = append(summary.Risks, fmt.Sprintf("phase2 Empty-After-Filter ratio %.2f%% exceeds 15%%", emptyAfterFilterRate*100))
+		}
+	}
+	if summary.P95DurationMs > 2000 {
+		summary.RollbackRecommended = true
+		summary.Risks = append(summary.Risks, fmt.Sprintf("retrieve P95 latency %dms exceeds 2000ms", summary.P95DurationMs))
+	}
+	if summary.P95RerankMs > 800 {
+		summary.Risks = append(summary.Risks, fmt.Sprintf("rerank P95 latency %dms exceeds 800ms", summary.P95RerankMs))
+	}
+
+	return summary
 }
 
 func PauseIngest(ctx context.Context, c *app.RequestContext) {

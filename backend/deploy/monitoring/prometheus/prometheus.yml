@@ -4,6 +4,7 @@ global:
 
 rule_files:
   - /etc/prometheus/rules/rag-l3-alert-rules.yml
+  - /etc/prometheus/rules/rag-l8-alert-rules.yml
 
 alerting:
   alertmanagers:

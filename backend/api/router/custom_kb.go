@@ -1,9 +1,9 @@
 package router
 
 import (
+	kb "interview-agents/api/handler/kb"
 	"interview-agents/internal/config"
 	"log"
-	kb "interview-agents/api/handler/kb"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/route"
@@ -15,11 +15,11 @@ func registerKnowledgeBaseRoutes(r *server.Hertz) {
 		return
 	}
 	log.Println("[RAG] Registering knowledge base routes")
-	registerKBGroup(r.Group("/api/kb"))
-	registerKBGroup(r.Group("/api/admin/kb"))
+	registerKBGroup(r.Group("/api/kb"), false)
+	registerKBGroup(r.Group("/api/admin/kb"), true)
 }
 
-func registerKBGroup(group *route.RouterGroup) {
+func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.GET("/dashboard/stats", kb.GetDashboardStats)
 	group.POST("/bases", kb.CreateKnowledgeBase)
 	group.GET("/bases", kb.ListKnowledgeBases)
@@ -36,4 +36,10 @@ func registerKBGroup(group *route.RouterGroup) {
 	group.POST("/ingest/pause", kb.PauseIngest)
 	group.POST("/ingest/resume", kb.ResumeIngest)
 	group.GET("/ingest/status", kb.GetIngestStatus)
+	if adminOnly {
+		group.GET("/release/status", kb.GetReleaseStatus)
+		group.GET("/release/summary", kb.GetReleaseSummary)
+		group.POST("/release/rollback", kb.RollbackRelease)
+		group.POST("/release/activate", kb.ActivateRelease)
+	}
 }

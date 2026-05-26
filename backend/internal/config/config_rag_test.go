@@ -86,6 +86,15 @@ func TestValidateRAGPrerequisites_DynamicTopKRangeInvalid(t *testing.T) {
 	}
 }
 
+func TestValidateRAGPrerequisites_ReleaseStageInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.Release.Enabled = true
+	cfg.RAG.Release.Stage = "unknown"
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when release stage is invalid")
+	}
+}
+
 func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	basePath := filepath.Join(tempDir, "config.yaml")
@@ -130,6 +139,11 @@ rag:
 
 	t.Setenv("APP_ENV", "staging")
 	t.Setenv("RAG_RETRIEVE_TIMEOUT_MS", "7000")
+	t.Setenv("RAG_RELEASE_ENABLED", "true")
+	t.Setenv("RAG_RELEASE_STAGE", "small_flow")
+	t.Setenv("RAG_RELEASE_CANARY_PERCENT", "15")
+	t.Setenv("RAG_RELEASE_INTERNAL_ROLES", "admin,staff")
+	t.Setenv("RAG_RELEASE_USER_ALLOWLIST", "1,3,5")
 
 	cfg, err := LoadConfig(basePath)
 	if err != nil {
@@ -144,6 +158,12 @@ rag:
 	}
 	if cfg.RAG.FeatureFlags.EnableRetrieveAudit {
 		t.Fatalf("expected retrieve_audit to be false from overlay")
+	}
+	if !cfg.RAG.Release.Enabled || cfg.RAG.Release.Stage != "small_flow" || cfg.RAG.Release.CanaryPercent != 15 {
+		t.Fatalf("expected release env overrides to apply, got %+v", cfg.RAG.Release)
+	}
+	if len(cfg.RAG.Release.InternalRoles) != 2 || len(cfg.RAG.Release.UserAllowlist) != 3 {
+		t.Fatalf("expected release role/allowlist overrides to apply, got %+v", cfg.RAG.Release)
 	}
 
 	snapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase1", "baseline_snapshot.json")

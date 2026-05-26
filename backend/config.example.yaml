@@ -103,6 +103,13 @@ rag:
     rewrite_max_expansions: 3
     rerank_timeout_ms: 250
     rerank_model: "jaccard-v1"
+  release:
+    enabled: false
+    stage: full
+    internal_roles: ["admin"]
+    canary_percent: 5
+    batch_percent: 25
+    user_allowlist: []
 
 # Embedding 服务配置
 Embedding:
