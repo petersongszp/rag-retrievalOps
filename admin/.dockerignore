@@ -1,0 +1,17 @@
+.git
+.idea
+.vscode
+node_modules/
+.next/
+coverage/
+dist/
+out/
+docs/
+test_data/
+*.log
+*.tsbuildinfo
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local

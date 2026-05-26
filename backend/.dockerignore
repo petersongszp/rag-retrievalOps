@@ -1,0 +1,10 @@
+.git
+.idea
+.vscode
+logs/
+docs/
+studyDocs/
+deploy/
+main
+server.exe
+*.log

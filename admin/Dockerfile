@@ -35,12 +35,12 @@ RUN addgroup -g 1001 appuser && \
 # 设置工作目录
 WORKDIR /app
 
-# 只复制必要文件
-COPY --from=builder /app/.next ./.next
-COPY --from=builder /app/node_modules ./node_modules
-COPY --from=builder /app/package*.json ./
+# 只复制必要文件，并在复制时直接设置归属，避免额外 chown 扫描整个依赖目录
+COPY --from=builder --chown=appuser:appuser /app/.next ./.next
+COPY --from=builder --chown=appuser:appuser /app/node_modules ./node_modules
+COPY --from=builder --chown=appuser:appuser /app/package*.json ./
 # COPY --from=builder /app/public ./public/ 2>/dev/null || true
-RUN chown -R appuser:appuser /app
+
 # 切换到非root用户
 USER appuser
 
