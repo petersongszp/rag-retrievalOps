@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { CopyOutlined, SearchOutlined, WarningOutlined } from '@ant-design/icons';
 import {
   Alert,
@@ -126,6 +127,7 @@ function findContractGaps(item: RetrieveItem): string[] {
 }
 
 export function RetrievalLabPage() {
+  const router = useRouter();
   const { selectedBase, setSelectedBaseId, bases } = useKnowledgeBaseContext();
   const [form] = Form.useForm<{ query: string; top_k: number; kb_id: number }>();
   const [result, setResult] = useState<RetrieveResponse | null>(null);
@@ -258,6 +260,17 @@ export function RetrievalLabPage() {
                 }}
               >
                 复制 request_id
+              </Button>
+              <Button
+                disabled={!result.request_id}
+                onClick={() => {
+                  if (!result.request_id) {
+                    return;
+                  }
+                  router.push(`/trace-logs/retrieval?request_id=${encodeURIComponent(result.request_id)}`);
+                }}
+              >
+                查看 Trace
               </Button>
             </div>
           </Card>
