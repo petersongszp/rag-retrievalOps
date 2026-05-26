@@ -8,38 +8,70 @@ type CitationTarget struct {
 	FileName   string `json:"file_name,omitempty"`
 }
 
+type DatasetBundle struct {
+	DatasetVersion string        `json:"dataset_version,omitempty"`
+	Description    string        `json:"description,omitempty"`
+	Cases          []DatasetCase `json:"cases"`
+}
+
 type DatasetCase struct {
-	ID              string           `json:"id"`
-	Query           string           `json:"query"`
-	TopK            int              `json:"top_k"`
-	RelevantIDs     []string         `json:"relevant_ids"`
-	CitationTargets []CitationTarget `json:"citation_targets,omitempty"`
-	QueryType       string           `json:"query_type,omitempty"`
-	Tags            []string         `json:"tags,omitempty"`
-	KBIDs           []uint64         `json:"kb_ids,omitempty"`
-	Collection      string           `json:"collection,omitempty"`
-	Notes           string           `json:"notes,omitempty"`
+	ID               string           `json:"id"`
+	Question         string           `json:"question,omitempty"`
+	Query            string           `json:"query"`
+	Context          string           `json:"context,omitempty"`
+	GroundTruth      string           `json:"ground_truth,omitempty"`
+	TopK             int              `json:"top_k"`
+	RelevantIDs      []string         `json:"relevant_ids"`
+	CitationTargets  []CitationTarget `json:"citation_targets,omitempty"`
+	QueryType        string           `json:"query_type,omitempty"`
+	Scenario         string           `json:"scenario,omitempty"`
+	ExpectedBehavior string           `json:"expected_behavior,omitempty"`
+	Tags             []string         `json:"tags,omitempty"`
+	KBIDs            []uint64         `json:"kb_ids,omitempty"`
+	Collection       string           `json:"collection,omitempty"`
+	Notes            string           `json:"notes,omitempty"`
 }
 
 type StrategyProfile struct {
-	Name                 string  `json:"name"`
-	Label                string  `json:"label,omitempty"`
-	Baseline             bool    `json:"baseline,omitempty"`
-	Candidate            bool    `json:"candidate,omitempty"`
-	Mode                 string  `json:"mode"`
-	EnableQueryRewrite   bool    `json:"enable_query_rewrite,omitempty"`
-	EnableDynamicTopK    bool    `json:"enable_dynamic_topk,omitempty"`
-	EnableAdvancedRerank bool    `json:"enable_advanced_rerank,omitempty"`
-	CandidateTopK        int     `json:"candidate_top_k,omitempty"`
-	DenseWeight          float64 `json:"dense_weight,omitempty"`
-	SparseWeight         float64 `json:"sparse_weight,omitempty"`
-	MinTopK              int     `json:"min_top_k,omitempty"`
-	MaxTopK              int     `json:"max_top_k,omitempty"`
-	TokenBudget          int     `json:"token_budget,omitempty"`
-	MinAnswerChunks      int     `json:"min_answer_chunks,omitempty"`
-	RewriteMaxExpansions int     `json:"rewrite_max_expansions,omitempty"`
-	RerankTimeoutMS      int     `json:"rerank_timeout_ms,omitempty"`
-	RerankModel          string  `json:"rerank_model,omitempty"`
+	Name                        string  `json:"name"`
+	Label                       string  `json:"label,omitempty"`
+	Baseline                    bool    `json:"baseline,omitempty"`
+	Candidate                   bool    `json:"candidate,omitempty"`
+	Mode                        string  `json:"mode"`
+	EnableQueryRewrite          bool    `json:"enable_query_rewrite,omitempty"`
+	EnableDynamicTopK           bool    `json:"enable_dynamic_topk,omitempty"`
+	EnableAdvancedRerank        bool    `json:"enable_advanced_rerank,omitempty"`
+	EnableParentChildRetrieval  bool    `json:"enable_parent_child_retrieval,omitempty"`
+	EnableStrategicTopK         bool    `json:"enable_strategic_topk,omitempty"`
+	EnableEvidenceRefusal       bool    `json:"enable_evidence_refusal,omitempty"`
+	EnableCitationConsistency   bool    `json:"enable_citation_consistency,omitempty"`
+	EnableDomainTerms           bool    `json:"enable_domain_terms,omitempty"`
+	EnableRouteSpecificRewrite  bool    `json:"enable_route_specific_rewrite,omitempty"`
+	EnableModelAssistedRewrite  bool    `json:"enable_model_assisted_rewrite,omitempty"`
+	CandidateTopK               int     `json:"candidate_top_k,omitempty"`
+	DenseWeight                 float64 `json:"dense_weight,omitempty"`
+	SparseWeight                float64 `json:"sparse_weight,omitempty"`
+	MinTopK                     int     `json:"min_top_k,omitempty"`
+	MaxTopK                     int     `json:"max_top_k,omitempty"`
+	TokenBudget                 int     `json:"token_budget,omitempty"`
+	MinAnswerChunks             int     `json:"min_answer_chunks,omitempty"`
+	RewriteMaxExpansions        int     `json:"rewrite_max_expansions,omitempty"`
+	RerankTimeoutMS             int     `json:"rerank_timeout_ms,omitempty"`
+	RerankModel                 string  `json:"rerank_model,omitempty"`
+	ParentChildFillStrategy     string  `json:"parent_child_fill_strategy,omitempty"`
+	ParentChildWindowSize       int     `json:"parent_child_window_size,omitempty"`
+	ParentChildMaxTokens        int     `json:"parent_child_max_tokens,omitempty"`
+	StrategicTopKMinK           int     `json:"strategic_topk_min_k,omitempty"`
+	StrategicTopKMaxK           int     `json:"strategic_topk_max_k,omitempty"`
+	StrategicTopKBudgetRatio    float64 `json:"strategic_topk_budget_ratio,omitempty"`
+	EvidenceMinRerankScore      float64 `json:"evidence_min_rerank_score,omitempty"`
+	EvidenceMinDensity          float64 `json:"evidence_min_density,omitempty"`
+	EvidenceMinCitationCoverage float64 `json:"evidence_min_citation_coverage,omitempty"`
+	CitationCheckThreshold      float64 `json:"citation_check_threshold,omitempty"`
+	CitationCheckVersion        string  `json:"citation_check_version,omitempty"`
+	DomainTermTimeoutMS         int     `json:"domain_term_timeout_ms,omitempty"`
+	ModelRewriteTimeoutMS       int     `json:"model_rewrite_timeout_ms,omitempty"`
+	ModelRewriteShadowRatio     float64 `json:"model_rewrite_shadow_ratio,omitempty"`
 }
 
 type RetrievedItem struct {
@@ -129,12 +161,13 @@ type GateResult struct {
 }
 
 type Report struct {
-	DatasetSize  int               `json:"dataset_size"`
-	GeneratedAt  time.Time         `json:"generated_at"`
-	Results      []StrategyResult  `json:"results"`
-	Contribution []StrategyDelta   `json:"contribution"`
-	Comparison   ComparisonSummary `json:"comparison"`
-	Gate         GateResult        `json:"gate"`
-	Baseline     string            `json:"baseline"`
-	Candidate    string            `json:"candidate"`
+	DatasetSize    int               `json:"dataset_size"`
+	DatasetVersion string            `json:"dataset_version,omitempty"`
+	GeneratedAt    time.Time         `json:"generated_at"`
+	Results        []StrategyResult  `json:"results"`
+	Contribution   []StrategyDelta   `json:"contribution"`
+	Comparison     ComparisonSummary `json:"comparison"`
+	Gate           GateResult        `json:"gate"`
+	Baseline       string            `json:"baseline"`
+	Candidate      string            `json:"candidate"`
 }

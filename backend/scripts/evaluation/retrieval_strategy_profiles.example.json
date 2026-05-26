@@ -1,30 +1,58 @@
 [
   {
-    "name": "dense_only",
-    "label": "Dense Only",
+    "name": "phase2_baseline",
+    "label": "Phase 2 Baseline",
     "baseline": true,
-    "mode": "dense"
-  },
-  {
-    "name": "hybrid",
-    "label": "Hybrid",
-    "mode": "hybrid",
-    "candidate_top_k": 10
-  },
-  {
-    "name": "hybrid_rewrite",
-    "label": "Hybrid + Rewrite",
     "mode": "hybrid",
     "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
     "candidate_top_k": 10
   },
   {
-    "name": "hybrid_rewrite_dynamic_topk",
-    "label": "Hybrid + Rewrite + DynamicTopK",
+    "name": "parent_child",
+    "label": "Parent Child",
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "enable_parent_child_retrieval": true,
+    "candidate_top_k": 10
+  },
+  {
+    "name": "parent_child+strategic_topk",
+    "label": "Parent Child + Strategic TopK",
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "enable_parent_child_retrieval": true,
+    "enable_strategic_topk": true,
+    "candidate_top_k": 10
+  },
+  {
+    "name": "parent_child+refusal",
+    "label": "Parent Child + Refusal",
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "enable_parent_child_retrieval": true,
+    "enable_evidence_refusal": true,
+    "candidate_top_k": 10
+  },
+  {
+    "name": "parent_child+advanced_rewrite",
+    "label": "Parent Child + Advanced Rewrite",
     "candidate": true,
     "mode": "hybrid",
     "enable_query_rewrite": true,
     "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "enable_parent_child_retrieval": true,
+    "enable_domain_terms": true,
+    "enable_route_specific_rewrite": true,
+    "enable_model_assisted_rewrite": true,
     "candidate_top_k": 10
   }
 ]

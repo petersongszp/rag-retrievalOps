@@ -88,6 +88,13 @@ rag:
     enable_query_rewrite: false
     enable_dynamic_topk: false
     enable_advanced_rerank: false
+    enable_parent_child_retrieval: false
+    enable_strategic_topk: false
+    enable_evidence_refusal: false
+    enable_citation_consistency: false
+    enable_domain_terms: false
+    enable_route_specific_rewrite: false
+    enable_model_assisted_rewrite: false
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
@@ -99,10 +106,27 @@ rag:
     candidate_topk: 10
     min_topk: 3
     max_topk: 8
+    token_budget: 0
+    min_answer_chunks: 2
     rewrite_timeout_ms: 120
     rewrite_max_expansions: 3
     rerank_timeout_ms: 250
     rerank_model: "jaccard-v1"
+  phase3:
+    parent_child_fill_strategy: section_window
+    parent_child_window_size: 1
+    parent_child_max_tokens: 1200
+    strategic_topk_min_k: 2
+    strategic_topk_max_k: 8
+    strategic_topk_budget_ratio: 0.6
+    evidence_min_rerank_score: 0.55
+    evidence_min_density: 0.2
+    evidence_min_citation_coverage: 0.5
+    citation_check_threshold: 0.7
+    citation_check_version: "phase3-citation-v1"
+    domain_term_timeout_ms: 80
+    model_rewrite_timeout_ms: 150
+    model_rewrite_shadow_ratio: 0.1
   release:
     enabled: false
     stage: full

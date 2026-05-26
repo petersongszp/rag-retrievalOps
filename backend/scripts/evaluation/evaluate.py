@@ -4,7 +4,7 @@ Evaluation entrypoint for both retrieval regression and legacy Ragas answer eval
 
 Examples:
   python evaluate.py
-  python evaluate.py --mode retrieval --candidate hybrid_rewrite_dynamic_topk
+  python evaluate.py --mode retrieval --candidate "parent_child+advanced_rewrite"
   python evaluate.py --mode ragas --no-api
 """
 
@@ -34,7 +34,10 @@ RETRIEVAL_OUTPUT_PREFIX = BACKEND_DIR / "docs" / "retrieval-regression-report"
 
 def load_dataset(file_path: Path) -> List[Dict]:
     with file_path.open("r", encoding="utf-8") as file:
-        return json.load(file)
+        payload = json.load(file)
+    if isinstance(payload, dict):
+        return payload.get("cases", [])
+    return payload
 
 
 def call_agent_api(question: str) -> str:

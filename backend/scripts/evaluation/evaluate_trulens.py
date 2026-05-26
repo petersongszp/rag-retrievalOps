@@ -23,7 +23,10 @@ REPORT_FILE = "trulens_report.json"
 
 def load_dataset(file_path: str) -> List[Dict]:
     with open(file_path, "r", encoding="utf-8") as f:
-        return json.load(f)
+        payload = json.load(f)
+    if isinstance(payload, dict):
+        return payload.get("cases", [])
+    return payload
 
 
 def run_trulens_dimensions(dataset: List[Dict], use_mock_answer: bool) -> Dict[str, Any]:

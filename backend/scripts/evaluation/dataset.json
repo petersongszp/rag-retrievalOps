@@ -1,92 +1,198 @@
-[
-  {
-    "id": "entity-go-goroutine",
-    "question": "Go 语言的 goroutine 是什么？",
-    "query": "goroutine 是什么",
-    "context": "goroutine 是 Go 语言中的轻量级线程，由 Go 运行时管理。",
-    "ground_truth": "goroutine 是 Go 的并发执行单元，比操作系统线程更轻量，由 Go runtime 调度。",
-    "top_k": 5,
-    "relevant_ids": [
-      "kb_1_doc_1_chunk_0_1779523924191899824"
-    ],
-    "citation_targets": [
-      {
-        "chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"
-      }
-    ],
-    "query_type": "entity",
-    "tags": ["go", "goroutine", "entity"]
-  },
-  {
-    "id": "entity-react-component",
-    "question": "React 中什么是组件？",
-    "query": "React 组件",
-    "context": "React 组件是 UI 的基本构建块，可以是函数组件或类组件。",
-    "ground_truth": "React 组件是可复用的 UI 单元，接收 props 并返回 JSX 描述的界面。",
-    "top_k": 5,
-    "relevant_ids": [
-      "kb_1_doc_2_chunk_0_1779523936358216873"
-    ],
-    "citation_targets": [
-      {
-        "chunk_id": "kb_1_doc_2_chunk_0_1779523936358216873"
-      }
-    ],
-    "query_type": "entity",
-    "tags": ["react", "component", "entity"]
-  },
-  {
-    "id": "entity-js-promise",
-    "question": "JavaScript 的 Promise 是什么？",
-    "query": "JavaScript Promise 异步",
-    "context": "Promise 是 JavaScript 处理异步操作的对象，有 pending、fulfilled、rejected 三种状态。",
-    "ground_truth": "Promise 用于异步编程，通过 then/catch 链式调用或 async/await 语法糖处理异步结果。",
-    "top_k": 5,
-    "relevant_ids": [
-      "kb_1_doc_4_chunk_0_1779731716268688925"
-    ],
-    "citation_targets": [
-      {
-        "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
-      }
-    ],
-    "query_type": "entity",
-    "tags": ["javascript", "promise", "async", "entity"]
-  },
-  {
-    "id": "abbreviation-gc",
-    "question": "gc 在 Go 语言中代表什么？",
-    "query": "gc",
-    "context": "gc 是 garbage collection（垃圾回收）的缩写。",
-    "ground_truth": "gc 是 garbage collection 的缩写，Go 语言内置垃圾回收器自动管理内存。",
-    "top_k": 5,
-    "relevant_ids": [
-      "kb_1_doc_1_chunk_0_1779523924191899824"
-    ],
-    "citation_targets": [
-      {
-        "chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"
-      }
-    ],
-    "query_type": "abbreviation",
-    "tags": ["go", "gc", "abbreviation"]
-  },
-  {
-    "id": "synonym-js-var",
-    "question": "JavaScript 中如何声明变量？",
-    "query": "JavaScript 变量声明",
-    "context": "JavaScript 有 var、let、const 三种变量声明方式。",
-    "ground_truth": "使用 var（函数作用域）、let（块级作用域）或 const（常量）声明变量。",
-    "top_k": 5,
-    "relevant_ids": [
-      "kb_1_doc_4_chunk_0_1779731716268688925"
-    ],
-    "citation_targets": [
-      {
-        "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
-      }
-    ],
-    "query_type": "synonym",
-    "tags": ["javascript", "variable", "synonym"]
-  }
-]
+{
+  "dataset_version": "phase3-l0-v1",
+  "description": "Phase 3 L0 retrieval regression dataset covering baseline, long-document, multi-evidence, insufficient-evidence, abbreviation, domain-term, and colloquial rewrite scenarios.",
+  "cases": [
+    {
+      "id": "entity-go-goroutine",
+      "question": "Go 语言的 goroutine 是什么？",
+      "query": "goroutine 是什么",
+      "context": "goroutine 是 Go 语言中的轻量级线程，由 Go runtime 调度。",
+      "ground_truth": "goroutine 是 Go 的并发执行单元，比操作系统线程更轻量，由 Go runtime 调度。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_1_chunk_0_1779523924191899824"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"
+        }
+      ],
+      "query_type": "entity",
+      "scenario": "phase2_baseline",
+      "expected_behavior": "hit_precise_chunk",
+      "tags": ["go", "goroutine", "entity"]
+    },
+    {
+      "id": "longdoc-go-runtime-scheduling",
+      "question": "Go runtime 为什么能把 goroutine 调度得比线程更轻量？",
+      "query": "Go runtime 调度 goroutine 为什么更轻量",
+      "context": "该问题用于覆盖长文档和上下文补全收益场景。",
+      "ground_truth": "因为 goroutine 由 Go runtime 调度和管理，开销通常比操作系统线程更小。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_1_chunk_0_1779523924191899824"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"
+        }
+      ],
+      "query_type": "long_document",
+      "scenario": "parent_child_gain",
+      "expected_behavior": "future_parent_child_should_improve_context_completeness",
+      "tags": ["go", "runtime", "long_document", "phase3"]
+    },
+    {
+      "id": "entity-react-component",
+      "question": "React 中什么是组件？",
+      "query": "React 组件",
+      "context": "React 组件是 UI 的基础构建块，可以是函数组件或类组件。",
+      "ground_truth": "React 组件是可复用的 UI 单元，接收 props 并返回 JSX 描述的界面。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_2_chunk_0_1779523936358216873"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_2_chunk_0_1779523936358216873"
+        }
+      ],
+      "query_type": "entity",
+      "scenario": "phase2_baseline",
+      "expected_behavior": "hit_precise_chunk",
+      "tags": ["react", "component", "entity"]
+    },
+    {
+      "id": "entity-js-promise",
+      "question": "JavaScript 的 Promise 是什么？",
+      "query": "JavaScript Promise 异步",
+      "context": "Promise 是 JavaScript 处理异步操作的对象，有 pending、fulfilled、rejected 三种状态。",
+      "ground_truth": "Promise 用于异步编程，通过 then/catch 链式调用或 async/await 处理异步结果。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_4_chunk_0_1779731716268688925"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
+        }
+      ],
+      "query_type": "entity",
+      "scenario": "phase2_baseline",
+      "expected_behavior": "hit_precise_chunk",
+      "tags": ["javascript", "promise", "async", "entity"]
+    },
+    {
+      "id": "multi-evidence-react-promise",
+      "question": "React 组件和 JavaScript Promise 分别解决什么问题？",
+      "query": "React 组件 Promise 分别解决什么问题",
+      "context": "该样本用于覆盖多段证据整合能力。",
+      "ground_truth": "React 组件解决 UI 复用与拆分问题，Promise 解决异步流程表达与结果处理问题。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_2_chunk_0_1779523936358216873",
+        "kb_1_doc_4_chunk_0_1779731716268688925"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_2_chunk_0_1779523936358216873"
+        },
+        {
+          "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
+        }
+      ],
+      "query_type": "multi_hop",
+      "scenario": "multi_evidence",
+      "expected_behavior": "return_multiple_supporting_chunks",
+      "tags": ["react", "javascript", "multi_evidence", "phase3"]
+    },
+    {
+      "id": "abbreviation-gc",
+      "question": "gc 在 Go 语言中代表什么？",
+      "query": "gc",
+      "context": "gc 是 garbage collection（垃圾回收）的缩写。",
+      "ground_truth": "gc 是 garbage collection 的缩写，Go 语言内置垃圾回收器自动管理内存。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_1_chunk_0_1779523924191899824"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"
+        }
+      ],
+      "query_type": "abbreviation",
+      "scenario": "advanced_rewrite",
+      "expected_behavior": "rewrite_or_expand_abbreviation",
+      "tags": ["go", "gc", "abbreviation", "rewrite"]
+    },
+    {
+      "id": "domain-term-promise-chain",
+      "question": "JS 里的 promise 链是干什么的？",
+      "query": "js promise 链 干什么",
+      "context": "该样本用于覆盖领域术语和口语化表述。",
+      "ground_truth": "Promise 链用于串联异步流程，让多个 then/catch 处理步骤按顺序衔接。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_4_chunk_0_1779731716268688925"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
+        }
+      ],
+      "query_type": "domain_term",
+      "scenario": "advanced_rewrite",
+      "expected_behavior": "benefit_from_domain_terms_or_route_specific_rewrite",
+      "tags": ["javascript", "promise", "domain_terms", "colloquial"]
+    },
+    {
+      "id": "typo-js-variable",
+      "question": "JavaScript 里怎么声明变量？",
+      "query": "javascirpt 变量声明 let const",
+      "context": "该样本用于覆盖轻微拼写错误与 rewrite 能力。",
+      "ground_truth": "可以使用 var、let 或 const 来声明变量。",
+      "top_k": 5,
+      "relevant_ids": [
+        "kb_1_doc_4_chunk_0_1779731716268688925"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"
+        }
+      ],
+      "query_type": "typo",
+      "scenario": "advanced_rewrite",
+      "expected_behavior": "benefit_from_typo_correction",
+      "tags": ["javascript", "typo", "rewrite", "route_specific"]
+    },
+    {
+      "id": "insufficient-evidence-out-of-scope",
+      "question": "Vue 3 的响应式系统和 React Fiber 的差异是什么？",
+      "query": "Vue3 响应式 React Fiber 差异",
+      "context": "该样本用于覆盖证据不足或知识库范围外场景。",
+      "ground_truth": "当前评测集将它视为证据不足样本，后续用于拒答策略评估。",
+      "top_k": 5,
+      "relevant_ids": [],
+      "citation_targets": [],
+      "query_type": "insufficient_evidence",
+      "scenario": "evidence_refusal",
+      "expected_behavior": "future_evidence_gate_should_refuse_or_degrade_confidence",
+      "tags": ["insufficient_evidence", "out_of_scope", "phase3"]
+    },
+    {
+      "id": "insufficient-evidence-ambiguous",
+      "question": "那个前端状态方案和异步方案怎么一起配合？",
+      "query": "前端 状态方案 异步方案 一起配合",
+      "context": "该样本故意保持模糊，用于覆盖弱证据与拒答评测。",
+      "ground_truth": "当前评测集将它视为弱证据样本，后续用于 evidence refusal 与 citation consistency 回归。",
+      "top_k": 5,
+      "relevant_ids": [],
+      "citation_targets": [],
+      "query_type": "ambiguous",
+      "scenario": "evidence_refusal",
+      "expected_behavior": "future_evidence_gate_should_avoid_overconfident_answering",
+      "tags": ["ambiguous", "weak_evidence", "phase3"]
+    }
+  ]
+}

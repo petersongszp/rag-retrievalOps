@@ -95,6 +95,27 @@ func TestValidateRAGPrerequisites_ReleaseStageInvalid(t *testing.T) {
 	}
 }
 
+func TestValidateRAGPrerequisites_StrategicTopKRangeInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableStrategicTopK = true
+	cfg.RAG.Phase3.StrategicTopKMinK = 9
+	cfg.RAG.Phase3.StrategicTopKMaxK = 5
+	cfg.RAG.Phase3.StrategicTopKBudgetRatio = 0.6
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when strategic topk min/max range is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_CitationConsistencyMissingVersion(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableCitationConsistency = true
+	cfg.RAG.Phase3.CitationCheckThreshold = 0.8
+	cfg.RAG.Phase3.CitationCheckVersion = ""
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when citation consistency version is missing")
+	}
+}
+
 func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	basePath := filepath.Join(tempDir, "config.yaml")
@@ -144,6 +165,9 @@ rag:
 	t.Setenv("RAG_RELEASE_CANARY_PERCENT", "15")
 	t.Setenv("RAG_RELEASE_INTERNAL_ROLES", "admin,staff")
 	t.Setenv("RAG_RELEASE_USER_ALLOWLIST", "1,3,5")
+	t.Setenv("RAG_ENABLE_PARENT_CHILD_RETRIEVAL", "true")
+	t.Setenv("RAG_PARENT_CHILD_FILL_STRATEGY", "section_window")
+	t.Setenv("RAG_STRATEGIC_TOPK_BUDGET_RATIO", "0.75")
 
 	cfg, err := LoadConfig(basePath)
 	if err != nil {
@@ -165,9 +189,22 @@ rag:
 	if len(cfg.RAG.Release.InternalRoles) != 2 || len(cfg.RAG.Release.UserAllowlist) != 3 {
 		t.Fatalf("expected release role/allowlist overrides to apply, got %+v", cfg.RAG.Release)
 	}
+	if !cfg.RAG.FeatureFlags.EnableParentChildRetrieval {
+		t.Fatalf("expected parent-child retrieval flag to be enabled from env override")
+	}
+	if cfg.RAG.Phase3.ParentChildFillStrategy != "section_window" {
+		t.Fatalf("expected parent child fill strategy override to apply, got %s", cfg.RAG.Phase3.ParentChildFillStrategy)
+	}
+	if cfg.RAG.Phase3.StrategicTopKBudgetRatio != 0.75 {
+		t.Fatalf("expected strategic topk budget ratio override to apply, got %.2f", cfg.RAG.Phase3.StrategicTopKBudgetRatio)
+	}
 
 	snapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase1", "baseline_snapshot.json")
 	if _, err := os.Stat(snapshotPath); err != nil {
 		t.Fatalf("expected phase1 baseline snapshot to be created, got err: %v", err)
+	}
+	phase2SnapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase2", "baseline_snapshot.json")
+	if _, err := os.Stat(phase2SnapshotPath); err != nil {
+		t.Fatalf("expected phase2 baseline snapshot to be created, got err: %v", err)
 	}
 }

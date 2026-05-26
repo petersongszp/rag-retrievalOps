@@ -37,7 +37,7 @@ func main() {
 	exitIfErr(err)
 	defer manager.Close()
 
-	dataset, err := evaluation.LoadDataset(*datasetPath)
+	datasetBundle, err := evaluation.LoadDatasetBundle(*datasetPath)
 	exitIfErr(err)
 
 	profiles := evaluation.DefaultProfiles()
@@ -62,8 +62,9 @@ func main() {
 			return buildSearcher(cfg, manager, profile, targetCollection)
 		},
 	}
-	report, err := runner.Run(ctx, dataset, profiles, thresholds, *baseline, *candidate)
+	report, err := runner.Run(ctx, datasetBundle.Cases, profiles, thresholds, *baseline, *candidate)
 	exitIfErr(err)
+	report.DatasetVersion = datasetBundle.DatasetVersion
 
 	jsonPath := *outputPrefix + ".json"
 	mdPath := *outputPrefix + ".md"
