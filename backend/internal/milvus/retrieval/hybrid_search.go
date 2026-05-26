@@ -42,6 +42,7 @@ type HybridRetriever struct {
 	reranker        Reranker
 	queryRewriter   QueryRewriter
 	parentChild     *parentChildPostProcessor
+	citationChecker *CitationConsistencyChecker
 	config          *HybridRetrieverConfig
 }
 
@@ -55,6 +56,7 @@ type HybridRetrieverConfig struct {
 	DynamicTopK   DynamicTopKConfig
 	ParentChild   ParentChildConfig
 	EvidenceGate  EvidenceGateConfig
+	CitationCheck CitationConsistencyConfig
 }
 
 func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConfig) (*HybridRetriever, error) {
@@ -84,6 +86,7 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 		sparseRetriever: sparseRetriever,
 		queryRewriter:   config.QueryRewriter,
 		parentChild:     newParentChildPostProcessor(retriever.client, retriever.config.Collection, config.ParentChild),
+		citationChecker: NewCitationConsistencyChecker(config.CitationCheck),
 		config:          config,
 	}
 	if config.RerankerImpl != nil {
@@ -276,7 +279,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	rawCandidateCount := len(denseDocs) + len(sparseDocs)
 	if rawCandidateCount == 0 {
-		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision)
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
@@ -312,7 +315,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		SparseWeight: h.config.SparseWeight,
 	})
 	if len(fused) == 0 {
-		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision)
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
@@ -323,7 +326,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	merged := DeduplicateFusedDocuments(fused)
 	if len(merged) == 0 {
-		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision)
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
@@ -375,10 +378,14 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		}
 	}
 
-	evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, merged, topKDecision)
+	citationCandidateCount := len(merged)
+	citationOutcome := h.evaluateCitationConsistency(req.FinalQuery, merged)
+	merged, citationOutcome = h.tryRefineUnsupportedCitations(req.FinalQuery, merged, citationOutcome)
+	truncatedCount += citationCandidateCount - len(merged)
+	evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, merged, topKDecision, citationOutcome)
 	totalMS := time.Since(start).Milliseconds()
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.OriginalQuery,
 		req.RewriteQuery,
@@ -399,7 +406,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		topKDecision.DecisionReason,
 		evidenceOutcome.Result,
 		evidenceOutcome.RefusalReason,
+		citationOutcome.Supported,
 		evidenceOutcome.CitationSupportScore,
+		len(citationOutcome.UnsupportedClaims),
+		citationOutcome.Version,
+		citationOutcome.Latency.Milliseconds(),
+		citationOutcome.Error,
 		evidenceOutcome.Error,
 		"dense+sparse",
 		len(denseDocs),
@@ -424,6 +436,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	)
 
 	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome)
+	result.Metrics.CitationSupported = citationOutcome.Supported
+	result.Metrics.UnsupportedClaims = append([]string(nil), citationOutcome.UnsupportedClaims...)
+	result.Metrics.UnsupportedClaimCount = len(citationOutcome.UnsupportedClaims)
+	result.Metrics.CitationCheckVersion = citationOutcome.Version
+	result.Metrics.CitationCheckLatencyMs = citationOutcome.Latency.Milliseconds()
+	result.Metrics.CitationCheckError = citationOutcome.Error
 	result.Metrics.TruncatedCount = truncatedCount
 	result.Metrics.RerankMs = rerankMS
 	result.Metrics.RerankModel = rerankModel
@@ -563,13 +581,55 @@ func (h *HybridRetriever) observeRouteMetric(route string, duration time.Duratio
 	metrics.ObserveRetrieveRoute(route, duration, status, errCode, hitCount)
 }
 
-func (h *HybridRetriever) evaluateEvidenceGate(query string, docs []*schema.Document, topKDecision TopKDecision) EvidenceGateOutcome {
+func (h *HybridRetriever) evaluateEvidenceGate(query string, docs []*schema.Document, topKDecision TopKDecision, citationOutcome CitationConsistencyOutcome) EvidenceGateOutcome {
 	if h == nil {
 		return EvidenceGateOutcome{Result: EvidenceGateResultDisabled}
 	}
 	return EvaluateEvidenceGate(query, docs, SearchMetrics{
-		EvidenceDensity: topKDecision.EvidenceDensity,
+		EvidenceDensity:        topKDecision.EvidenceDensity,
+		CitationSupportScore:   citationOutcome.SupportScore,
+		CitationSupported:      citationOutcome.Supported,
+		UnsupportedClaims:      append([]string(nil), citationOutcome.UnsupportedClaims...),
+		UnsupportedClaimCount:  len(citationOutcome.UnsupportedClaims),
+		CitationCheckVersion:   citationOutcome.Version,
+		CitationCheckLatencyMs: citationOutcome.Latency.Milliseconds(),
+		CitationCheckError:     citationOutcome.Error,
 	}, h.config.EvidenceGate)
+}
+
+func (h *HybridRetriever) evaluateCitationConsistency(query string, docs []*schema.Document) CitationConsistencyOutcome {
+	if h == nil || h.citationChecker == nil {
+		return CitationConsistencyOutcome{}
+	}
+	return h.citationChecker.Check(query, docs)
+}
+
+func (h *HybridRetriever) tryRefineUnsupportedCitations(query string, docs []*schema.Document, current CitationConsistencyOutcome) ([]*schema.Document, CitationConsistencyOutcome) {
+	if h == nil || h.citationChecker == nil || !h.config.CitationCheck.Enabled {
+		return docs, current
+	}
+	if current.Supported || len(docs) <= 1 {
+		return docs, current
+	}
+
+	supportedDocs := make([]*schema.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		if value, ok := doc.MetaData["citation_supported"]; ok && castBool(value) {
+			supportedDocs = append(supportedDocs, doc)
+		}
+	}
+	if len(supportedDocs) == 0 || len(supportedDocs) == len(docs) {
+		return docs, current
+	}
+
+	refined := h.citationChecker.Check(query, supportedDocs)
+	if refined.SupportScore > current.SupportScore || (refined.Supported && !current.Supported) {
+		return supportedDocs, refined
+	}
+	return docs, current
 }
 
 func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewriter QueryRewriter) {

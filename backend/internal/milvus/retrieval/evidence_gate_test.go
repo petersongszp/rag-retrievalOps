@@ -111,3 +111,36 @@ func TestEvaluateEvidenceGatePass(t *testing.T) {
 		t.Fatalf("refusal_reason = %q, want empty", outcome.RefusalReason)
 	}
 }
+
+func TestEvaluateEvidenceGateRespectsUnsupportedClaims(t *testing.T) {
+	docs := []*schema.Document{
+		{
+			ID:      "chunk-1",
+			Content: "The Go scheduler multiplexes goroutines onto system threads.",
+			MetaData: map[string]interface{}{
+				"document_id":  uint64(42),
+				"chunk_id":     "chunk-1",
+				"rerank_score": 0.92,
+			},
+		},
+	}
+
+	outcome := EvaluateEvidenceGate("go scheduler and garbage collector tuning", docs, SearchMetrics{
+		EvidenceDensity:       0.8,
+		CitationSupported:     false,
+		CitationSupportScore:  0.82,
+		UnsupportedClaimCount: 1,
+		CitationCheckVersion:  "phase3-citation-v1",
+	}, EvidenceGateConfig{
+		Enabled:             true,
+		MinRerankScore:      0.55,
+		MinEvidenceDensity:  0.2,
+		MinCitationCoverage: 0.5,
+	})
+	if outcome.Result != EvidenceGateResultRefused {
+		t.Fatalf("result = %q, want %q", outcome.Result, EvidenceGateResultRefused)
+	}
+	if outcome.RefusalReason != RefusalReasonInsufficientCitationCover {
+		t.Fatalf("refusal_reason = %q, want %q", outcome.RefusalReason, RefusalReasonInsufficientCitationCover)
+	}
+}

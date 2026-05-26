@@ -101,28 +101,32 @@ func TestKBRetrieveLogTableName(t *testing.T) {
 
 func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	log := KBRetrieveLog{
-		RequestID:            "test-req-001",
-		UserID:               1,
-		KBIDs:                "1,2,3",
-		Query:                "Go语言特点",
-		Expr:                 `metadata["user_id"] == 1`,
-		TopK:                 5,
-		Rewrite:              "",
-		Routes:               "dense",
-		Collection:           "knowledge",
-		RetrieverVersion:     "v1",
-		EvidenceGateResult:   "pass",
-		CitationSupportScore: 1,
-		FinalCount:           3,
-		TruncatedCount:       0,
-		ResultStatus:         RetrieveResultStatusSuccess,
-		ErrorCode:            "",
-		ErrorMsg:             "",
-		EmbeddingMs:          50,
-		SearchMs:             120,
-		PostprocessMs:        10,
-		DurationMs:           180,
-		TimeoutMs:            3000,
+		RequestID:              "test-req-001",
+		UserID:                 1,
+		KBIDs:                  "1,2,3",
+		Query:                  "Go语言特点",
+		Expr:                   `metadata["user_id"] == 1`,
+		TopK:                   5,
+		Rewrite:                "",
+		Routes:                 "dense",
+		Collection:             "knowledge",
+		RetrieverVersion:       "v1",
+		EvidenceGateResult:     "pass",
+		CitationSupported:      true,
+		CitationSupportScore:   1,
+		UnsupportedClaimCount:  0,
+		CitationCheckVersion:   "phase3-citation-v1",
+		CitationCheckLatencyMs: 12,
+		FinalCount:             3,
+		TruncatedCount:         0,
+		ResultStatus:           RetrieveResultStatusSuccess,
+		ErrorCode:              "",
+		ErrorMsg:               "",
+		EmbeddingMs:            50,
+		SearchMs:               120,
+		PostprocessMs:          10,
+		DurationMs:             180,
+		TimeoutMs:              3000,
 	}
 
 	if log.RequestID != "test-req-001" {
@@ -134,8 +138,17 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	if log.EvidenceGateResult != "pass" {
 		t.Errorf("EvidenceGateResult = %q, want %q", log.EvidenceGateResult, "pass")
 	}
+	if !log.CitationSupported {
+		t.Errorf("CitationSupported = %v, want true", log.CitationSupported)
+	}
 	if log.CitationSupportScore != 1 {
 		t.Errorf("CitationSupportScore = %v, want 1", log.CitationSupportScore)
+	}
+	if log.CitationCheckVersion != "phase3-citation-v1" {
+		t.Errorf("CitationCheckVersion = %q, want %q", log.CitationCheckVersion, "phase3-citation-v1")
+	}
+	if log.CitationCheckLatencyMs != 12 {
+		t.Errorf("CitationCheckLatencyMs = %d, want 12", log.CitationCheckLatencyMs)
 	}
 	if log.EmbeddingMs != 50 {
 		t.Errorf("EmbeddingMs = %d, want 50", log.EmbeddingMs)

@@ -32,6 +32,14 @@ func TestRetrieveResponseWithRefusalJSON(t *testing.T) {
 		RequestID:          "req-1",
 		Items:              []retrieveItem{},
 		EvidenceGateResult: retrieval.EvidenceGateResultRefused,
+		CitationCheck: &citationCheckResponse{
+			Supported:             false,
+			SupportScore:          0.3,
+			UnsupportedClaims:     []string{"scheduler detail"},
+			UnsupportedClaimCount: 1,
+			Version:               "phase3-citation-v1",
+			LatencyMs:             8,
+		},
 		Refusal: &refusalPayload{
 			Reason:               retrieval.RefusalReasonLowRerankConfidence,
 			Message:              "evidence too weak",
@@ -59,5 +67,12 @@ func TestRetrieveResponseWithRefusalJSON(t *testing.T) {
 	}
 	if refusal["reason"] != retrieval.RefusalReasonLowRerankConfidence {
 		t.Fatalf("reason = %v, want %q", refusal["reason"], retrieval.RefusalReasonLowRerankConfidence)
+	}
+	citationCheck, ok := parsed["citation_check"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected citation_check object, got %T", parsed["citation_check"])
+	}
+	if citationCheck["unsupported_claim_count"] != float64(1) {
+		t.Fatalf("unsupported_claim_count = %v, want 1", citationCheck["unsupported_claim_count"])
 	}
 }

@@ -137,6 +137,17 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 				WindowSize:   fallbackInt(profile.ParentChildWindowSize, cfg.RAG.Phase3.ParentChildWindowSize),
 				MaxTokens:    fallbackInt(profile.ParentChildMaxTokens, cfg.RAG.Phase3.ParentChildMaxTokens),
 			},
+			EvidenceGate: retrieval.EvidenceGateConfig{
+				Enabled:             profile.EnableEvidenceRefusal,
+				MinRerankScore:      fallbackFloat(profile.EvidenceMinRerankScore, cfg.RAG.Phase3.EvidenceMinRerankScore),
+				MinEvidenceDensity:  fallbackFloat(profile.EvidenceMinDensity, cfg.RAG.Phase3.EvidenceMinDensity),
+				MinCitationCoverage: fallbackFloat(profile.EvidenceMinCitationCoverage, cfg.RAG.Phase3.EvidenceMinCitationCoverage),
+			},
+			CitationCheck: retrieval.CitationConsistencyConfig{
+				Enabled:   profile.EnableCitationConsistency,
+				Threshold: fallbackFloat(profile.CitationCheckThreshold, cfg.RAG.Phase3.CitationCheckThreshold),
+				Version:   firstNonEmpty(profile.CitationCheckVersion, cfg.RAG.Phase3.CitationCheckVersion),
+			},
 		}
 		hybridConfig.RerankerImpl = retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
 			TopK:      candidateTopK,

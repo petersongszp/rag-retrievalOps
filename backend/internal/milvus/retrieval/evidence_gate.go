@@ -61,7 +61,7 @@ func EvaluateEvidenceGate(query string, docs []*schema.Document, metrics SearchM
 		}
 	}
 
-	citationSupportScore := computeCitationSupportScore(docs)
+	citationSupportScore, citationSupported, citationChecked, unsupportedClaimCount := resolveCitationSupport(metrics, docs)
 	maxRerankScore := computeMaxEvidenceScore(docs)
 	evidenceDensity := metrics.EvidenceDensity
 	if evidenceDensity <= 0 {
@@ -88,6 +88,12 @@ func EvaluateEvidenceGate(query string, docs []*schema.Document, metrics SearchM
 	if maxRerankScore < thresholds.MinRerankScore || evidenceDensity < thresholds.MinEvidenceDensity {
 		outcome.Result = EvidenceGateResultRefused
 		outcome.RefusalReason = RefusalReasonLowRerankConfidence
+		return outcome
+	}
+
+	if citationChecked && (!citationSupported || unsupportedClaimCount > 0) {
+		outcome.Result = EvidenceGateResultRefused
+		outcome.RefusalReason = RefusalReasonInsufficientCitationCover
 		return outcome
 	}
 
@@ -164,6 +170,17 @@ func computeCitationSupportScore(docs []*schema.Document) float64 {
 		}
 	}
 	return float64(citableCount) / float64(limit)
+}
+
+func resolveCitationSupport(metrics SearchMetrics, docs []*schema.Document) (float64, bool, bool, int) {
+	if metrics.CitationCheckVersion != "" {
+		return metrics.CitationSupportScore, metrics.CitationSupported, true, metrics.UnsupportedClaimCount
+	}
+	score := metrics.CitationSupportScore
+	if score <= 0 {
+		score = computeCitationSupportScore(docs)
+	}
+	return score, score > 0, false, 0
 }
 
 func computeMaxEvidenceScore(docs []*schema.Document) float64 {

@@ -167,6 +167,11 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 			MinEvidenceDensity:  cfg.RAG.Phase3.EvidenceMinDensity,
 			MinCitationCoverage: cfg.RAG.Phase3.EvidenceMinCitationCoverage,
 		},
+		CitationCheck: retrieval.CitationConsistencyConfig{
+			Enabled:   cfg.RAG.FeatureFlags.EnableCitationConsistency,
+			Threshold: cfg.RAG.Phase3.CitationCheckThreshold,
+			Version:   cfg.RAG.Phase3.CitationCheckVersion,
+		},
 	}
 	fallbackReranker := retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
 		TopK:      candidateTopK,
