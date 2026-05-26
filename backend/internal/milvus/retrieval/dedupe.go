@@ -98,6 +98,7 @@ func annotateDedupedDocument(doc *schema.Document, score float64, primaryRoute s
 		source["retriever_version"] = hybridRetrieverVersion
 	}
 	doc.MetaData["source"] = source
+	annotateParentChildSource(doc)
 }
 
 func copyFloatMap(input map[string]float64) map[string]float64 {

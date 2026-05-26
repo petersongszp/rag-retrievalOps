@@ -170,6 +170,15 @@ func SearchWithExprAndMetrics(
 			if i < len(result.Scores) {
 				doc.MetaData["score"] = result.Scores[i]
 			}
+			doc.MetaData["retriever_version"] = DenseRetrieverVersion
+			source := ensureSourceMetadata(doc)
+			source["route"] = routeDense
+			source["retriever_version"] = DenseRetrieverVersion
+			if collectionName != "" {
+				source["collection"] = collectionName
+			}
+			doc.MetaData["source"] = source
+			annotateParentChildSource(doc)
 
 			documents = append(documents, doc)
 		}

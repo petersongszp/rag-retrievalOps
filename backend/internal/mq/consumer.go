@@ -279,7 +279,16 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
 	}
 
-	doc := &schema.Document{Content: rawText}
+	docRecord, err := model.KBDocumentDao.GetByID(payload.DocumentID)
+	if err != nil {
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
+	}
+
+	baseMeta := milvus.NewKBDocumentMetadata(payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
+	doc := &schema.Document{
+		Content:  rawText,
+		MetaData: baseMeta.ToMap(),
+	}
 	chunks, err := manager.GetSplitterService().Split(ctx, []*schema.Document{doc})
 	if err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
@@ -289,12 +298,6 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "empty chunks after split", nil)
 	}
 
-	docRecord, err := model.KBDocumentDao.GetByID(payload.DocumentID)
-	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
-	}
-
-	baseMeta := milvus.NewKBDocumentMetadata(payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
 	totalChunks := len(chunks)
 	for i, chunk := range chunks {
 		if chunk == nil {
@@ -302,14 +305,6 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		}
 		if chunk.ID == "" {
 			chunk.ID = fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", payload.KBID, payload.DocumentID, i, time.Now().UnixNano())
-		}
-		if chunk.MetaData == nil {
-			chunk.MetaData = map[string]interface{}{}
-		}
-		baseMeta.ChunkIndex = i
-		baseMeta.TotalChunks = totalChunks
-		for k, v := range baseMeta.ToMap() {
-			chunk.MetaData[k] = v
 		}
 	}
 

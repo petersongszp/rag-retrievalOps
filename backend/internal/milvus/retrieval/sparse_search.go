@@ -145,6 +145,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 				source["collection"] = collection
 			}
 			doc.MetaData["source"] = source
+			annotateParentChildSource(doc)
 			merged[docID] = doc
 		}
 	}
@@ -183,6 +184,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 			source["collection"] = collection
 		}
 		doc.MetaData["source"] = source
+		annotateParentChildSource(doc)
 		attachRewriteMetadata(doc, req)
 		results = append(results, doc)
 	}

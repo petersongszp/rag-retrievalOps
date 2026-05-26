@@ -51,6 +51,34 @@ type DocumentMetadata struct {
 
 	TotalChunks int `json:"total_chunks,omitempty"`
 
+	ChunkID string `json:"chunk_id,omitempty"`
+
+	ParentID string `json:"parent_id,omitempty"`
+
+	ChildID string `json:"child_id,omitempty"`
+
+	ChildStartOffset int `json:"child_start_offset,omitempty"`
+
+	ChildEndOffset int `json:"child_end_offset,omitempty"`
+
+	ParentStartOffset int `json:"parent_start_offset,omitempty"`
+
+	ParentEndOffset int `json:"parent_end_offset,omitempty"`
+
+	SectionTitle string `json:"section_title,omitempty"`
+
+	HierarchyPath string `json:"hierarchy_path,omitempty"`
+
+	ParentTokenCount int `json:"parent_token_count,omitempty"`
+
+	ParentBuildStrategy string `json:"parent_build_strategy,omitempty"`
+
+	ParentBuildVersion string `json:"parent_build_version,omitempty"`
+
+	ParentTruncated bool `json:"parent_truncated,omitempty"`
+
+	ParentChildAvailable bool `json:"parent_child_available,omitempty"`
+
 	CreatedAt string `json:"created_at"`
 
 	Extra map[string]interface{} `json:"extra,omitempty"`
@@ -124,6 +152,40 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 	if m.TotalChunks > 0 {
 		result["total_chunks"] = m.TotalChunks
 	}
+	if m.ChunkID != "" {
+		result["chunk_id"] = m.ChunkID
+	}
+	if m.ChildID != "" {
+		result["child_id"] = m.ChildID
+	}
+	if m.ChildID != "" || m.ChunkID != "" {
+		result["child_start_offset"] = m.ChildStartOffset
+		result["child_end_offset"] = m.ChildEndOffset
+	}
+	if m.ParentID != "" {
+		result["parent_id"] = m.ParentID
+		result["parent_start_offset"] = m.ParentStartOffset
+		result["parent_end_offset"] = m.ParentEndOffset
+		result["parent_token_count"] = m.ParentTokenCount
+	}
+	if m.SectionTitle != "" {
+		result["section_title"] = m.SectionTitle
+	}
+	if m.HierarchyPath != "" {
+		result["hierarchy_path"] = m.HierarchyPath
+	}
+	if m.ParentBuildStrategy != "" {
+		result["parent_build_strategy"] = m.ParentBuildStrategy
+	}
+	if m.ParentBuildVersion != "" {
+		result["parent_build_version"] = m.ParentBuildVersion
+	}
+	if m.ParentTruncated {
+		result["parent_truncated"] = true
+	}
+	if m.ParentChildAvailable {
+		result["parent_child_available"] = true
+	}
 
 	for k, v := range m.Extra {
 		result[k] = v
@@ -138,6 +200,9 @@ func EnrichDocumentsWithMetadata(chunks []*schema.Document, baseMetadata *Docume
 	totalChunks := len(chunks)
 
 	for i, chunk := range chunks {
+		if chunk == nil {
+			continue
+		}
 		// 创建块的元数据副本
 		chunkMetadata := *baseMetadata
 		chunkMetadata.ChunkIndex = i
@@ -151,7 +216,9 @@ func EnrichDocumentsWithMetadata(chunks []*schema.Document, baseMetadata *Docume
 		// 合并元数据
 		baseMap := chunkMetadata.ToMap()
 		for k, v := range baseMap {
-			chunk.MetaData[k] = v
+			if _, exists := chunk.MetaData[k]; !exists {
+				chunk.MetaData[k] = v
+			}
 		}
 	}
 

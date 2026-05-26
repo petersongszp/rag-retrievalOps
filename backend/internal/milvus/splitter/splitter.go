@@ -56,9 +56,16 @@ func (s *DocumentSplitterService) Split(ctx context.Context, docs []*schema.Docu
 		return nil, fmt.Errorf("docs is empty")
 	}
 
-	results, err := s.splitter.Transform(ctx, docs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to split documents: %w", err)
+	results := make([]*schema.Document, 0)
+	for _, doc := range docs {
+		if doc == nil {
+			continue
+		}
+		splitResults, err := s.splitter.Transform(ctx, []*schema.Document{doc})
+		if err != nil {
+			return nil, fmt.Errorf("failed to split documents: %w", err)
+		}
+		results = append(results, s.annotateSplitChunks(doc, splitResults)...)
 	}
 
 	return results, nil

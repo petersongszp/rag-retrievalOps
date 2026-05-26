@@ -487,6 +487,7 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 			source["collection"] = collection
 		}
 		doc.MetaData["source"] = source
+		annotateParentChildSource(doc)
 		attachRewriteMetadata(doc, req)
 	}
 	result.Metrics.RetrieverVersion = HybridRetrieverVersion
