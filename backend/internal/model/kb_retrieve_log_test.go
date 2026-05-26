@@ -6,10 +6,10 @@ import (
 
 func TestParseRetrieveResultStatus(t *testing.T) {
 	tests := []struct {
-		name        string
-		input       string
-		expected    RetrieveResultStatus
-		expectedOk  bool
+		name       string
+		input      string
+		expected   RetrieveResultStatus
+		expectedOk bool
 	}{
 		{
 			name:       "success",
@@ -101,26 +101,28 @@ func TestKBRetrieveLogTableName(t *testing.T) {
 
 func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	log := KBRetrieveLog{
-		RequestID:       "test-req-001",
-		UserID:          1,
-		KBIDs:           "1,2,3",
-		Query:           "Go语言特点",
-		Expr:            `metadata["user_id"] == 1`,
-		TopK:            5,
-		Rewrite:         "",
-		Routes:          "dense",
-		Collection:      "knowledge",
-		RetrieverVersion: "v1",
-		FinalCount:      3,
-		TruncatedCount:  0,
-		ResultStatus:    RetrieveResultStatusSuccess,
-		ErrorCode:       "",
-		ErrorMsg:        "",
-		EmbeddingMs:     50,
-		SearchMs:        120,
-		PostprocessMs:   10,
-		DurationMs:      180,
-		TimeoutMs:       3000,
+		RequestID:            "test-req-001",
+		UserID:               1,
+		KBIDs:                "1,2,3",
+		Query:                "Go语言特点",
+		Expr:                 `metadata["user_id"] == 1`,
+		TopK:                 5,
+		Rewrite:              "",
+		Routes:               "dense",
+		Collection:           "knowledge",
+		RetrieverVersion:     "v1",
+		EvidenceGateResult:   "pass",
+		CitationSupportScore: 1,
+		FinalCount:           3,
+		TruncatedCount:       0,
+		ResultStatus:         RetrieveResultStatusSuccess,
+		ErrorCode:            "",
+		ErrorMsg:             "",
+		EmbeddingMs:          50,
+		SearchMs:             120,
+		PostprocessMs:        10,
+		DurationMs:           180,
+		TimeoutMs:            3000,
 	}
 
 	if log.RequestID != "test-req-001" {
@@ -128,6 +130,12 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	}
 	if log.RetrieverVersion != "v1" {
 		t.Errorf("RetrieverVersion = %q, want %q", log.RetrieverVersion, "v1")
+	}
+	if log.EvidenceGateResult != "pass" {
+		t.Errorf("EvidenceGateResult = %q, want %q", log.EvidenceGateResult, "pass")
+	}
+	if log.CitationSupportScore != 1 {
+		t.Errorf("CitationSupportScore = %v, want 1", log.CitationSupportScore)
 	}
 	if log.EmbeddingMs != 50 {
 		t.Errorf("EmbeddingMs = %d, want 50", log.EmbeddingMs)

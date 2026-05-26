@@ -16,37 +16,41 @@ const DenseRetrieverVersion = "phase1-dense-v1"
 
 // SearchMetrics carries retrieve-stage observability fields used across L4-L8.
 type SearchMetrics struct {
-	EmbeddingMs        int64
-	SearchMs           int64
-	PostprocessMs      int64
-	HitCount           int
-	TruncatedCount     int
-	CandidateTopK      int
-	FinalTopK          int
-	TokenBudget        int
-	TruncateReason     string
-	Strategy           string
-	ReleaseStage       string
-	ReleaseReason      string
-	RetrieverVersion   string
-	RewriteApplied     bool
-	EmptyReason        string
-	RerankMs           int64
-	RerankModel        string
-	RerankVersion      string
-	RerankFallback     bool
-	RerankReason       string
-	DenseHits          int
-	SparseHits         int
-	DenseContribution  int
-	SparseContribution int
-	TopKPolicyVersion  string
-	ScoreDistribution  string
-	RerankGap          float64
-	EvidenceDensity    float64
-	TopKDecisionReason string
-	TokenBudgetRemain  int
-	ContextTokens      int
+	EmbeddingMs          int64
+	SearchMs             int64
+	PostprocessMs        int64
+	HitCount             int
+	TruncatedCount       int
+	CandidateTopK        int
+	FinalTopK            int
+	TokenBudget          int
+	TruncateReason       string
+	Strategy             string
+	ReleaseStage         string
+	ReleaseReason        string
+	RetrieverVersion     string
+	RewriteApplied       bool
+	EmptyReason          string
+	RerankMs             int64
+	RerankModel          string
+	RerankVersion        string
+	RerankFallback       bool
+	RerankReason         string
+	DenseHits            int
+	SparseHits           int
+	DenseContribution    int
+	SparseContribution   int
+	TopKPolicyVersion    string
+	ScoreDistribution    string
+	RerankGap            float64
+	EvidenceDensity      float64
+	TopKDecisionReason   string
+	TokenBudgetRemain    int
+	ContextTokens        int
+	EvidenceGateResult   string
+	RefusalReason        string
+	CitationSupportScore float64
+	EvidenceGateError    string
 }
 
 // SearchResult bundles documents with observable metrics.
