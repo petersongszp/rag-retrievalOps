@@ -28,3 +28,20 @@ func (d *_KBJobOperationLog) Create(record *KBJobOperationLog) error {
 	}
 	return getDB().Create(record).Error
 }
+
+func (d *_KBJobOperationLog) ListByJobID(jobID uint64) ([]*KBJobOperationLog, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+
+	var records []*KBJobOperationLog
+	err := getDB().
+		Model(&KBJobOperationLog{}).
+		Where("job_id = ?", jobID).
+		Order("created_at ASC, id ASC").
+		Find(&records).Error
+	if err != nil {
+		return nil, err
+	}
+	return records, nil
+}

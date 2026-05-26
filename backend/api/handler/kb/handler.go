@@ -1795,6 +1795,11 @@ type metricsOverviewResponse struct {
 	ErrorTypeTopN        []metricsOverviewErrorType   `json:"error_type_topn"`
 }
 
+type ingestLogDetailResponse struct {
+	Job           *model.KBIngestJob         `json:"job"`
+	OperationLogs []*model.KBJobOperationLog `json:"operation_logs"`
+}
+
 func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 	userID := middleware.GetUserID(c)
 	if userID == 0 {
@@ -1927,6 +1932,112 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 		RetrieveP95Ms:        buildRetrieveP95Series(retrieveLogs, startInclusive, bucketSize, bucketCount),
 		RetrieveEmptyRate:    buildRetrieveEmptyRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
 		ErrorTypeTopN:        buildRetrieveErrorTopN(retrieveLogs),
+	})
+}
+
+func ListIngestLogs(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
+	var status *model.KBIngestJobStatus
+	statusRaw := strings.TrimSpace(string(c.Query("status")))
+	if statusRaw != "" {
+		parsed, ok := model.ParseKBIngestJobStatus(statusRaw)
+		if !ok {
+			response.BadRequest(ctx, c, "status is invalid")
+			return
+		}
+		status = &parsed
+	}
+
+	errorCodeRaw := strings.TrimSpace(string(c.Query("error_code")))
+	var errorCode *string
+	if errorCodeRaw != "" {
+		errorCode = &errorCodeRaw
+	}
+
+	startTime, err := parseOptionalRFC3339Query(c, "start_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	endTime, err := parseOptionalRFC3339Query(c, "end_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	if startTime != nil && endTime != nil && startTime.After(*endTime) {
+		response.BadRequest(ctx, c, "start_time cannot be later than end_time")
+		return
+	}
+
+	page, pageSize := getPagination(c)
+	items, total, err := model.KBIngestJobDao.ListWithFilter(model.KBIngestJobListFilter{
+		KBID:      kbID,
+		Status:    status,
+		ErrorCode: errorCode,
+		StartTime: startTime,
+		EndTime:   endTime,
+		Page:      page,
+		PageSize:  pageSize,
+	})
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list ingest logs", err))
+		return
+	}
+
+	response.Success(ctx, c, jobListResponse{
+		Items:    items,
+		Total:    total,
+		Page:     page,
+		PageSize: pageSize,
+	})
+}
+
+func GetIngestLogDetail(ctx context.Context, c *app.RequestContext) {
+	if middleware.GetUserID(c) == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	jobID, err := parseUint64(c.Param("job_id"), "job_id")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "job not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get ingest log detail", err))
+		return
+	}
+
+	operationLogs, err := model.KBJobOperationLogDao.ListByJobID(jobID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get ingest operation logs", err))
+		return
+	}
+
+	response.Success(ctx, c, ingestLogDetailResponse{
+		Job:           job,
+		OperationLogs: operationLogs,
 	})
 }
 
