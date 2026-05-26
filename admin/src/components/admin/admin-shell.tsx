@@ -43,7 +43,7 @@ const navItems: NavItem[] = [
     href: '/retrieval-lab',
     icon: <ExperimentOutlined />,
   },
-  { key: '/trace-logs', label: '追踪日志', icon: <FileSearchOutlined />, disabled: true },
+  { key: '/trace-logs', label: '追踪日志', href: '/trace-logs', icon: <FileSearchOutlined /> },
   { key: '/evaluation', label: '评测', icon: <BookOutlined />, disabled: true },
   { key: '/strategy-center', label: '策略中心', icon: <SettingOutlined />, disabled: true },
   { key: '/quality-monitor', label: '质量监控', icon: <AppstoreOutlined />, disabled: true },
@@ -58,6 +58,10 @@ function getSelectedNavKey(pathname: string): string {
 
   if (pathname.startsWith('/retrieval-lab')) {
     return '/retrieval-lab';
+  }
+
+  if (pathname.startsWith('/trace-logs')) {
+    return '/trace-logs';
   }
 
   return '/dashboard';
@@ -94,6 +98,18 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
     if (pathname.startsWith('/retrieval-lab')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '检索实验室' }];
+    }
+
+    if (pathname.startsWith('/trace-logs/retrieval')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/trace-logs">追踪日志</Link> },
+        { title: '检索日志' },
+      ];
+    }
+
+    if (pathname.startsWith('/trace-logs')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '追踪日志' }];
     }
 
     return [{ title: '概览' }];
