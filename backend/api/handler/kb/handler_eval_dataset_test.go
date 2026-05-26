@@ -180,7 +180,7 @@ func setupEvalDatasetTestDB(t *testing.T) *gorm.DB {
 	if err != nil {
 		t.Fatalf("failed to open test database: %v", err)
 	}
-	if err := db.AutoMigrate(&model.KBKnowledgeBase{}, &model.KBEvalDataset{}, &model.KBEvalCase{}, &model.KBEvalRun{}); err != nil {
+	if err := db.AutoMigrate(&model.KBKnowledgeBase{}, &model.KBEvalDataset{}, &model.KBEvalCase{}, &model.KBEvalRun{}, &model.KBRetrieveLog{}); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 	model.SetDBGetter(func() *gorm.DB { return db })

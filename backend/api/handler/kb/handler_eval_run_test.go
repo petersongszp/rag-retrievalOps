@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net/http"
+	"os"
 	"testing"
 	"time"
 
@@ -98,6 +99,11 @@ func TestEvalRunLifecycleSuccess(t *testing.T) {
 	}
 
 	run := waitForEvalRunStatus(t, h, payload.Data.RunID, 5*time.Second)
+	t.Cleanup(func() {
+		if run.ReportPath != "" {
+			_ = os.Remove(run.ReportPath)
+		}
+	})
 	if run.Status != string(model.KBEvalRunStatusSucceeded) {
 		t.Fatalf("expected succeeded run, got %+v", run)
 	}
