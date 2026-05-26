@@ -1105,6 +1105,21 @@ func getPagination(c *app.RequestContext) (int, int) {
 	return page, pageSize
 }
 
+func parseOptionalRFC3339Query(c *app.RequestContext, field string) (*time.Time, error) {
+	raw := strings.TrimSpace(string(c.Query(field)))
+	if raw == "" {
+		return nil, nil
+	}
+
+	parsed, err := time.Parse(time.RFC3339, raw)
+	if err != nil {
+		return nil, fmt.Errorf("%s must be a valid RFC3339 timestamp", field)
+	}
+
+	parsed = parsed.UTC()
+	return &parsed, nil
+}
+
 func clampTopK(topK int) int {
 	if topK <= 0 {
 		return defaultRetrieveTopK
@@ -1536,28 +1551,66 @@ func ListRetrieveAuditLogs(ctx context.Context, c *app.RequestContext) {
 
 	page, pageSize := getPagination(c)
 
+	var kbID *uint64
+	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
+	if kbIDRaw != "" {
+		parsed, err := parseUint64(kbIDRaw, "kb_id")
+		if err != nil {
+			response.BadRequest(ctx, c, err.Error())
+			return
+		}
+		kbID = &parsed
+	}
+
 	statusRaw := strings.TrimSpace(string(c.Query("result_status")))
+	var status *model.RetrieveResultStatus
 	if statusRaw != "" {
-		status, ok := model.ParseRetrieveResultStatus(statusRaw)
+		parsed, ok := model.ParseRetrieveResultStatus(statusRaw)
 		if !ok {
 			response.BadRequest(ctx, c, "result_status is invalid")
 			return
 		}
-		items, total, err := model.KBRetrieveLogDao.ListByStatus(status, page, pageSize)
-		if err != nil {
-			response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
-			return
-		}
-		response.Success(ctx, c, retrieveAuditListResponse{
-			Items:    items,
-			Total:    total,
-			Page:     page,
-			PageSize: pageSize,
-		})
+		status = &parsed
+	}
+
+	startTime, err := parseOptionalRFC3339Query(c, "start_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	endTime, err := parseOptionalRFC3339Query(c, "end_time")
+	if err != nil {
+		response.BadRequest(ctx, c, err.Error())
+		return
+	}
+	if startTime != nil && endTime != nil && startTime.After(*endTime) {
+		response.BadRequest(ctx, c, "start_time cannot be later than end_time")
 		return
 	}
 
-	items, total, err := model.KBRetrieveLogDao.ListByUserID(userID, page, pageSize)
+	queryKeywordRaw := strings.TrimSpace(string(c.Query("query_keyword")))
+	var queryKeyword *string
+	if queryKeywordRaw != "" {
+		queryKeyword = &queryKeywordRaw
+	}
+
+	requestIDRaw := strings.TrimSpace(string(c.Query("request_id")))
+	var requestID *string
+	if requestIDRaw != "" {
+		requestID = &requestIDRaw
+	}
+
+	items, total, err := model.KBRetrieveLogDao.ListWithFilter(model.KBRetrieveLogListFilter{
+		UserID:       &userID,
+		KBID:         kbID,
+		ResultStatus: status,
+		StartTime:    startTime,
+		EndTime:      endTime,
+		QueryKeyword: queryKeyword,
+		RequestID:    requestID,
+		Page:         page,
+		PageSize:     pageSize,
+	})
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list retrieve logs", err))
 		return
