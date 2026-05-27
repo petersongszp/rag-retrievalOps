@@ -48,6 +48,10 @@ type RetrievalLogFilters = {
 
 const PAGE_SIZE = 20;
 
+type RetrievalLogWithP3Summary = KBRetrieveLog & {
+  topk_policy_version?: string;
+};
+
 const statusOptions: Array<{ label: string; value: RetrieveResultStatus }> = [
   { label: '成功', value: 'success' },
   { label: '无结果', value: 'no_result' },
@@ -107,6 +111,24 @@ function renderField(value: string | number | boolean | null | undefined) {
   return String(value);
 }
 
+function buildRetrievalDebugHref(requestId: string) {
+  return `/retrieval-lab/debug?request_id=${encodeURIComponent(requestId)}`;
+}
+
+function hasP3Summary(detail: RetrievalLogWithP3Summary | null) {
+  if (!detail) {
+    return false;
+  }
+
+  return (
+    detail.parent_child_enabled !== undefined ||
+    Boolean(detail.topk_policy_version) ||
+    Boolean(detail.evidence_gate_result) ||
+    detail.citation_support_score !== undefined ||
+    Boolean(detail.refusal_reason)
+  );
+}
+
 export function RetrievalLogsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -118,7 +140,7 @@ export function RetrievalLogsPage() {
   const [page, setPage] = useState(1);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [detail, setDetail] = useState<KBRetrieveLog | null>(null);
+  const [detail, setDetail] = useState<RetrievalLogWithP3Summary | null>(null);
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
@@ -180,8 +202,29 @@ export function RetrievalLogsPage() {
         width: 190,
         render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
       },
+      {
+        title: '操作',
+        key: 'actions',
+        width: 120,
+        render: (_, record) => (
+          <Button
+            type="link"
+            size="small"
+            disabled={!record.request_id}
+            onClick={(event) => {
+              event.stopPropagation();
+              if (!record.request_id) {
+                return;
+              }
+              router.push(buildRetrievalDebugHref(record.request_id));
+            }}
+          >
+            调试视图
+          </Button>
+        ),
+      },
     ],
-    []
+    [router]
   );
 
   const loadList = async (nextFilters: RetrievalLogFilters, nextPage: number) => {
@@ -208,7 +251,9 @@ export function RetrievalLogsPage() {
       setDetailOpen(true);
       setDetailLoading(true);
       setDetailError(null);
-      const data = (await apiClient.get(KB_ADMIN_API.GET_RETRIEVE_AUDIT_LOG(requestId))) as KBRetrieveLog;
+      const data = (await apiClient.get(
+        KB_ADMIN_API.GET_RETRIEVE_AUDIT_LOG(requestId)
+      )) as RetrievalLogWithP3Summary;
       setDetail(data);
     } catch (err) {
       setDetailError(err instanceof Error ? err.message : '加载检索详情失败');
@@ -363,6 +408,14 @@ export function RetrievalLogsPage() {
           <Alert type="error" showIcon message={detailError} />
         ) : detail ? (
           <Space direction="vertical" size="large" className="w-full">
+            {!hasP3Summary(detail) ? (
+              <Alert
+                type="warning"
+                showIcon
+                message="该请求暂无 P3 调试字段"
+                description="当前仍可查看基础 trace 详情；如需完整 P3 摘要，请确认日志链路已返回 parent-child、TopK、evidence 与 citation 相关字段。"
+              />
+            ) : null}
             <Descriptions title="请求信息" column={1} size="small" bordered>
               <Descriptions.Item label="Request ID">{renderField(detail.request_id)}</Descriptions.Item>
               <Descriptions.Item label="KB IDs">{renderField(detail.kb_ids)}</Descriptions.Item>
@@ -408,6 +461,34 @@ export function RetrievalLogsPage() {
             </Descriptions>
 
             <Descriptions title="错误与补充信息" column={1} size="small" bordered>
+              <Descriptions.Item label="P3 摘要">
+                <Space direction="vertical" size="middle" className="w-full">
+                  <div>
+                    <Text strong>parent_child_enabled: </Text>
+                    {renderField(detail.parent_child_enabled)}
+                  </div>
+                  <div>
+                    <Text strong>topk_policy_version: </Text>
+                    {detail.topk_policy_version ? (
+                      detail.topk_policy_version
+                    ) : (
+                      <Text type="secondary">当前日志未返回 topk_policy_version</Text>
+                    )}
+                  </div>
+                  <div>
+                    <Text strong>evidence_gate_result: </Text>
+                    {renderField(detail.evidence_gate_result)}
+                  </div>
+                  <div>
+                    <Text strong>citation_support_score: </Text>
+                    {renderField(detail.citation_support_score)}
+                  </div>
+                  <div>
+                    <Text strong>refusal_reason: </Text>
+                    {renderField(detail.refusal_reason)}
+                  </div>
+                </Space>
+              </Descriptions.Item>
               <Descriptions.Item label="Error Code">{renderField(detail.error_code)}</Descriptions.Item>
               <Descriptions.Item label="Error Message">{renderField(detail.error_msg)}</Descriptions.Item>
               <Descriptions.Item label="Strategy">{renderField(detail.strategy)}</Descriptions.Item>

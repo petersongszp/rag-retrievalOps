@@ -444,6 +444,19 @@ export function RetrievalLabPage() {
                 >
                   查看 Trace
                 </Button>
+                <Button
+                  disabled={!result.request_id}
+                  onClick={() => {
+                    if (!result.request_id) {
+                      return;
+                    }
+                    router.push(
+                      `/retrieval-lab/debug?request_id=${encodeURIComponent(result.request_id)}`
+                    );
+                  }}
+                >
+                  鏌ョ湅璋冭瘯瑙嗗浘
+                </Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={() => void openSaveModal()}>
                   保存为评测样本
                 </Button>

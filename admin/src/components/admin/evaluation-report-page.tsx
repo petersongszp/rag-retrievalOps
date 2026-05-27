@@ -60,6 +60,24 @@ type MetricRow = {
   inverse?: boolean;
 };
 
+type FailureCaseWithDebugHints = EvalFailureCase & {
+  baseline_debug_available?: boolean;
+  candidate_debug_available?: boolean;
+  baseline_debug_request_id?: string;
+  candidate_debug_request_id?: string;
+};
+
+type FailureTraceSide = 'baseline' | 'candidate';
+
+type FailureTraceLink = {
+  label: string;
+  href?: string;
+  fallbackHref?: string;
+  usesDebug: boolean;
+  missing: boolean;
+  downgraded: boolean;
+};
+
 const failureReasonOptions: Array<{ label: string; value: EvalFailureReason }> = [
   { label: 'recall_miss', value: 'recall_miss' },
   { label: 'citation_miss', value: 'citation_miss' },
@@ -158,6 +176,56 @@ function buildFailureParams(filters: FailureFilterValues, page: number) {
     ...(filters.failure_reason ? { failure_reason: filters.failure_reason } : {}),
     ...(filters.query_type?.trim() ? { query_type: filters.query_type.trim() } : {}),
     ...(filters.tag?.trim() ? { tag: filters.tag.trim() } : {}),
+  };
+}
+
+function buildRetrievalDebugHref(requestId: string) {
+  return `/retrieval-lab/debug?request_id=${encodeURIComponent(requestId)}`;
+}
+
+function buildTraceLogsHref(requestId: string) {
+  return `/trace-logs/retrieval?request_id=${encodeURIComponent(requestId)}`;
+}
+
+function getFailureTraceLink(
+  record: FailureCaseWithDebugHints,
+  side: FailureTraceSide
+): FailureTraceLink {
+  const prefix = side === 'baseline' ? 'Baseline' : 'Candidate';
+  const requestId = side === 'baseline' ? record.baseline_request_id : record.candidate_request_id;
+  const debugRequestId =
+    side === 'baseline'
+      ? record.baseline_debug_request_id ?? requestId
+      : record.candidate_debug_request_id ?? requestId;
+  const debugAvailable =
+    side === 'baseline' ? record.baseline_debug_available : record.candidate_debug_available;
+
+  if (debugRequestId && debugAvailable !== false) {
+    return {
+      label: `${prefix} Debug`,
+      href: buildRetrievalDebugHref(debugRequestId),
+      fallbackHref: requestId ? buildTraceLogsHref(requestId) : undefined,
+      usesDebug: true,
+      missing: false,
+      downgraded: false,
+    };
+  }
+
+  if (requestId) {
+    return {
+      label: `${prefix} Trace`,
+      href: buildTraceLogsHref(requestId),
+      usesDebug: false,
+      missing: false,
+      downgraded: debugAvailable === false,
+    };
+  }
+
+  return {
+    label: `${prefix} Trace`,
+    usesDebug: false,
+    missing: true,
+    downgraded: false,
   };
 }
 
@@ -481,25 +549,41 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
       {
         title: 'Trace',
         key: 'trace',
-        width: 240,
-        render: (_, record) => (
-          <Space wrap>
-            {record.baseline_request_id ? (
-              <Link href={`/trace-logs/retrieval?request_id=${record.baseline_request_id}`}>
-                <Button size="small">Baseline Trace</Button>
-              </Link>
-            ) : (
-              <Tag color="warning">未生成 baseline trace</Tag>
-            )}
-            {record.candidate_request_id ? (
-              <Link href={`/trace-logs/retrieval?request_id=${record.candidate_request_id}`}>
-                <Button size="small">Candidate Trace</Button>
-              </Link>
-            ) : (
-              <Tag color="warning">未生成 candidate trace</Tag>
-            )}
-          </Space>
-        ),
+        width: 320,
+        render: (_, rawRecord) => {
+          const record = rawRecord as FailureCaseWithDebugHints;
+          const baselineTrace = getFailureTraceLink(record, 'baseline');
+          const candidateTrace = getFailureTraceLink(record, 'candidate');
+
+          const renderTraceAction = (trace: FailureTraceLink, missingText: string) => {
+            if (trace.missing || !trace.href) {
+              return <Tag color="warning">{missingText}</Tag>;
+            }
+
+            return (
+              <Space size={4} wrap>
+                <Link href={trace.href}>
+                  <Button size="small">{trace.label}</Button>
+                </Link>
+                {trace.usesDebug && trace.fallbackHref ? (
+                  <Link href={trace.fallbackHref}>
+                    <Button size="small" type="link">
+                      Trace Logs
+                    </Button>
+                  </Link>
+                ) : null}
+                {trace.downgraded ? <Text type="secondary">P3 unavailable</Text> : null}
+              </Space>
+            );
+          };
+
+          return (
+            <Space wrap>
+              {renderTraceAction(baselineTrace, 'Baseline trace unavailable')}
+              {renderTraceAction(candidateTrace, 'Candidate trace unavailable')}
+            </Space>
+          );
+        },
       },
     ],
     []
