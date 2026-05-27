@@ -25,4 +25,26 @@ export const KB_ADMIN_API = {
   LIST_INGEST_LOGS: `${API_BASE_URL}/admin/kb/logs/ingest`,
   GET_INGEST_LOG_DETAIL: (jobId: number | string) =>
     `${API_BASE_URL}/admin/kb/logs/ingest/${jobId}`,
+
+  LIST_EVAL_DATASETS: `${API_BASE_URL}/admin/kb/eval/datasets`,
+  CREATE_EVAL_DATASET: `${API_BASE_URL}/admin/kb/eval/datasets`,
+  LIST_EVAL_CASES: (datasetId: number | string) =>
+    `${API_BASE_URL}/admin/kb/eval/datasets/${datasetId}/items`,
+  CREATE_EVAL_CASE: (datasetId: number | string) =>
+    `${API_BASE_URL}/admin/kb/eval/datasets/${datasetId}/items`,
+  IMPORT_EVAL_CASES: (datasetId: number | string) =>
+    `${API_BASE_URL}/admin/kb/eval/datasets/${datasetId}/items/import`,
+  EXPORT_EVAL_CASES: (datasetId: number | string) =>
+    `${API_BASE_URL}/admin/kb/eval/datasets/${datasetId}/items/export`,
+  VALIDATE_EVAL_DATASET: (datasetId: number | string) =>
+    `${API_BASE_URL}/admin/kb/eval/datasets/${datasetId}/validate`,
+
+  LIST_EVAL_RUNS: `${API_BASE_URL}/admin/kb/eval/runs`,
+  CREATE_EVAL_RUN: `${API_BASE_URL}/admin/kb/eval/runs`,
+  GET_EVAL_RUN: (runId: string) => `${API_BASE_URL}/admin/kb/eval/runs/${runId}`,
+  GET_EVAL_REPORT: (runId: string) => `${API_BASE_URL}/admin/kb/eval/runs/${runId}/report`,
+  LIST_EVAL_FAILURE_CASES: (runId: string) =>
+    `${API_BASE_URL}/admin/kb/eval/runs/${runId}/cases`,
+  EXPORT_EVAL_REPORT: (runId: string, format: 'json' | 'markdown') =>
+    `${API_BASE_URL}/admin/kb/eval/runs/${runId}/report/export?format=${format}`,
 };

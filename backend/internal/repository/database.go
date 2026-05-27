@@ -81,6 +81,9 @@ func migrateDatabase() error {
 		&model.KBIngestJob{},
 		&model.KBJobOperationLog{},
 		&model.KBRetrieveLog{},
+		&model.KBEvalDataset{},
+		&model.KBEvalCase{},
+		&model.KBEvalRun{},
 	)
 }
 

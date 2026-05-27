@@ -171,3 +171,237 @@ export interface ListResponse<T> {
   page: number;
   page_size: number;
 }
+
+export type EvalDatasetStatus = 'draft' | 'ready' | 'invalid' | 'archived';
+
+export type EvalRunStatus = 'pending' | 'running' | 'succeeded' | 'failed' | 'canceled';
+
+export type EvalFailureReason =
+  | 'recall_miss'
+  | 'citation_miss'
+  | 'mrr_drop'
+  | 'ndcg_drop'
+  | 'latency_regression'
+  | 'gate_failed'
+  | 'trace_missing';
+
+export interface CitationTarget {
+  document_id?: number;
+  chunk_id?: string;
+  file_name?: string;
+}
+
+export interface EvalDataset {
+  id: number;
+  name: string;
+  description?: string;
+  kb_id?: number;
+  case_count: number;
+  status: EvalDatasetStatus;
+  created_by?: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface EvalCase {
+  id: number;
+  dataset_id: number;
+  case_key: string;
+  query: string;
+  top_k: number;
+  relevant_ids: string[];
+  citation_targets: CitationTarget[];
+  query_type?: string;
+  tags?: string[];
+  kb_ids?: number[];
+  collection?: string;
+  notes?: string;
+  validation_status: 'valid' | 'invalid' | 'unchecked';
+  validation_errors?: string[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface EvalStrategyProfile {
+  name: string;
+  label?: string;
+  baseline?: boolean;
+  candidate?: boolean;
+  mode: string;
+  enable_query_rewrite?: boolean;
+  enable_dynamic_topk?: boolean;
+  enable_advanced_rerank?: boolean;
+  candidate_top_k?: number;
+  dense_weight?: number;
+  sparse_weight?: number;
+  min_top_k?: number;
+  max_top_k?: number;
+  token_budget?: number;
+  rewrite_max_expansions?: number;
+  rerank_timeout_ms?: number;
+  rerank_model?: string;
+}
+
+export interface EvalAggregateMetrics {
+  recall_at_k: number;
+  mrr: number;
+  ndcg: number;
+  citation_accuracy: number;
+  p50_latency_ms: number;
+  p95_latency_ms: number;
+  avg_latency_ms: number;
+}
+
+export interface EvalQueryMetrics {
+  query_id: string;
+  query: string;
+  query_type?: string;
+  tags?: string[];
+  top_k: number;
+  latency: number;
+  recall_at_k: number;
+  mrr: number;
+  ndcg: number;
+  citation_accuracy: number;
+  result_ids: string[];
+  relevant_ids: string[];
+  citation_targets?: CitationTarget[];
+}
+
+export interface EvalStrategyResult {
+  strategy: EvalStrategyProfile;
+  metrics: EvalAggregateMetrics;
+  queries: EvalQueryMetrics[];
+}
+
+export interface EvalStrategyDelta {
+  strategy: string;
+  compared_to: string;
+  recall_delta: number;
+  mrr_delta: number;
+  ndcg_delta: number;
+  citation_accuracy_delta: number;
+  p95_latency_delta_ms: number;
+}
+
+export interface EvalComparisonSummary {
+  baseline: string;
+  candidate: string;
+  recall_delta: number;
+  mrr_delta: number;
+  ndcg_delta: number;
+  citation_accuracy_delta: number;
+  p95_latency_delta_ms: number;
+  p95_latency_delta_ratio: number;
+}
+
+export interface EvalGateThresholds {
+  min_recall_delta?: number;
+  min_mrr_delta?: number;
+  min_ndcg_delta?: number;
+  min_citation_accuracy_delta?: number;
+  max_p95_latency_regression_ms?: number;
+  max_p95_latency_regression_ratio?: number;
+}
+
+export interface EvalGateCheck {
+  name: string;
+  actual: number;
+  expected: number;
+  passed: boolean;
+  message: string;
+}
+
+export interface EvalGateResult {
+  passed: boolean;
+  thresholds: EvalGateThresholds;
+  checks: EvalGateCheck[];
+}
+
+export interface EvalReport {
+  dataset_size: number;
+  generated_at: string;
+  results: EvalStrategyResult[];
+  contribution: EvalStrategyDelta[];
+  comparison: EvalComparisonSummary;
+  gate: EvalGateResult;
+  baseline: string;
+  candidate: string;
+}
+
+export interface EvalRun {
+  id: number;
+  run_id: string;
+  dataset_id: number;
+  baseline_profile: string;
+  candidate_profile: string;
+  profiles?: EvalStrategyProfile[];
+  gate_thresholds: EvalGateThresholds;
+  status: EvalRunStatus;
+  progress: number;
+  case_total: number;
+  case_finished: number;
+  report_path?: string;
+  error_msg?: string;
+  started_at?: string;
+  finished_at?: string;
+  created_at: string;
+  updated_at?: string;
+}
+
+export interface EvalFailureMetrics {
+  recall_at_k: number;
+  mrr: number;
+  ndcg: number;
+  citation_accuracy: number;
+  latency_ms: number;
+}
+
+export interface EvalFailureDelta {
+  recall_delta: number;
+  mrr_delta: number;
+  ndcg_delta: number;
+  citation_accuracy_delta: number;
+  latency_delta_ms: number;
+}
+
+export interface EvalFailureCase {
+  case_id: string;
+  query: string;
+  query_type?: string;
+  tags?: string[];
+  failure_reason: EvalFailureReason;
+  baseline_metrics: EvalFailureMetrics;
+  candidate_metrics: EvalFailureMetrics;
+  delta: EvalFailureDelta;
+  baseline_request_id?: string;
+  candidate_request_id?: string;
+}
+
+export interface EvalDatasetValidationIssue {
+  case_id: number;
+  case_key: string;
+  errors: string[];
+}
+
+export interface EvalDatasetValidationResult {
+  dataset_id: number;
+  status: EvalDatasetStatus;
+  case_count: number;
+  valid_count: number;
+  invalid_count: number;
+  unchecked_count: number;
+  issues: EvalDatasetValidationIssue[];
+}
+
+export interface EvalCaseImportError {
+  index: number;
+  case_key?: string;
+  message: string;
+}
+
+export interface EvalCaseImportResult {
+  imported: number;
+  failed: number;
+  errors: EvalCaseImportError[];
+}
