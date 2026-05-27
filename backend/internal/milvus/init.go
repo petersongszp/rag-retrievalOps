@@ -226,6 +226,26 @@ func GetMilvusManager() (*MilvusManager, error) {
 	return globalManager, nil
 }
 
+func ReconfigureGlobalManager(ctx context.Context, cfg *config.Config) error {
+	if cfg == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if globalManager == nil {
+		return nil
+	}
+	previous := globalManager
+	manager, err := InitMilvusManager(ctx, cfg)
+	if err != nil {
+		globalManager = previous
+		return err
+	}
+	if previous != nil {
+		_ = previous.Close()
+	}
+	globalManager = manager
+	return nil
+}
+
 // Close 关闭所有服务和连接
 func (m *MilvusManager) Close() error {
 	log.Println("Closing Milvus Manager...")

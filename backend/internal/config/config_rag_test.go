@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"interview-agents/internal/rag/phase3"
 )
 
 func baseValidRAGConfig() *Config {
@@ -206,5 +208,47 @@ rag:
 	phase2SnapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase2", "baseline_snapshot.json")
 	if _, err := os.Stat(phase2SnapshotPath); err != nil {
 		t.Fatalf("expected phase2 baseline snapshot to be created, got err: %v", err)
+	}
+}
+
+func TestRAGFeatureFlagsPhase3StrategyFlags(t *testing.T) {
+	flags := RAGFeatureFlags{
+		EnableParentChildRetrieval: true,
+		EnableStrategicTopK:        true,
+		EnableEvidenceRefusal:      false,
+		EnableCitationConsistency:  true,
+		EnableDomainTerms:          false,
+		EnableRouteSpecificRewrite: true,
+		EnableModelAssistedRewrite: false,
+	}
+
+	got := flags.Phase3StrategyFlags()
+	if len(got) != len(phase3.ManagedFeatureFlags()) {
+		t.Fatalf("Phase3StrategyFlags len = %d, want %d", len(got), len(phase3.ManagedFeatureFlags()))
+	}
+	if !got[phase3.FlagParentChildRetrieval] || !got[phase3.FlagStrategicTopK] || !got[phase3.FlagCitationConsistency] {
+		t.Fatalf("Phase3StrategyFlags missing enabled flags: %+v", got)
+	}
+	if got[phase3.FlagEvidenceRefusal] || got[phase3.FlagDomainTerms] || got[phase3.FlagModelAssistedRewrite] {
+		t.Fatalf("Phase3StrategyFlags unexpected enabled flags: %+v", got)
+	}
+}
+
+func TestRAGFeatureFlagsGetAndSetPhase3StrategyFlag(t *testing.T) {
+	var flags RAGFeatureFlags
+
+	if ok := flags.SetPhase3StrategyFlag(phase3.FlagModelAssistedRewrite, true); !ok {
+		t.Fatal("SetPhase3StrategyFlag should accept managed flag")
+	}
+	value, ok := flags.GetPhase3StrategyFlag(phase3.FlagModelAssistedRewrite)
+	if !ok || !value {
+		t.Fatalf("GetPhase3StrategyFlag(%q) = (%t, %t), want (true, true)", phase3.FlagModelAssistedRewrite, value, ok)
+	}
+
+	if ok := flags.SetPhase3StrategyFlag("RAG_UNKNOWN_FLAG", true); ok {
+		t.Fatal("SetPhase3StrategyFlag should reject unmanaged flag")
+	}
+	if _, ok := flags.GetPhase3StrategyFlag("RAG_UNKNOWN_FLAG"); ok {
+		t.Fatal("GetPhase3StrategyFlag should reject unmanaged flag")
 	}
 }

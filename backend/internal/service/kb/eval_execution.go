@@ -134,7 +134,7 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 	return searcher, nil
 }
 
-func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetCase) ([]evaluation.RetrievedItem, error) {
+func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetCase) (evaluation.SearchOutcome, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -165,28 +165,44 @@ func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetC
 		docs, err = s.retriever.RetrieveWithOptions(queryCtx, item.Query, opts)
 	}
 	if err != nil {
-		return nil, err
+		return evaluation.SearchOutcome{}, err
 	}
 
 	results := make([]evaluation.RetrievedItem, 0, len(docs))
+	outcome := evaluation.SearchOutcome{}
 	for _, doc := range docs {
 		if doc == nil {
 			continue
 		}
+		metadata := doc.MetaData
+		route := readString(metadata, "route")
 		results = append(results, evaluation.RetrievedItem{
 			ResultID: normalizeResultID(doc),
-			Score:    readFloat(doc.MetaData, "score"),
-			Route:    readString(doc.MetaData, "route"),
+			Score:    readFloat(metadata, "score"),
+			Route:    route,
 			Citation: evaluation.CitationTarget{
-				DocumentID: readUint64(doc.MetaData, "document_id"),
-				ChunkID:    firstNonEmpty(doc.ID, readString(doc.MetaData, "chunk_id")),
-				FileName:   readString(doc.MetaData, "file_name"),
+				DocumentID: readUint64(metadata, "document_id"),
+				ChunkID:    firstNonEmpty(doc.ID, readString(metadata, "chunk_id")),
+				FileName:   readString(metadata, "file_name"),
 			},
-			Source:    readSource(doc.MetaData),
-			RawFields: cloneMap(doc.MetaData),
+			Source:    readSource(metadata),
+			RawFields: cloneMap(metadata),
 		})
+		outcome.Refused = outcome.Refused || readBool(metadata, "refused")
+		outcome.RefusalReason = firstNonEmpty(outcome.RefusalReason, readString(metadata, "refusal_reason"))
+		outcome.CitationSupportScore = maxFloat(outcome.CitationSupportScore, readFloat(metadata, "citation_support_score"))
+		outcome.ParentFillCount = max(outcome.ParentFillCount, readInt(metadata, "parent_fill_count"))
+		outcome.RewriteApplied = outcome.RewriteApplied || readBool(metadata, "rewrite_applied")
+		outcome.ModelRewriteApplied = outcome.ModelRewriteApplied || readBool(metadata, "model_rewrite_applied")
+		switch strings.ToLower(route) {
+		case "dense":
+			outcome.DenseContribution++
+		case "sparse":
+			outcome.SparseContribution++
+		}
 	}
-	return results, nil
+	outcome.Items = results
+	return outcome, nil
 }
 
 func normalizeResultID(doc *schema.Document) string {
@@ -273,6 +289,31 @@ func readFloat(metadata map[string]interface{}, key string) float64 {
 	return 0
 }
 
+func readInt(metadata map[string]interface{}, key string) int {
+	if metadata == nil {
+		return 0
+	}
+	switch value := metadata[key].(type) {
+	case int:
+		return value
+	case int32:
+		return int(value)
+	case int64:
+		return int(value)
+	case uint:
+		return int(value)
+	case uint32:
+		return int(value)
+	case uint64:
+		return int(value)
+	case float32:
+		return int(value)
+	case float64:
+		return int(value)
+	}
+	return 0
+}
+
 func readString(metadata map[string]interface{}, key string) string {
 	if metadata == nil {
 		return ""
@@ -308,6 +349,19 @@ func readUint64(metadata map[string]interface{}, key string) uint64 {
 	return 0
 }
 
+func readBool(metadata map[string]interface{}, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	switch value := metadata[key].(type) {
+	case bool:
+		return value
+	case string:
+		return strings.EqualFold(strings.TrimSpace(value), "true")
+	}
+	return false
+}
+
 func readSource(metadata map[string]interface{}) map[string]interface{} {
 	if metadata == nil {
 		return nil
@@ -328,4 +382,11 @@ func cloneMap(source map[string]interface{}) map[string]interface{} {
 		cloned[key] = value
 	}
 	return cloned
+}
+
+func maxFloat(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
 }

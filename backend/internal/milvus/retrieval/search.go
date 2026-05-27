@@ -83,6 +83,7 @@ type SearchMetrics struct {
 type SearchResult struct {
 	Documents []*schema.Document
 	Metrics   SearchMetrics
+	Debug     *DebugTrace
 }
 
 func SearchWithExpr(

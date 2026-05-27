@@ -3,6 +3,7 @@ package router
 import (
 	kb "interview-agents/api/handler/kb"
 	"interview-agents/internal/config"
+	"interview-agents/internal/rag/phase3"
 	"log"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -32,7 +33,8 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.DELETE("/documents/:document_id", kb.DeleteDocument)
 	group.POST("/retrieve", kb.Retrieve)
 	group.GET("/retrieve/audit/:request_id", kb.GetRetrieveAuditLog)
-	group.GET("/retrieve/debug/:request_id", kb.GetRetrieveDebugView)
+	group.GET(phase3.LegacyRetrievalDebugRoute, kb.GetRetrieveDebugView)
+	group.GET(phase3.RetrievalDebugRoute, kb.GetRetrieveDebugView)
 	group.GET("/retrieve/audit", kb.ListRetrieveAuditLogs)
 	group.GET("/metrics/overview", kb.GetMetricsOverview)
 	group.GET("/logs/ingest", kb.ListIngestLogs)
@@ -54,6 +56,14 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 		group.GET("/eval/runs/:run_id/report", kb.GetEvalReport)
 		group.GET("/eval/runs/:run_id/cases", kb.ListEvalFailureCases)
 		group.GET("/eval/runs/:run_id/report/export", kb.ExportEvalReport)
+		group.GET("/strategy/flags", kb.ListStrategyFlags)
+		group.PATCH("/strategy/flags/:flag_key", kb.UpdateStrategyFlag)
+		group.GET("/strategy/versions", kb.ListStrategyVersions)
+		group.GET("/strategy/versions/:version_id", kb.GetStrategyVersion)
+		group.POST("/strategy/rollback", kb.RollbackStrategy)
+		group.GET("/strategy/impact", kb.GetStrategyImpact)
+		group.GET("/strategy/gates", kb.GetStrategyGates)
+		group.GET("/strategy/operations", kb.ListStrategyOperations)
 		group.GET("/release/status", kb.GetReleaseStatus)
 		group.GET("/release/summary", kb.GetReleaseSummary)
 		group.POST("/release/rollback", kb.RollbackRelease)
