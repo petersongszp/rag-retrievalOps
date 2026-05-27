@@ -234,6 +234,8 @@
 
 **对应后端**：`rag-enterprise-fusion-roadmap.md` Phase 3 高级检索能力期（L0~L8）。
 
+**详细执行文档**：`admin/docs/phase3-rag-admin-p3-detailed-roadmap.md`。
+
 **目标**：把父子块、动态 TopK、证据拒答、高级 rewrite 等高级策略变成可解释、可灰度、可回滚的前端工作台。
 
 #### 5.3.1 前端任务
