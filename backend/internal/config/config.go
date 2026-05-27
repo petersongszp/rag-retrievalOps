@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"interview-agents/internal/rag/phase3"
+
 	"gopkg.in/yaml.v3"
 )
 
@@ -228,6 +230,64 @@ type RAGFeatureFlags struct {
 	EnableDomainTerms          bool `yaml:"enable_domain_terms"`
 	EnableRouteSpecificRewrite bool `yaml:"enable_route_specific_rewrite"`
 	EnableModelAssistedRewrite bool `yaml:"enable_model_assisted_rewrite"`
+}
+
+func (f RAGFeatureFlags) Phase3StrategyFlags() map[string]bool {
+	return map[string]bool{
+		phase3.FlagParentChildRetrieval: f.EnableParentChildRetrieval,
+		phase3.FlagStrategicTopK:        f.EnableStrategicTopK,
+		phase3.FlagEvidenceRefusal:      f.EnableEvidenceRefusal,
+		phase3.FlagCitationConsistency:  f.EnableCitationConsistency,
+		phase3.FlagDomainTerms:          f.EnableDomainTerms,
+		phase3.FlagRouteSpecificRewrite: f.EnableRouteSpecificRewrite,
+		phase3.FlagModelAssistedRewrite: f.EnableModelAssistedRewrite,
+	}
+}
+
+func (f RAGFeatureFlags) GetPhase3StrategyFlag(flagKey string) (bool, bool) {
+	switch flagKey {
+	case phase3.FlagParentChildRetrieval:
+		return f.EnableParentChildRetrieval, true
+	case phase3.FlagStrategicTopK:
+		return f.EnableStrategicTopK, true
+	case phase3.FlagEvidenceRefusal:
+		return f.EnableEvidenceRefusal, true
+	case phase3.FlagCitationConsistency:
+		return f.EnableCitationConsistency, true
+	case phase3.FlagDomainTerms:
+		return f.EnableDomainTerms, true
+	case phase3.FlagRouteSpecificRewrite:
+		return f.EnableRouteSpecificRewrite, true
+	case phase3.FlagModelAssistedRewrite:
+		return f.EnableModelAssistedRewrite, true
+	default:
+		return false, false
+	}
+}
+
+func (f *RAGFeatureFlags) SetPhase3StrategyFlag(flagKey string, enabled bool) bool {
+	if f == nil {
+		return false
+	}
+	switch flagKey {
+	case phase3.FlagParentChildRetrieval:
+		f.EnableParentChildRetrieval = enabled
+	case phase3.FlagStrategicTopK:
+		f.EnableStrategicTopK = enabled
+	case phase3.FlagEvidenceRefusal:
+		f.EnableEvidenceRefusal = enabled
+	case phase3.FlagCitationConsistency:
+		f.EnableCitationConsistency = enabled
+	case phase3.FlagDomainTerms:
+		f.EnableDomainTerms = enabled
+	case phase3.FlagRouteSpecificRewrite:
+		f.EnableRouteSpecificRewrite = enabled
+	case phase3.FlagModelAssistedRewrite:
+		f.EnableModelAssistedRewrite = enabled
+	default:
+		return false
+	}
+	return true
 }
 
 type RAGThresholds struct {
