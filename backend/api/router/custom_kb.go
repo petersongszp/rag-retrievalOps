@@ -32,6 +32,7 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.DELETE("/documents/:document_id", kb.DeleteDocument)
 	group.POST("/retrieve", kb.Retrieve)
 	group.GET("/retrieve/audit/:request_id", kb.GetRetrieveAuditLog)
+	group.GET("/retrieve/debug/:request_id", kb.GetRetrieveDebugView)
 	group.GET("/retrieve/audit", kb.ListRetrieveAuditLogs)
 	group.GET("/metrics/overview", kb.GetMetricsOverview)
 	group.GET("/logs/ingest", kb.ListIngestLogs)

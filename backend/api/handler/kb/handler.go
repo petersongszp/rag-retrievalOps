@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -160,20 +161,135 @@ type releaseStatusResponse struct {
 }
 
 type releaseSummaryResponse struct {
-	WindowMinutes       int            `json:"window_minutes"`
-	Since               time.Time      `json:"since"`
-	TotalRequests       int            `json:"total_requests"`
-	StrategyCounts      map[string]int `json:"strategy_counts"`
-	ReleaseStageCounts  map[string]int `json:"release_stage_counts"`
-	ResultStatusCounts  map[string]int `json:"result_status_counts"`
-	EmptyReasonCounts   map[string]int `json:"empty_reason_counts"`
-	RouteContribution   map[string]int `json:"route_contribution"`
-	RewriteAppliedRate  float64        `json:"rewrite_applied_rate"`
-	P95DurationMs       int64          `json:"p95_duration_ms"`
-	P95RerankMs         int64          `json:"p95_rerank_ms"`
-	RollbackRecommended bool           `json:"rollback_recommended"`
-	Risks               []string       `json:"risks"`
-	AcceptanceTemplate  string         `json:"acceptance_template"`
+	WindowMinutes         int            `json:"window_minutes"`
+	Since                 time.Time      `json:"since"`
+	TotalRequests         int            `json:"total_requests"`
+	StrategyCounts        map[string]int `json:"strategy_counts"`
+	ReleaseStageCounts    map[string]int `json:"release_stage_counts"`
+	ResultStatusCounts    map[string]int `json:"result_status_counts"`
+	EmptyReasonCounts     map[string]int `json:"empty_reason_counts"`
+	RouteContribution     map[string]int `json:"route_contribution"`
+	RewriteGainBuckets    map[string]int `json:"rewrite_gain_buckets"`
+	RewriteAppliedRate    float64        `json:"rewrite_applied_rate"`
+	ParentFillRate        float64        `json:"parent_fill_rate"`
+	EvidenceRefusalRate   float64        `json:"evidence_refusal_rate"`
+	ModelRewriteErrorRate float64        `json:"model_rewrite_error_rate"`
+	AvgCitationSupport    float64        `json:"avg_citation_support"`
+	P95DurationMs         int64          `json:"p95_duration_ms"`
+	P95RerankMs           int64          `json:"p95_rerank_ms"`
+	RollbackRecommended   bool           `json:"rollback_recommended"`
+	Risks                 []string       `json:"risks"`
+	AcceptanceTemplate    string         `json:"acceptance_template"`
+}
+
+type retrieveDebugQueryView struct {
+	Original string `json:"original"`
+	Rewrite  string `json:"rewrite,omitempty"`
+	Final    string `json:"final,omitempty"`
+}
+
+type retrieveDebugRouteView struct {
+	Route           string `json:"route"`
+	FinalQuery      string `json:"final_query,omitempty"`
+	RewriteStrategy string `json:"rewrite_strategy,omitempty"`
+	Hits            int    `json:"hits"`
+	Contribution    int    `json:"contribution"`
+}
+
+type retrieveDebugTopKView struct {
+	CandidateTopK        int     `json:"candidate_topk"`
+	FinalTopK            int     `json:"final_topk"`
+	TokenBudget          int     `json:"token_budget"`
+	TokenBudgetRemaining int     `json:"token_budget_remaining"`
+	ContextTokens        int     `json:"context_tokens"`
+	TruncateReason       string  `json:"truncate_reason,omitempty"`
+	PolicyVersion        string  `json:"policy_version,omitempty"`
+	ScoreDistribution    string  `json:"score_distribution,omitempty"`
+	RerankGap            float64 `json:"rerank_gap,omitempty"`
+	EvidenceDensity      float64 `json:"evidence_density,omitempty"`
+	DecisionReason       string  `json:"decision_reason,omitempty"`
+}
+
+type retrieveDebugParentFillItem struct {
+	ChunkID          string `json:"chunk_id,omitempty"`
+	ParentID         string `json:"parent_id,omitempty"`
+	Strategy         string `json:"strategy,omitempty"`
+	Reason           string `json:"reason,omitempty"`
+	Applied          bool   `json:"applied"`
+	FillCount        int    `json:"fill_count"`
+	FillTokens       int    `json:"fill_tokens"`
+	BeforeContent    string `json:"before_content,omitempty"`
+	AfterContent     string `json:"after_content,omitempty"`
+	OriginalChildLen int    `json:"original_child_len"`
+	FilledContentLen int    `json:"filled_content_len"`
+}
+
+type retrieveDebugParentChildView struct {
+	Enabled       bool                          `json:"enabled"`
+	Strategy      string                        `json:"strategy,omitempty"`
+	FillCount     int                           `json:"fill_count"`
+	FallbackCount int                           `json:"fallback_count"`
+	FillTokens    int                           `json:"fill_tokens"`
+	Items         []retrieveDebugParentFillItem `json:"items,omitempty"`
+}
+
+type retrieveDebugRewriteView struct {
+	Applied             bool     `json:"applied"`
+	Strategy            string   `json:"strategy,omitempty"`
+	GainBucket          string   `json:"gain_bucket,omitempty"`
+	DenseQuery          string   `json:"dense_query,omitempty"`
+	SparseQuery         string   `json:"sparse_query,omitempty"`
+	TermDictScope       string   `json:"term_dict_scope,omitempty"`
+	TermDictVersion     string   `json:"term_dict_version,omitempty"`
+	TermHits            []string `json:"term_hits,omitempty"`
+	ModelApplied        bool     `json:"model_applied"`
+	ModelShadow         bool     `json:"model_shadow"`
+	ModelRiskLevel      string   `json:"model_risk_level,omitempty"`
+	ModelTerms          []string `json:"model_terms,omitempty"`
+	RouteDenseStrategy  string   `json:"route_dense_strategy,omitempty"`
+	RouteSparseStrategy string   `json:"route_sparse_strategy,omitempty"`
+}
+
+type retrieveDebugEvidenceView struct {
+	Result               string   `json:"result,omitempty"`
+	RefusalReason        string   `json:"refusal_reason,omitempty"`
+	CitationSupportScore float64  `json:"citation_support_score,omitempty"`
+	UnsupportedClaims    []string `json:"unsupported_claims,omitempty"`
+	UnsupportedCount     int      `json:"unsupported_count"`
+	Error                string   `json:"error,omitempty"`
+}
+
+type retrieveDebugCitationView struct {
+	Supported        bool    `json:"supported"`
+	SupportScore     float64 `json:"support_score,omitempty"`
+	UnsupportedCount int     `json:"unsupported_count"`
+	Version          string  `json:"version,omitempty"`
+	LatencyMs        int64   `json:"latency_ms,omitempty"`
+	Error            string  `json:"error,omitempty"`
+}
+
+type retrieveDebugTrace struct {
+	RequestID          string                       `json:"request_id"`
+	Strategy           string                       `json:"strategy,omitempty"`
+	ReleaseStage       string                       `json:"release_stage,omitempty"`
+	ReleaseReason      string                       `json:"release_reason,omitempty"`
+	ResultStatus       string                       `json:"result_status,omitempty"`
+	EmptyReason        string                       `json:"empty_reason,omitempty"`
+	FinalCount         int                          `json:"final_count"`
+	Query              retrieveDebugQueryView       `json:"query"`
+	Routes             []retrieveDebugRouteView     `json:"routes"`
+	TopK               retrieveDebugTopKView        `json:"topk"`
+	ParentChild        retrieveDebugParentChildView `json:"parent_child"`
+	Rewrite            retrieveDebugRewriteView     `json:"rewrite"`
+	EvidenceGate       retrieveDebugEvidenceView    `json:"evidence_gate"`
+	CitationCheck      retrieveDebugCitationView    `json:"citation_check"`
+	FinalItems         []retrieveItem               `json:"final_items,omitempty"`
+	Collection         string                       `json:"collection,omitempty"`
+	RetrieverVersion   string                       `json:"retriever_version,omitempty"`
+	DenseHits          int                          `json:"dense_hits"`
+	SparseHits         int                          `json:"sparse_hits"`
+	DenseContribution  int                          `json:"dense_contribution"`
+	SparseContribution int                          `json:"sparse_contribution"`
 }
 
 func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
@@ -813,18 +929,22 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		metricsStatus, metricsErrorCode = classifyRetrieveError(searchErr, retrieveCtx)
 		metrics.ObserveRetrieveStrategy(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, releaseDecision.Reason, metricsStatus)
 		metrics.ObserveRetrieveEmptyReason(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve))
-		persistRetrieveLog(&model.KBRetrieveLog{
+		errorStatus := classifyRetrieveResultStatus(metricsStatus)
+		retrieveLog := &model.KBRetrieveLog{
 			RequestID:              requestID,
 			UserID:                 userID,
 			KBIDs:                  formatKBIDs(kbIDs),
 			Query:                  req.Query,
-			FinalQuery:             req.Query,
+			FinalQuery:             firstNonEmptyString(searchResult.Metrics.FinalQuery, req.Query),
 			Expr:                   expr,
 			TopK:                   topK,
 			CandidateTopK:          searchResult.Metrics.CandidateTopK,
 			FinalTopK:              searchResult.Metrics.FinalTopK,
 			TokenBudget:            searchResult.Metrics.TokenBudget,
 			TruncateReason:         searchResult.Metrics.TruncateReason,
+			Rewrite:                searchResult.Metrics.RewriteQuery,
+			RewriteStrategy:        searchResult.Metrics.RewriteStrategy,
+			RewriteApplied:         searchResult.Metrics.RewriteApplied,
 			Strategy:               searchResult.Metrics.Strategy,
 			ReleaseStage:           searchResult.Metrics.ReleaseStage,
 			ReleaseReason:          searchResult.Metrics.ReleaseReason,
@@ -832,16 +952,23 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			Collection:             collection,
 			RetrieverVersion:       searchResult.Metrics.RetrieverVersion,
 			EmptyReason:            firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
+			ParentChildEnabled:     searchResult.Metrics.ParentChildEnabled,
+			ParentFillStrategy:     searchResult.Metrics.ParentFillStrategy,
+			ParentFillCount:        searchResult.Metrics.ParentFillCount,
+			ParentFillFallback:     searchResult.Metrics.ParentFillFallback,
+			ParentFillTokens:       searchResult.Metrics.ParentFillTokens,
+			TopKDecisionReason:     searchResult.Metrics.TopKDecisionReason,
 			EvidenceGateResult:     searchResult.Metrics.EvidenceGateResult,
 			RefusalReason:          searchResult.Metrics.RefusalReason,
 			CitationSupported:      searchResult.Metrics.CitationSupported,
 			CitationSupportScore:   searchResult.Metrics.CitationSupportScore,
+			RewriteGainBucket:      classifyRewriteGainBucket(searchResult.Metrics, 0, errorStatus),
 			UnsupportedClaimCount:  searchResult.Metrics.UnsupportedClaimCount,
 			CitationCheckVersion:   searchResult.Metrics.CitationCheckVersion,
 			CitationCheckLatencyMs: searchResult.Metrics.CitationCheckLatencyMs,
 			EvidenceGateError:      searchResult.Metrics.EvidenceGateError,
 			CitationCheckError:     searchResult.Metrics.CitationCheckError,
-			ResultStatus:           classifyRetrieveResultStatus(metricsStatus),
+			ResultStatus:           errorStatus,
 			ErrorCode:              metricsErrorCode,
 			ErrorMsg:               searchErr.Error(),
 			EmbeddingMs:            searchResult.Metrics.EmbeddingMs,
@@ -855,7 +982,14 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			SparseContribution:     searchResult.Metrics.SparseContribution,
 			DurationMs:             durationMs,
 			TimeoutMs:              retrieveTimeout.Milliseconds(),
-		})
+		}
+		retrieveLog.DebugTrace = encodeRetrieveDebugTrace(buildRetrieveDebugTrace(
+			retrieveLog,
+			searchResult.Metrics,
+			nil,
+			nil,
+		))
+		persistRetrieveLog(retrieveLog)
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
 	}
@@ -959,15 +1093,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		UserID:                 userID,
 		KBIDs:                  formatKBIDs(kbIDs),
 		Query:                  req.Query,
-		FinalQuery:             firstNonEmptyString(extractFinalQuery(docs), req.Query),
+		FinalQuery:             firstNonEmptyString(searchMetrics.FinalQuery, extractFinalQuery(docs), req.Query),
 		Expr:                   expr,
 		TopK:                   topK,
 		CandidateTopK:          searchMetrics.CandidateTopK,
 		FinalTopK:              searchMetrics.FinalTopK,
 		TokenBudget:            searchMetrics.TokenBudget,
 		TruncateReason:         searchMetrics.TruncateReason,
-		Rewrite:                extractRewriteQuery(docs),
-		RewriteStrategy:        extractRewriteStrategy(docs),
+		Rewrite:                firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
+		RewriteStrategy:        firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),
 		RewriteApplied:         searchMetrics.RewriteApplied || extractRewriteApplied(docs),
 		Strategy:               searchMetrics.Strategy,
 		ReleaseStage:           searchMetrics.ReleaseStage,
@@ -976,6 +1110,12 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		Collection:             collection,
 		RetrieverVersion:       searchMetrics.RetrieverVersion,
 		EmptyReason:            emptyReason,
+		ParentChildEnabled:     searchMetrics.ParentChildEnabled,
+		ParentFillStrategy:     searchMetrics.ParentFillStrategy,
+		ParentFillCount:        searchMetrics.ParentFillCount,
+		ParentFillFallback:     searchMetrics.ParentFillFallback,
+		ParentFillTokens:       searchMetrics.ParentFillTokens,
+		TopKDecisionReason:     searchMetrics.TopKDecisionReason,
 		FinalCount:             len(items),
 		TruncatedCount:         searchMetrics.TruncatedCount,
 		DenseHits:              searchMetrics.DenseHits,
@@ -986,6 +1126,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		RefusalReason:          searchMetrics.RefusalReason,
 		CitationSupported:      searchMetrics.CitationSupported,
 		CitationSupportScore:   searchMetrics.CitationSupportScore,
+		RewriteGainBucket:      classifyRewriteGainBucket(searchMetrics, len(items), resultStatus),
 		UnsupportedClaimCount:  searchMetrics.UnsupportedClaimCount,
 		CitationCheckVersion:   searchMetrics.CitationCheckVersion,
 		CitationCheckLatencyMs: searchMetrics.CitationCheckLatencyMs,
@@ -1000,11 +1141,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		DurationMs:             durationMs,
 		TimeoutMs:              retrieveTimeout.Milliseconds(),
 	}
+	retrieveLog.DebugTrace = encodeRetrieveDebugTrace(buildRetrieveDebugTrace(
+		retrieveLog,
+		searchMetrics,
+		docs,
+		items,
+	))
 	persistRetrieveLog(retrieveLog)
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t rewrite_gain_bucket=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_decision_reason=%q parent_child_enabled=%t parent_fill_strategy=%q parent_fill_count=%d evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
 			retrieveLog.Strategy,
 			retrieveLog.ReleaseStage,
@@ -1014,6 +1161,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			retrieveLog.Rewrite,
 			retrieveLog.RewriteStrategy,
 			retrieveLog.RewriteApplied,
+			retrieveLog.RewriteGainBucket,
 			userID,
 			kbIDs,
 			"global",
@@ -1023,6 +1171,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			searchMetrics.FinalTopK,
 			searchMetrics.TokenBudget,
 			searchMetrics.TruncateReason,
+			retrieveLog.TopKDecisionReason,
+			retrieveLog.ParentChildEnabled,
+			retrieveLog.ParentFillStrategy,
+			retrieveLog.ParentFillCount,
 			retrieveLog.EvidenceGateResult,
 			retrieveLog.RefusalReason,
 			retrieveLog.CitationSupported,
@@ -1122,6 +1274,283 @@ func getStringMetadataFromDocs(docs []*schema.Document, key string) string {
 		}
 	}
 	return ""
+}
+
+func classifyRewriteGainBucket(metrics retrieval.SearchMetrics, finalCount int, resultStatus model.RetrieveResultStatus) string {
+	if !metrics.RewriteApplied {
+		return "not_applied"
+	}
+	switch resultStatus {
+	case model.RetrieveResultStatusError, model.RetrieveResultStatusTimeout:
+		return "error"
+	case model.RetrieveResultStatusFilteredOut:
+		if strings.EqualFold(metrics.EvidenceGateResult, retrieval.EvidenceGateResultRefused) {
+			return "risk_refusal"
+		}
+		return "risk_filtered"
+	}
+	if finalCount <= 0 {
+		return "risk_no_result"
+	}
+	if metrics.ModelRewriteApplied {
+		return "model_gain_candidate"
+	}
+	if metrics.RouteRewriteDense != "" || metrics.RouteRewriteSparse != "" {
+		return "route_gain_candidate"
+	}
+	return "gain_candidate"
+}
+
+func buildRetrieveDebugTrace(
+	logEntry *model.KBRetrieveLog,
+	searchMetrics retrieval.SearchMetrics,
+	docs []*schema.Document,
+	items []retrieveItem,
+) retrieveDebugTrace {
+	trace := retrieveDebugTrace{
+		Query: retrieveDebugQueryView{
+			Original: firstNonEmptyString(searchMetrics.OriginalQuery, searchMetrics.FinalQuery, searchMetrics.RewriteQuery, func() string {
+				if logEntry != nil {
+					return logEntry.Query
+				}
+				return ""
+			}()),
+			Rewrite: firstNonEmptyString(searchMetrics.RewriteQuery, func() string {
+				if logEntry != nil {
+					return logEntry.Rewrite
+				}
+				return ""
+			}()),
+			Final: firstNonEmptyString(searchMetrics.FinalQuery, func() string {
+				if logEntry != nil {
+					return logEntry.FinalQuery
+				}
+				return ""
+			}()),
+		},
+		Routes: []retrieveDebugRouteView{
+			{
+				Route:           "dense",
+				FinalQuery:      firstNonEmptyString(searchMetrics.DenseQuery, searchMetrics.FinalQuery),
+				RewriteStrategy: searchMetrics.RouteRewriteDense,
+				Hits:            searchMetrics.DenseHits,
+				Contribution:    searchMetrics.DenseContribution,
+			},
+			{
+				Route:           "sparse",
+				FinalQuery:      firstNonEmptyString(searchMetrics.SparseQuery, searchMetrics.FinalQuery),
+				RewriteStrategy: searchMetrics.RouteRewriteSparse,
+				Hits:            searchMetrics.SparseHits,
+				Contribution:    searchMetrics.SparseContribution,
+			},
+		},
+		TopK: retrieveDebugTopKView{
+			CandidateTopK:        searchMetrics.CandidateTopK,
+			FinalTopK:            searchMetrics.FinalTopK,
+			TokenBudget:          searchMetrics.TokenBudget,
+			TokenBudgetRemaining: searchMetrics.TokenBudgetRemain,
+			ContextTokens:        searchMetrics.ContextTokens,
+			TruncateReason:       searchMetrics.TruncateReason,
+			PolicyVersion:        searchMetrics.TopKPolicyVersion,
+			ScoreDistribution:    searchMetrics.ScoreDistribution,
+			RerankGap:            searchMetrics.RerankGap,
+			EvidenceDensity:      searchMetrics.EvidenceDensity,
+			DecisionReason: firstNonEmptyString(searchMetrics.TopKDecisionReason, func() string {
+				if logEntry != nil {
+					return logEntry.TopKDecisionReason
+				}
+				return ""
+			}()),
+		},
+		ParentChild: retrieveDebugParentChildView{
+			Enabled: searchMetrics.ParentChildEnabled,
+			Strategy: firstNonEmptyString(searchMetrics.ParentFillStrategy, func() string {
+				if logEntry != nil {
+					return logEntry.ParentFillStrategy
+				}
+				return ""
+			}()),
+			FillCount: maxInt(searchMetrics.ParentFillCount, func() int {
+				if logEntry != nil {
+					return logEntry.ParentFillCount
+				}
+				return 0
+			}()),
+			FallbackCount: maxInt(searchMetrics.ParentFillFallback, func() int {
+				if logEntry != nil {
+					return logEntry.ParentFillFallback
+				}
+				return 0
+			}()),
+			FillTokens: maxInt(searchMetrics.ParentFillTokens, func() int {
+				if logEntry != nil {
+					return logEntry.ParentFillTokens
+				}
+				return 0
+			}()),
+			Items: buildParentFillDebugItems(docs),
+		},
+		Rewrite: retrieveDebugRewriteView{
+			Applied: searchMetrics.RewriteApplied,
+			Strategy: firstNonEmptyString(searchMetrics.RewriteStrategy, func() string {
+				if logEntry != nil {
+					return logEntry.RewriteStrategy
+				}
+				return ""
+			}()),
+			GainBucket: func() string {
+				if logEntry != nil {
+					return logEntry.RewriteGainBucket
+				}
+				return ""
+			}(),
+			DenseQuery:          searchMetrics.DenseQuery,
+			SparseQuery:         searchMetrics.SparseQuery,
+			TermDictScope:       searchMetrics.TermDictScope,
+			TermDictVersion:     searchMetrics.TermDictVersion,
+			TermHits:            append([]string(nil), searchMetrics.TermHits...),
+			ModelApplied:        searchMetrics.ModelRewriteApplied,
+			ModelShadow:         searchMetrics.ModelRewriteShadow,
+			ModelRiskLevel:      searchMetrics.ModelRewriteRiskLevel,
+			ModelTerms:          append([]string(nil), searchMetrics.ModelRewriteTerms...),
+			RouteDenseStrategy:  searchMetrics.RouteRewriteDense,
+			RouteSparseStrategy: searchMetrics.RouteRewriteSparse,
+		},
+		EvidenceGate: retrieveDebugEvidenceView{
+			Result: firstNonEmptyString(searchMetrics.EvidenceGateResult, func() string {
+				if logEntry != nil {
+					return logEntry.EvidenceGateResult
+				}
+				return ""
+			}()),
+			RefusalReason: firstNonEmptyString(searchMetrics.RefusalReason, func() string {
+				if logEntry != nil {
+					return logEntry.RefusalReason
+				}
+				return ""
+			}()),
+			CitationSupportScore: firstNonEmptyFloat(searchMetrics.CitationSupportScore, func() float64 {
+				if logEntry != nil {
+					return logEntry.CitationSupportScore
+				}
+				return 0
+			}()),
+			UnsupportedClaims: append([]string(nil), searchMetrics.UnsupportedClaims...),
+			UnsupportedCount: maxInt(searchMetrics.UnsupportedClaimCount, func() int {
+				if logEntry != nil {
+					return logEntry.UnsupportedClaimCount
+				}
+				return 0
+			}()),
+			Error: firstNonEmptyString(searchMetrics.EvidenceGateError, func() string {
+				if logEntry != nil {
+					return logEntry.EvidenceGateError
+				}
+				return ""
+			}()),
+		},
+		CitationCheck: retrieveDebugCitationView{
+			Supported: searchMetrics.CitationSupported,
+			SupportScore: firstNonEmptyFloat(searchMetrics.CitationSupportScore, func() float64 {
+				if logEntry != nil {
+					return logEntry.CitationSupportScore
+				}
+				return 0
+			}()),
+			UnsupportedCount: maxInt(searchMetrics.UnsupportedClaimCount, func() int {
+				if logEntry != nil {
+					return logEntry.UnsupportedClaimCount
+				}
+				return 0
+			}()),
+			Version: firstNonEmptyString(searchMetrics.CitationCheckVersion, func() string {
+				if logEntry != nil {
+					return logEntry.CitationCheckVersion
+				}
+				return ""
+			}()),
+			LatencyMs: maxInt64(searchMetrics.CitationCheckLatencyMs, func() int64 {
+				if logEntry != nil {
+					return logEntry.CitationCheckLatencyMs
+				}
+				return 0
+			}()),
+			Error: firstNonEmptyString(searchMetrics.CitationCheckError, func() string {
+				if logEntry != nil {
+					return logEntry.CitationCheckError
+				}
+				return ""
+			}()),
+		},
+		FinalItems: items,
+	}
+	if logEntry != nil {
+		trace.RequestID = logEntry.RequestID
+		trace.Strategy = logEntry.Strategy
+		trace.ReleaseStage = logEntry.ReleaseStage
+		trace.ReleaseReason = logEntry.ReleaseReason
+		trace.ResultStatus = string(logEntry.ResultStatus)
+		trace.EmptyReason = logEntry.EmptyReason
+		trace.FinalCount = logEntry.FinalCount
+		trace.Collection = logEntry.Collection
+		trace.RetrieverVersion = logEntry.RetrieverVersion
+		trace.DenseHits = logEntry.DenseHits
+		trace.SparseHits = logEntry.SparseHits
+		trace.DenseContribution = logEntry.DenseContribution
+		trace.SparseContribution = logEntry.SparseContribution
+	}
+	if trace.RequestID == "" {
+		trace.RequestID = "unknown"
+	}
+	return trace
+}
+
+func buildParentFillDebugItems(docs []*schema.Document) []retrieveDebugParentFillItem {
+	if len(docs) == 0 {
+		return nil
+	}
+	items := make([]retrieveDebugParentFillItem, 0, len(docs))
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		before := getStringMetadata(doc.MetaData, "original_child_content")
+		after := strings.TrimSpace(doc.Content)
+		items = append(items, retrieveDebugParentFillItem{
+			ChunkID:          firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), getStringMetadata(doc.MetaData, "chunk_id"), doc.ID),
+			ParentID:         getStringMetadata(doc.MetaData, "parent_id"),
+			Strategy:         getStringMetadata(doc.MetaData, "parent_fill_strategy"),
+			Reason:           getStringMetadata(doc.MetaData, "parent_fill_reason"),
+			Applied:          getBoolMetadata(doc.MetaData, "parent_fill_applied"),
+			FillCount:        getIntMetadata(doc.MetaData, "parent_fill_count"),
+			FillTokens:       getIntMetadata(doc.MetaData, "parent_fill_tokens"),
+			BeforeContent:    before,
+			AfterContent:     after,
+			OriginalChildLen: len([]rune(before)),
+			FilledContentLen: len([]rune(after)),
+		})
+	}
+	return items
+}
+
+func encodeRetrieveDebugTrace(trace retrieveDebugTrace) string {
+	data, err := json.Marshal(trace)
+	if err != nil {
+		return ""
+	}
+	return string(data)
+}
+
+func decodeRetrieveDebugTrace(raw string) (*retrieveDebugTrace, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return nil, nil
+	}
+	var trace retrieveDebugTrace
+	if err := json.Unmarshal([]byte(raw), &trace); err != nil {
+		return nil, err
+	}
+	return &trace, nil
 }
 
 func classifyRetrieveError(err error, retrieveCtx context.Context) (string, string) {
@@ -1507,6 +1936,27 @@ func firstNonEmptyString(values ...string) string {
 	return ""
 }
 
+func firstNonEmptyFloat(primary float64, fallback float64) float64 {
+	if primary > 0 {
+		return primary
+	}
+	return fallback
+}
+
+func maxInt(a int, b int) int {
+	if b > a {
+		return b
+	}
+	return a
+}
+
+func maxInt64(a int64, b int64) int64 {
+	if b > a {
+		return b
+	}
+	return a
+}
+
 func getOperationReason(c *app.RequestContext) string {
 	reason := strings.TrimSpace(string(c.Query("operation_reason")))
 	if reason != "" {
@@ -1778,6 +2228,166 @@ func buildRetrieveEmptyRateSeries(logs []*model.KBRetrieveLog, start time.Time, 
 	return series
 }
 
+func buildParentFillAppliedRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	return buildBucketRateSeries(logs, start, bucketSize, bucketCount, func(logEntry *model.KBRetrieveLog) bool {
+		return logEntry.ParentFillCount > 0
+	})
+}
+
+func buildEvidenceRefusalRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	return buildBucketRateSeries(logs, start, bucketSize, bucketCount, func(logEntry *model.KBRetrieveLog) bool {
+		return strings.EqualFold(logEntry.EvidenceGateResult, retrieval.EvidenceGateResultRefused)
+	})
+}
+
+func buildRouteSpecificRewriteGainRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	return buildBucketScopedRateSeries(logs, start, bucketSize, bucketCount,
+		func(logEntry *model.KBRetrieveLog) bool {
+			return strings.Contains(strings.ToLower(logEntry.RewriteStrategy), retrieval.RewriteStrategyRouteSpecific)
+		},
+		func(logEntry *model.KBRetrieveLog) bool {
+			bucket := strings.TrimSpace(strings.ToLower(logEntry.RewriteGainBucket))
+			return bucket == "gain_candidate" || bucket == "route_gain_candidate" || bucket == "model_gain_candidate"
+		},
+	)
+}
+
+func buildModelRewriteErrorRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketRate {
+	return buildBucketScopedRateSeries(logs, start, bucketSize, bucketCount,
+		func(logEntry *model.KBRetrieveLog) bool {
+			return strings.Contains(strings.ToLower(logEntry.RewriteStrategy), retrieval.RewriteStrategyModelAssistedShadow)
+		},
+		func(logEntry *model.KBRetrieveLog) bool {
+			bucket := strings.TrimSpace(strings.ToLower(logEntry.RewriteGainBucket))
+			return logEntry.ResultStatus == model.RetrieveResultStatusError ||
+				logEntry.ResultStatus == model.RetrieveResultStatusTimeout ||
+				strings.HasPrefix(bucket, "risk_") ||
+				bucket == "error"
+		},
+	)
+}
+
+func buildCitationSupportScoreSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewBucketAverage {
+	if len(logs) == 0 {
+		return []metricsOverviewBucketAverage{}
+	}
+
+	type aggregate struct {
+		total float64
+		count int
+	}
+	aggregates := make([]aggregate, bucketCount)
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		index := bucketIndex(logEntry.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		aggregates[index].total += logEntry.CitationSupportScore
+		aggregates[index].count++
+	}
+
+	series := make([]metricsOverviewBucketAverage, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		avg := 0.0
+		if aggregates[i].count > 0 {
+			avg = aggregates[i].total / float64(aggregates[i].count)
+		}
+		series = append(series, metricsOverviewBucketAverage{
+			Bucket:  start.Add(time.Duration(i) * bucketSize),
+			Average: avg,
+			Count:   aggregates[i].count,
+		})
+	}
+	return series
+}
+
+func buildRouteContributionTotal(logs []*model.KBRetrieveLog) map[string]int {
+	total := map[string]int{
+		"dense":  0,
+		"sparse": 0,
+	}
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		total["dense"] += logEntry.DenseContribution
+		total["sparse"] += logEntry.SparseContribution
+	}
+	return total
+}
+
+func buildRewriteGainBucketCounts(logs []*model.KBRetrieveLog) map[string]int {
+	counts := make(map[string]int)
+	for _, logEntry := range logs {
+		if logEntry == nil {
+			continue
+		}
+		bucket := strings.TrimSpace(logEntry.RewriteGainBucket)
+		if bucket == "" {
+			bucket = "unknown"
+		}
+		counts[bucket]++
+	}
+	return counts
+}
+
+func buildBucketRateSeries(logs []*model.KBRetrieveLog, start time.Time, bucketSize time.Duration, bucketCount int, matched func(*model.KBRetrieveLog) bool) []metricsOverviewBucketRate {
+	return buildBucketScopedRateSeries(logs, start, bucketSize, bucketCount,
+		func(*model.KBRetrieveLog) bool { return true },
+		matched,
+	)
+}
+
+func buildBucketScopedRateSeries(
+	logs []*model.KBRetrieveLog,
+	start time.Time,
+	bucketSize time.Duration,
+	bucketCount int,
+	scoped func(*model.KBRetrieveLog) bool,
+	matched func(*model.KBRetrieveLog) bool,
+) []metricsOverviewBucketRate {
+	if len(logs) == 0 {
+		return []metricsOverviewBucketRate{}
+	}
+
+	type aggregate struct {
+		total   int
+		matched int
+	}
+	aggregates := make([]aggregate, bucketCount)
+	for _, logEntry := range logs {
+		if logEntry == nil || !scoped(logEntry) {
+			continue
+		}
+		index := bucketIndex(logEntry.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		aggregates[index].total++
+		if matched(logEntry) {
+			aggregates[index].matched++
+		}
+	}
+
+	series := make([]metricsOverviewBucketRate, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		rate := 0.0
+		if aggregates[i].total > 0 {
+			rate = float64(aggregates[i].matched) / float64(aggregates[i].total)
+		}
+		series = append(series, metricsOverviewBucketRate{
+			Bucket: start.Add(time.Duration(i) * bucketSize),
+			Rate:   rate,
+			Total:  aggregates[i].total,
+			Empty:  aggregates[i].matched,
+		})
+	}
+	return series
+}
+
 func buildRetrieveErrorTopN(logs []*model.KBRetrieveLog) []metricsOverviewErrorType {
 	if len(logs) == 0 {
 		return []metricsOverviewErrorType{}
@@ -1874,6 +2484,71 @@ func GetRetrieveAuditLog(ctx context.Context, c *app.RequestContext) {
 	response.Success(ctx, c, logEntry)
 }
 
+func GetRetrieveDebugView(ctx context.Context, c *app.RequestContext) {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
+		response.Unauthorized(ctx, c, "Authorization token is required")
+		return
+	}
+
+	requestID := strings.TrimSpace(c.Param("request_id"))
+	if requestID == "" {
+		response.BadRequest(ctx, c, "request_id is required")
+		return
+	}
+
+	logEntry, err := model.KBRetrieveLogDao.GetByRequestID(requestID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			response.NotFound(ctx, c, "retrieve log not found")
+			return
+		}
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get retrieve debug trace", err))
+		return
+	}
+
+	trace, err := decodeRetrieveDebugTrace(logEntry.DebugTrace)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewInternalError("failed to decode retrieve debug trace", err))
+		return
+	}
+	if trace == nil {
+		fallback := buildRetrieveDebugTrace(logEntry, retrieval.SearchMetrics{
+			OriginalQuery:          logEntry.Query,
+			RewriteQuery:           logEntry.Rewrite,
+			FinalQuery:             logEntry.FinalQuery,
+			RewriteStrategy:        logEntry.RewriteStrategy,
+			RewriteApplied:         logEntry.RewriteApplied,
+			ParentChildEnabled:     logEntry.ParentChildEnabled,
+			ParentFillStrategy:     logEntry.ParentFillStrategy,
+			ParentFillCount:        logEntry.ParentFillCount,
+			ParentFillFallback:     logEntry.ParentFillFallback,
+			ParentFillTokens:       logEntry.ParentFillTokens,
+			TopKDecisionReason:     logEntry.TopKDecisionReason,
+			EvidenceGateResult:     logEntry.EvidenceGateResult,
+			RefusalReason:          logEntry.RefusalReason,
+			CitationSupported:      logEntry.CitationSupported,
+			CitationSupportScore:   logEntry.CitationSupportScore,
+			UnsupportedClaimCount:  logEntry.UnsupportedClaimCount,
+			CitationCheckVersion:   logEntry.CitationCheckVersion,
+			CitationCheckLatencyMs: logEntry.CitationCheckLatencyMs,
+			EvidenceGateError:      logEntry.EvidenceGateError,
+			CitationCheckError:     logEntry.CitationCheckError,
+			CandidateTopK:          logEntry.CandidateTopK,
+			FinalTopK:              logEntry.FinalTopK,
+			TokenBudget:            logEntry.TokenBudget,
+			TruncateReason:         logEntry.TruncateReason,
+			DenseHits:              logEntry.DenseHits,
+			SparseHits:             logEntry.SparseHits,
+			DenseContribution:      logEntry.DenseContribution,
+			SparseContribution:     logEntry.SparseContribution,
+		}, nil, nil)
+		trace = &fallback
+	}
+
+	response.Success(ctx, c, trace)
+}
+
 type retrieveAuditListResponse struct {
 	Items    []*model.KBRetrieveLog `json:"items"`
 	Total    int64                  `json:"total"`
@@ -1899,18 +2574,31 @@ type metricsOverviewBucketP95 struct {
 	P95Ms  int64     `json:"p95_ms"`
 }
 
+type metricsOverviewBucketAverage struct {
+	Bucket  time.Time `json:"bucket"`
+	Average float64   `json:"average"`
+	Count   int       `json:"count"`
+}
+
 type metricsOverviewErrorType struct {
 	ErrorCode string `json:"error_code"`
 	Count     int    `json:"count"`
 }
 
 type metricsOverviewResponse struct {
-	Range                string                       `json:"range"`
-	IngestSuccessRate    []metricsOverviewBucketRate  `json:"ingest_success_rate"`
-	RetrieveRequestCount []metricsOverviewBucketCount `json:"retrieve_request_count"`
-	RetrieveP95Ms        []metricsOverviewBucketP95   `json:"retrieve_p95_ms"`
-	RetrieveEmptyRate    []metricsOverviewBucketRate  `json:"retrieve_empty_rate"`
-	ErrorTypeTopN        []metricsOverviewErrorType   `json:"error_type_topn"`
+	Range                        string                         `json:"range"`
+	IngestSuccessRate            []metricsOverviewBucketRate    `json:"ingest_success_rate"`
+	RetrieveRequestCount         []metricsOverviewBucketCount   `json:"retrieve_request_count"`
+	RetrieveP95Ms                []metricsOverviewBucketP95     `json:"retrieve_p95_ms"`
+	RetrieveEmptyRate            []metricsOverviewBucketRate    `json:"retrieve_empty_rate"`
+	ParentFillAppliedRate        []metricsOverviewBucketRate    `json:"parent_fill_applied_rate"`
+	EvidenceRefusalRate          []metricsOverviewBucketRate    `json:"evidence_refusal_rate"`
+	RouteSpecificRewriteGainRate []metricsOverviewBucketRate    `json:"route_specific_rewrite_gain_rate"`
+	ModelRewriteErrorRate        []metricsOverviewBucketRate    `json:"model_rewrite_error_rate"`
+	CitationSupportScore         []metricsOverviewBucketAverage `json:"citation_support_score"`
+	RouteContributionTotal       map[string]int                 `json:"route_contribution_total"`
+	RewriteGainBucketCounts      map[string]int                 `json:"rewrite_gain_bucket_counts"`
+	ErrorTypeTopN                []metricsOverviewErrorType     `json:"error_type_topn"`
 }
 
 type ingestLogDetailResponse struct {
@@ -2044,12 +2732,19 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 	}
 
 	response.Success(ctx, c, metricsOverviewResponse{
-		Range:                rangeName,
-		IngestSuccessRate:    buildIngestSuccessRateSeries(ingestJobs, startInclusive, bucketSize, bucketCount),
-		RetrieveRequestCount: buildRetrieveRequestCountSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
-		RetrieveP95Ms:        buildRetrieveP95Series(retrieveLogs, startInclusive, bucketSize, bucketCount),
-		RetrieveEmptyRate:    buildRetrieveEmptyRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
-		ErrorTypeTopN:        buildRetrieveErrorTopN(retrieveLogs),
+		Range:                        rangeName,
+		IngestSuccessRate:            buildIngestSuccessRateSeries(ingestJobs, startInclusive, bucketSize, bucketCount),
+		RetrieveRequestCount:         buildRetrieveRequestCountSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RetrieveP95Ms:                buildRetrieveP95Series(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RetrieveEmptyRate:            buildRetrieveEmptyRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		ParentFillAppliedRate:        buildParentFillAppliedRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		EvidenceRefusalRate:          buildEvidenceRefusalRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RouteSpecificRewriteGainRate: buildRouteSpecificRewriteGainRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		ModelRewriteErrorRate:        buildModelRewriteErrorRateSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		CitationSupportScore:         buildCitationSupportScoreSeries(retrieveLogs, startInclusive, bucketSize, bucketCount),
+		RouteContributionTotal:       buildRouteContributionTotal(retrieveLogs),
+		RewriteGainBucketCounts:      buildRewriteGainBucketCounts(retrieveLogs),
+		ErrorTypeTopN:                buildRetrieveErrorTopN(retrieveLogs),
 	})
 }
 
@@ -2253,6 +2948,7 @@ func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveL
 		ReleaseStageCounts: map[string]int{},
 		ResultStatusCounts: map[string]int{},
 		EmptyReasonCounts:  map[string]int{},
+		RewriteGainBuckets: map[string]int{},
 		RouteContribution: map[string]int{
 			"dense":  0,
 			"sparse": 0,
@@ -2269,6 +2965,11 @@ func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveL
 	phase2Requests := 0
 	phase2Failures := 0
 	phase2EmptyAfterFilter := 0
+	parentFillRequests := 0
+	evidenceRefusals := 0
+	modelRewriteRequests := 0
+	modelRewriteErrors := 0
+	totalCitationSupport := 0.0
 
 	for _, item := range logs {
 		if item == nil {
@@ -2279,11 +2980,28 @@ func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveL
 		summary.ReleaseStageCounts[firstNonEmptyString(item.ReleaseStage, "unknown")]++
 		summary.ResultStatusCounts[string(item.ResultStatus)]++
 		summary.EmptyReasonCounts[firstNonEmptyString(item.EmptyReason, retrieval.EmptyReasonNone)]++
+		summary.RewriteGainBuckets[firstNonEmptyString(item.RewriteGainBucket, "unknown")]++
 		summary.RouteContribution["dense"] += item.DenseContribution
 		summary.RouteContribution["sparse"] += item.SparseContribution
 		if item.RewriteApplied {
 			rewriteApplied++
 		}
+		if item.ParentFillCount > 0 {
+			parentFillRequests++
+		}
+		if strings.EqualFold(item.EvidenceGateResult, retrieval.EvidenceGateResultRefused) {
+			evidenceRefusals++
+		}
+		if strings.Contains(strings.ToLower(item.RewriteStrategy), retrieval.RewriteStrategyModelAssistedShadow) {
+			modelRewriteRequests++
+			if item.ResultStatus == model.RetrieveResultStatusError ||
+				item.ResultStatus == model.RetrieveResultStatusTimeout ||
+				strings.HasPrefix(strings.ToLower(item.RewriteGainBucket), "risk_") ||
+				strings.EqualFold(item.RewriteGainBucket, "error") {
+				modelRewriteErrors++
+			}
+		}
+		totalCitationSupport += item.CitationSupportScore
 		if item.DurationMs > 0 {
 			durationValues = append(durationValues, item.DurationMs)
 		}
@@ -2302,6 +3020,12 @@ func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveL
 	}
 
 	summary.RewriteAppliedRate = float64(rewriteApplied) / float64(len(logs))
+	summary.ParentFillRate = float64(parentFillRequests) / float64(len(logs))
+	summary.EvidenceRefusalRate = float64(evidenceRefusals) / float64(len(logs))
+	summary.AvgCitationSupport = totalCitationSupport / float64(len(logs))
+	if modelRewriteRequests > 0 {
+		summary.ModelRewriteErrorRate = float64(modelRewriteErrors) / float64(modelRewriteRequests)
+	}
 	summary.P95DurationMs = percentileInt64(durationValues, 0.95)
 	summary.P95RerankMs = percentileInt64(rerankValues, 0.95)
 	if phase2Requests > 0 {
@@ -2322,6 +3046,9 @@ func buildReleaseSummary(minutes int, since time.Time, logs []*model.KBRetrieveL
 	}
 	if summary.P95RerankMs > 800 {
 		summary.Risks = append(summary.Risks, fmt.Sprintf("rerank P95 latency %dms exceeds 800ms", summary.P95RerankMs))
+	}
+	if summary.ModelRewriteErrorRate > 0.2 {
+		summary.Risks = append(summary.Risks, fmt.Sprintf("model rewrite error rate %.2f%% exceeds 20%%", summary.ModelRewriteErrorRate*100))
 	}
 
 	return summary

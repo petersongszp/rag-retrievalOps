@@ -81,26 +81,30 @@ func SaveReportMarkdown(path string, report *Report) error {
 
 func RenderMarkdownReport(report *Report) string {
 	var buf bytes.Buffer
-	buf.WriteString("# L7 检索离线回归报告\n\n")
-	buf.WriteString(fmt.Sprintf("- 生成时间: `%s`\n", report.GeneratedAt.Format("2006-01-02 15:04:05")))
-	buf.WriteString(fmt.Sprintf("- 评测样本数: `%d`\n", report.DatasetSize))
+	buf.WriteString("# L7 Retrieval Regression Report\n\n")
+	buf.WriteString(fmt.Sprintf("- Generated At: `%s`\n", report.GeneratedAt.Format("2006-01-02 15:04:05")))
+	buf.WriteString(fmt.Sprintf("- Dataset Size: `%d`\n", report.DatasetSize))
 	if strings.TrimSpace(report.DatasetVersion) != "" {
 		buf.WriteString(fmt.Sprintf("- Dataset Version: `%s`\n", report.DatasetVersion))
 	}
 	buf.WriteString(fmt.Sprintf("- Baseline: `%s`\n", report.Baseline))
 	buf.WriteString(fmt.Sprintf("- Candidate: `%s`\n\n", report.Candidate))
 
-	buf.WriteString("## 指标对比\n\n")
-	buf.WriteString("| Strategy | Recall@K | MRR | nDCG | Citation Accuracy | P50(ms) | P95(ms) |\n")
-	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	buf.WriteString("## Metrics\n\n")
+	buf.WriteString("| Strategy | Recall@K | MRR | nDCG | Citation Acc | Citation P/R | Parent Fill Gain | Refusal FP | P50(ms) | P95(ms) |\n")
+	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, result := range report.Results {
 		buf.WriteString(fmt.Sprintf(
-			"| %s | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
+			"| %s | %.4f | %.4f | %.4f | %.4f | %.4f / %.4f | %.4f | %.4f | %.2f | %.2f |\n",
 			result.Strategy.Name,
 			result.Metrics.RecallAtK,
 			result.Metrics.MRR,
 			result.Metrics.NDCG,
 			result.Metrics.CitationAccuracy,
+			result.Metrics.CitationPrecision,
+			result.Metrics.CitationRecall,
+			result.Metrics.ParentFillGain,
+			result.Metrics.RefusalFalsePositiveRate,
 			result.Metrics.P50LatencyMS,
 			result.Metrics.P95LatencyMS,
 		))
@@ -111,22 +115,36 @@ func RenderMarkdownReport(report *Report) string {
 	buf.WriteString(fmt.Sprintf("- MRR Delta: `%.4f`\n", report.Comparison.MRRDelta))
 	buf.WriteString(fmt.Sprintf("- nDCG Delta: `%.4f`\n", report.Comparison.NDCGDelta))
 	buf.WriteString(fmt.Sprintf("- Citation Accuracy Delta: `%.4f`\n", report.Comparison.CitationAccuracyDelta))
+	buf.WriteString(fmt.Sprintf("- Citation Precision Delta: `%.4f`\n", report.Comparison.CitationPrecisionDelta))
+	buf.WriteString(fmt.Sprintf("- Citation Recall Delta: `%.4f`\n", report.Comparison.CitationRecallDelta))
+	buf.WriteString(fmt.Sprintf("- Parent Fill Gain Delta: `%.4f`\n", report.Comparison.ParentFillGainDelta))
+	buf.WriteString(fmt.Sprintf("- Rewrite Gain Delta: `%.4f`\n", report.Comparison.RewriteGainDelta))
+	buf.WriteString(fmt.Sprintf("- Refusal False Positive Rate: `%.4f`\n", report.Comparison.RefusalFalsePositiveRate))
 	buf.WriteString(fmt.Sprintf("- P95 Latency Delta: `%.2f ms` (`%.2f%%`)\n\n", report.Comparison.P95LatencyDeltaMS, report.Comparison.P95LatencyDeltaRatio*100))
 
-	buf.WriteString("## 策略贡献分析\n\n")
+	buf.WriteString("## Contribution\n\n")
 	if len(report.Contribution) == 0 {
-		buf.WriteString("- 未生成贡献度链路，请检查 profile 配置顺序。\n")
+		buf.WriteString("- No contribution chain generated.\n")
 	} else {
 		for _, delta := range report.Contribution {
 			buf.WriteString(fmt.Sprintf(
-				"- `%s` vs `%s`: Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation `%.4f`, P95 `%.2f ms`\n",
-				delta.Strategy, delta.ComparedTo, delta.RecallDelta, delta.MRRDelta, delta.NDCGDelta, delta.CitationAccuracyDelta, delta.P95LatencyDeltaMS,
+				"- `%s` vs `%s`: Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Citation P/R `%.4f / %.4f`, Parent Fill `%.4f`, P95 `%.2f ms`\n",
+				delta.Strategy,
+				delta.ComparedTo,
+				delta.RecallDelta,
+				delta.MRRDelta,
+				delta.NDCGDelta,
+				delta.CitationAccuracyDelta,
+				delta.CitationPrecisionDelta,
+				delta.CitationRecallDelta,
+				delta.ParentFillGainDelta,
+				delta.P95LatencyDeltaMS,
 			))
 		}
 	}
 
-	buf.WriteString("\n## 门禁结果\n\n")
-	buf.WriteString(fmt.Sprintf("- 总体结果: `%t`\n", report.Gate.Passed))
+	buf.WriteString("\n## Gate\n\n")
+	buf.WriteString(fmt.Sprintf("- Passed: `%t`\n", report.Gate.Passed))
 	for _, check := range report.Gate.Checks {
 		status := "FAIL"
 		if check.Passed {

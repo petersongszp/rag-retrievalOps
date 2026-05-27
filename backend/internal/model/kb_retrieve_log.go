@@ -57,10 +57,17 @@ type (
 		Collection             string               `json:"collection" gorm:"size:200"`
 		RetrieverVersion       string               `json:"retriever_version" gorm:"size:50"`
 		EmptyReason            string               `json:"empty_reason" gorm:"size:64;index"`
+		ParentChildEnabled     bool                 `json:"parent_child_enabled"`
+		ParentFillStrategy     string               `json:"parent_fill_strategy" gorm:"size:64"`
+		ParentFillCount        int                  `json:"parent_fill_count"`
+		ParentFillFallback     int                  `json:"parent_fill_fallback"`
+		ParentFillTokens       int                  `json:"parent_fill_tokens"`
+		TopKDecisionReason     string               `json:"topk_decision_reason" gorm:"size:255"`
 		EvidenceGateResult     string               `json:"evidence_gate_result" gorm:"size:32;index"`
 		RefusalReason          string               `json:"refusal_reason" gorm:"size:64;index"`
 		CitationSupported      bool                 `json:"citation_supported"`
 		CitationSupportScore   float64              `json:"citation_support_score"`
+		RewriteGainBucket      string               `json:"rewrite_gain_bucket" gorm:"size:64;index"`
 		UnsupportedClaimCount  int                  `json:"unsupported_claim_count"`
 		CitationCheckVersion   string               `json:"citation_check_version" gorm:"size:64"`
 		CitationCheckLatencyMs int64                `json:"citation_check_latency_ms"`
@@ -82,6 +89,7 @@ type (
 		RerankModel            string               `json:"rerank_model" gorm:"size:128"`
 		DurationMs             int64                `json:"duration_ms"`
 		TimeoutMs              int64                `json:"timeout_ms"`
+		DebugTrace             string               `json:"-" gorm:"type:longtext"`
 		CreatedAt              time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
 	}
 )

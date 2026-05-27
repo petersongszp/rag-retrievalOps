@@ -29,6 +29,7 @@ type SearchMetrics struct {
 	ReleaseStage           string
 	ReleaseReason          string
 	RetrieverVersion       string
+	RewriteStrategy        string
 	RewriteApplied         bool
 	EmptyReason            string
 	RerankMs               int64
@@ -47,6 +48,25 @@ type SearchMetrics struct {
 	TopKDecisionReason     string
 	TokenBudgetRemain      int
 	ContextTokens          int
+	OriginalQuery          string
+	RewriteQuery           string
+	FinalQuery             string
+	DenseQuery             string
+	SparseQuery            string
+	RouteRewriteDense      string
+	RouteRewriteSparse     string
+	TermDictScope          string
+	TermDictVersion        string
+	TermHits               []string
+	ModelRewriteApplied    bool
+	ModelRewriteShadow     bool
+	ModelRewriteRiskLevel  string
+	ModelRewriteTerms      []string
+	ParentChildEnabled     bool
+	ParentFillStrategy     string
+	ParentFillCount        int
+	ParentFillFallback     int
+	ParentFillTokens       int
 	EvidenceGateResult     string
 	RefusalReason          string
 	CitationSupportScore   float64

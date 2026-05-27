@@ -136,6 +136,7 @@ func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema
 	if base.MetaData == nil {
 		base.MetaData = make(map[string]interface{})
 	}
+	base.MetaData["original_child_content"] = strings.TrimSpace(doc.Content)
 
 	parentID := readMetadataString(base, "parent_id")
 	if !castBool(base.MetaData["parent_child_available"]) || parentID == "" {

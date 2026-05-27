@@ -8,8 +8,12 @@ func DefaultGateThresholds() GateThresholds {
 		MinMRRDelta:                  0.00,
 		MinNDCGDelta:                 0.00,
 		MinCitationAccuracyDelta:     0.00,
+		MinCitationPrecisionDelta:    0.00,
+		MinCitationRecallDelta:       0.00,
 		MaxP95LatencyRegressionMS:    0,
 		MaxP95LatencyRegressionRatio: 0.20,
+		MaxRefusalFalsePositiveRate:  0.05,
+		MinRewriteGainDelta:          0.00,
 	}
 }
 
@@ -44,12 +48,43 @@ func EvaluateGate(comparison ComparisonSummary, thresholds GateThresholds) GateR
 			Message:  "candidate citation accuracy must not regress below threshold",
 		},
 		{
+			Name:     "citation_precision_delta",
+			Actual:   comparison.CitationPrecisionDelta,
+			Expected: thresholds.MinCitationPrecisionDelta,
+			Passed:   comparison.CitationPrecisionDelta >= thresholds.MinCitationPrecisionDelta,
+			Message:  "candidate citation precision must not regress below threshold",
+		},
+		{
+			Name:     "citation_recall_delta",
+			Actual:   comparison.CitationRecallDelta,
+			Expected: thresholds.MinCitationRecallDelta,
+			Passed:   comparison.CitationRecallDelta >= thresholds.MinCitationRecallDelta,
+			Message:  "candidate citation recall must not regress below threshold",
+		},
+		{
 			Name:     "p95_latency_regression_ratio",
 			Actual:   comparison.P95LatencyDeltaRatio,
 			Expected: thresholds.MaxP95LatencyRegressionRatio,
 			Passed:   comparison.P95LatencyDeltaRatio <= thresholds.MaxP95LatencyRegressionRatio,
 			Message:  "candidate P95 regression ratio must stay within threshold",
 		},
+		{
+			Name:     "refusal_false_positive_rate",
+			Actual:   comparison.RefusalFalsePositiveRate,
+			Expected: thresholds.MaxRefusalFalsePositiveRate,
+			Passed:   comparison.RefusalFalsePositiveRate <= thresholds.MaxRefusalFalsePositiveRate,
+			Message:  "candidate refusal false positive rate must stay within threshold",
+		},
+	}
+
+	if comparison.CandidateModelRewrite || thresholds.MinRewriteGainDelta > 0 {
+		checks = append(checks, GateCheck{
+			Name:     "rewrite_gain_delta",
+			Actual:   comparison.RewriteGainDelta,
+			Expected: thresholds.MinRewriteGainDelta,
+			Passed:   comparison.RewriteGainDelta >= thresholds.MinRewriteGainDelta,
+			Message:  "model-assisted rewrite must show non-negative gain before broader rollout",
+		})
 	}
 
 	if thresholds.MaxP95LatencyRegressionMS > 0 {
