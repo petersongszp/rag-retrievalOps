@@ -83,31 +83,66 @@ type RetrievedItem struct {
 	RawFields map[string]interface{}
 }
 
+type SearchOutcome struct {
+	Items                []RetrievedItem
+	Refused              bool
+	RefusalReason        string
+	CitationSupportScore float64
+	ParentFillCount      int
+	RewriteApplied       bool
+	ModelRewriteApplied  bool
+	DenseContribution    int
+	SparseContribution   int
+}
+
 type QueryMetrics struct {
-	QueryID          string           `json:"query_id"`
-	Query            string           `json:"query"`
-	QueryType        string           `json:"query_type,omitempty"`
-	Tags             []string         `json:"tags,omitempty"`
-	TopK             int              `json:"top_k"`
-	Latency          time.Duration    `json:"latency"`
-	RecallAtK        float64          `json:"recall_at_k"`
-	MRR              float64          `json:"mrr"`
-	NDCG             float64          `json:"ndcg"`
-	CitationAccuracy float64          `json:"citation_accuracy"`
-	ResultIDs        []string         `json:"result_ids"`
-	RelevantIDs      []string         `json:"relevant_ids"`
-	CitationTargets  []CitationTarget `json:"citation_targets,omitempty"`
+	QueryID              string           `json:"query_id"`
+	Query                string           `json:"query"`
+	QueryType            string           `json:"query_type,omitempty"`
+	Tags                 []string         `json:"tags,omitempty"`
+	TopK                 int              `json:"top_k"`
+	Latency              time.Duration    `json:"latency"`
+	RecallAtK            float64          `json:"recall_at_k"`
+	MRR                  float64          `json:"mrr"`
+	NDCG                 float64          `json:"ndcg"`
+	CitationAccuracy     float64          `json:"citation_accuracy"`
+	CitationPrecision    float64          `json:"citation_precision"`
+	CitationRecall       float64          `json:"citation_recall"`
+	LongDocCompleteness  float64          `json:"long_doc_completeness"`
+	Refused              bool             `json:"refused"`
+	RefusalReason        string           `json:"refusal_reason,omitempty"`
+	RefusalExpected      bool             `json:"refusal_expected"`
+	RefusalCorrect       bool             `json:"refusal_correct"`
+	RefusalFalsePositive bool             `json:"refusal_false_positive"`
+	ParentFillCount      int              `json:"parent_fill_count"`
+	RewriteApplied       bool             `json:"rewrite_applied"`
+	ModelRewriteApplied  bool             `json:"model_rewrite_applied"`
+	DenseContribution    int              `json:"dense_contribution"`
+	SparseContribution   int              `json:"sparse_contribution"`
+	ResultIDs            []string         `json:"result_ids"`
+	RelevantIDs          []string         `json:"relevant_ids"`
+	CitationTargets      []CitationTarget `json:"citation_targets,omitempty"`
 }
 
 type AggregateMetrics struct {
-	RecallAtK        float64       `json:"recall_at_k"`
-	MRR              float64       `json:"mrr"`
-	NDCG             float64       `json:"ndcg"`
-	CitationAccuracy float64       `json:"citation_accuracy"`
-	P50LatencyMS     float64       `json:"p50_latency_ms"`
-	P95LatencyMS     float64       `json:"p95_latency_ms"`
-	AvgLatencyMS     float64       `json:"avg_latency_ms"`
-	TotalLatency     time.Duration `json:"total_latency"`
+	RecallAtK                float64       `json:"recall_at_k"`
+	MRR                      float64       `json:"mrr"`
+	NDCG                     float64       `json:"ndcg"`
+	CitationAccuracy         float64       `json:"citation_accuracy"`
+	CitationPrecision        float64       `json:"citation_precision"`
+	CitationRecall           float64       `json:"citation_recall"`
+	LongDocCompleteness      float64       `json:"long_doc_completeness"`
+	EvidenceRefusalRate      float64       `json:"evidence_refusal_rate"`
+	RefusalFalsePositiveRate float64       `json:"refusal_false_positive_rate"`
+	ParentFillGain           float64       `json:"parent_fill_gain"`
+	RewriteAppliedRate       float64       `json:"rewrite_applied_rate"`
+	ModelRewriteRate         float64       `json:"model_rewrite_rate"`
+	DenseRouteContribution   float64       `json:"dense_route_contribution"`
+	SparseRouteContribution  float64       `json:"sparse_route_contribution"`
+	P50LatencyMS             float64       `json:"p50_latency_ms"`
+	P95LatencyMS             float64       `json:"p95_latency_ms"`
+	AvgLatencyMS             float64       `json:"avg_latency_ms"`
+	TotalLatency             time.Duration `json:"total_latency"`
 }
 
 type StrategyResult struct {
@@ -117,24 +152,39 @@ type StrategyResult struct {
 }
 
 type StrategyDelta struct {
-	Strategy              string  `json:"strategy"`
-	ComparedTo            string  `json:"compared_to"`
-	RecallDelta           float64 `json:"recall_delta"`
-	MRRDelta              float64 `json:"mrr_delta"`
-	NDCGDelta             float64 `json:"ndcg_delta"`
-	CitationAccuracyDelta float64 `json:"citation_accuracy_delta"`
-	P95LatencyDeltaMS     float64 `json:"p95_latency_delta_ms"`
+	Strategy                  string  `json:"strategy"`
+	ComparedTo                string  `json:"compared_to"`
+	RecallDelta               float64 `json:"recall_delta"`
+	MRRDelta                  float64 `json:"mrr_delta"`
+	NDCGDelta                 float64 `json:"ndcg_delta"`
+	CitationAccuracyDelta     float64 `json:"citation_accuracy_delta"`
+	CitationPrecisionDelta    float64 `json:"citation_precision_delta"`
+	CitationRecallDelta       float64 `json:"citation_recall_delta"`
+	LongDocCompletenessDelta  float64 `json:"long_doc_completeness_delta"`
+	ParentFillGainDelta       float64 `json:"parent_fill_gain_delta"`
+	RefusalFalsePositiveDelta float64 `json:"refusal_false_positive_delta"`
+	P95LatencyDeltaMS         float64 `json:"p95_latency_delta_ms"`
 }
 
 type ComparisonSummary struct {
-	Baseline              string  `json:"baseline"`
-	Candidate             string  `json:"candidate"`
-	RecallDelta           float64 `json:"recall_delta"`
-	MRRDelta              float64 `json:"mrr_delta"`
-	NDCGDelta             float64 `json:"ndcg_delta"`
-	CitationAccuracyDelta float64 `json:"citation_accuracy_delta"`
-	P95LatencyDeltaMS     float64 `json:"p95_latency_delta_ms"`
-	P95LatencyDeltaRatio  float64 `json:"p95_latency_delta_ratio"`
+	Baseline                     string  `json:"baseline"`
+	Candidate                    string  `json:"candidate"`
+	RecallDelta                  float64 `json:"recall_delta"`
+	MRRDelta                     float64 `json:"mrr_delta"`
+	NDCGDelta                    float64 `json:"ndcg_delta"`
+	CitationAccuracyDelta        float64 `json:"citation_accuracy_delta"`
+	CitationPrecisionDelta       float64 `json:"citation_precision_delta"`
+	CitationRecallDelta          float64 `json:"citation_recall_delta"`
+	LongDocCompletenessDelta     float64 `json:"long_doc_completeness_delta"`
+	ParentFillGainDelta          float64 `json:"parent_fill_gain_delta"`
+	EvidenceRefusalRateDelta     float64 `json:"evidence_refusal_rate_delta"`
+	RefusalFalsePositiveRate     float64 `json:"refusal_false_positive_rate"`
+	RewriteGainDelta             float64 `json:"rewrite_gain_delta"`
+	DenseRouteContributionDelta  float64 `json:"dense_route_contribution_delta"`
+	SparseRouteContributionDelta float64 `json:"sparse_route_contribution_delta"`
+	P95LatencyDeltaMS            float64 `json:"p95_latency_delta_ms"`
+	P95LatencyDeltaRatio         float64 `json:"p95_latency_delta_ratio"`
+	CandidateModelRewrite        bool    `json:"candidate_model_rewrite"`
 }
 
 type GateThresholds struct {
@@ -142,8 +192,12 @@ type GateThresholds struct {
 	MinMRRDelta                  float64 `json:"min_mrr_delta"`
 	MinNDCGDelta                 float64 `json:"min_ndcg_delta"`
 	MinCitationAccuracyDelta     float64 `json:"min_citation_accuracy_delta"`
+	MinCitationPrecisionDelta    float64 `json:"min_citation_precision_delta"`
+	MinCitationRecallDelta       float64 `json:"min_citation_recall_delta"`
 	MaxP95LatencyRegressionMS    float64 `json:"max_p95_latency_regression_ms"`
 	MaxP95LatencyRegressionRatio float64 `json:"max_p95_latency_regression_ratio"`
+	MaxRefusalFalsePositiveRate  float64 `json:"max_refusal_false_positive_rate"`
+	MinRewriteGainDelta          float64 `json:"min_rewrite_gain_delta"`
 }
 
 type GateCheck struct {

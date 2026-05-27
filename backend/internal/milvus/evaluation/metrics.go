@@ -1,6 +1,7 @@
 package evaluation
 
 import (
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -111,30 +112,145 @@ func computeCitationAccuracy(expected []CitationTarget, relevantIDs []string, re
 	return float64(matched) / float64(len(targets))
 }
 
+func computeCitationPrecision(expected []CitationTarget, relevantIDs []string, results []RetrievedItem, k int) float64 {
+	if k <= 0 || len(results) == 0 {
+		return 0
+	}
+	targets := expected
+	if len(targets) == 0 && len(relevantIDs) > 0 {
+		targets = make([]CitationTarget, 0, len(relevantIDs))
+		for _, id := range relevantIDs {
+			if normalized := normalizeID(id); normalized != "" {
+				targets = append(targets, CitationTarget{ChunkID: normalized})
+			}
+		}
+	}
+	if len(targets) == 0 {
+		return 0
+	}
+
+	matched := 0
+	limit := min(k, len(results))
+	for i := 0; i < limit; i++ {
+		for _, target := range targets {
+			if citationMatches(target, results[i]) {
+				matched++
+				break
+			}
+		}
+	}
+	return float64(matched) / float64(limit)
+}
+
+func computeCitationRecall(expected []CitationTarget, relevantIDs []string, results []RetrievedItem, k int) float64 {
+	return computeCitationAccuracy(expected, relevantIDs, results, k)
+}
+
+func computeLongDocCompleteness(results []RetrievedItem, k int) float64 {
+	if k <= 0 || len(results) == 0 {
+		return 0
+	}
+	limit := min(k, len(results))
+	total := 0.0
+	for i := 0; i < limit; i++ {
+		before := readRawString(results[i].RawFields, "original_child_content")
+		after := readRawString(results[i].RawFields, "content")
+		if after == "" {
+			if value, ok := results[i].RawFields["content"].(string); ok {
+				after = value
+			}
+		}
+		if after == "" {
+			after = readRawString(results[i].Source, "content")
+		}
+		beforeLen := len([]rune(before))
+		afterLen := len([]rune(after))
+		switch {
+		case beforeLen <= 0 && afterLen <= 0:
+			total += 0
+		case beforeLen <= 0:
+			total += 1
+		default:
+			ratio := float64(afterLen) / float64(beforeLen)
+			if ratio < 1 {
+				ratio = 1
+			}
+			if ratio > 3 {
+				ratio = 3
+			}
+			total += ratio
+		}
+	}
+	return total / float64(limit)
+}
+
 func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duration, totalLatency time.Duration) AggregateMetrics {
 	recall := 0.0
 	mrr := 0.0
 	ndcg := 0.0
 	citationAccuracy := 0.0
+	citationPrecision := 0.0
+	citationRecall := 0.0
+	longDocCompleteness := 0.0
+	refusalCount := 0.0
+	refusalFalsePositive := 0.0
+	parentFillGain := 0.0
+	rewriteApplied := 0.0
+	modelRewrite := 0.0
+	denseContribution := 0.0
+	sparseContribution := 0.0
 	for _, metric := range queryMetrics {
 		recall += metric.RecallAtK
 		mrr += metric.MRR
 		ndcg += metric.NDCG
 		citationAccuracy += metric.CitationAccuracy
+		citationPrecision += metric.CitationPrecision
+		citationRecall += metric.CitationRecall
+		longDocCompleteness += metric.LongDocCompleteness
+		if metric.Refused {
+			refusalCount++
+		}
+		if metric.RefusalFalsePositive {
+			refusalFalsePositive++
+		}
+		if metric.ParentFillCount > 0 && metric.LongDocCompleteness > 1 {
+			parentFillGain += metric.LongDocCompleteness - 1
+		}
+		if metric.RewriteApplied {
+			rewriteApplied++
+		}
+		if metric.ModelRewriteApplied {
+			modelRewrite++
+		}
+		totalRouteContribution := metric.DenseContribution + metric.SparseContribution
+		if totalRouteContribution > 0 {
+			denseContribution += float64(metric.DenseContribution) / float64(totalRouteContribution)
+			sparseContribution += float64(metric.SparseContribution) / float64(totalRouteContribution)
+		}
 	}
 	count := float64(len(queryMetrics))
 	if count == 0 {
 		count = 1
 	}
 	return AggregateMetrics{
-		RecallAtK:        recall / count,
-		MRR:              mrr / count,
-		NDCG:             ndcg / count,
-		CitationAccuracy: citationAccuracy / count,
-		P50LatencyMS:     percentileLatency(latencies, 50),
-		P95LatencyMS:     percentileLatency(latencies, 95),
-		AvgLatencyMS:     averageLatency(latencies),
-		TotalLatency:     totalLatency,
+		RecallAtK:                recall / count,
+		MRR:                      mrr / count,
+		NDCG:                     ndcg / count,
+		CitationAccuracy:         citationAccuracy / count,
+		CitationPrecision:        citationPrecision / count,
+		CitationRecall:           citationRecall / count,
+		LongDocCompleteness:      longDocCompleteness / count,
+		EvidenceRefusalRate:      refusalCount / count,
+		RefusalFalsePositiveRate: refusalFalsePositive / count,
+		ParentFillGain:           parentFillGain / count,
+		RewriteAppliedRate:       rewriteApplied / count,
+		ModelRewriteRate:         modelRewrite / count,
+		DenseRouteContribution:   denseContribution / count,
+		SparseRouteContribution:  sparseContribution / count,
+		P50LatencyMS:             percentileLatency(latencies, 50),
+		P95LatencyMS:             percentileLatency(latencies, 95),
+		AvgLatencyMS:             averageLatency(latencies),
+		TotalLatency:             totalLatency,
 	}
 }
 
@@ -170,6 +286,21 @@ func averageLatency(latencies []time.Duration) float64 {
 
 func normalizeID(id string) string {
 	return strings.TrimSpace(strings.ToLower(id))
+}
+
+func readRawString(values map[string]interface{}, key string) string {
+	if values == nil {
+		return ""
+	}
+	if value, ok := values[key]; ok && value != nil {
+		switch typed := value.(type) {
+		case string:
+			return strings.TrimSpace(typed)
+		default:
+			return strings.TrimSpace(fmt.Sprint(typed))
+		}
+	}
+	return ""
 }
 
 func citationMatches(target CitationTarget, result RetrievedItem) bool {

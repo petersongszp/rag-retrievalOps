@@ -191,7 +191,7 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 	return searcher, nil
 }
 
-func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetCase) ([]evaluation.RetrievedItem, error) {
+func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetCase) (evaluation.SearchOutcome, error) {
 	queryCtx, cancel := context.WithTimeout(ctx, s.timeout)
 	defer cancel()
 
@@ -214,21 +214,29 @@ func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetC
 		RequestID:        fmt.Sprintf("eval-%s-%s", s.profile.Name, item.ID),
 	}
 
-	var docs []*schema.Document
+	var (
+		result *retrieval.SearchResult
+		docs   []*schema.Document
+	)
 	var err error
 	if s.hybrid != nil {
-		docs, err = s.hybrid.Search(queryCtx, item.Query, opts)
+		result, err = s.hybrid.SearchWithMetrics(queryCtx, item.Query, opts)
 	} else {
-		docs, err = s.retriever.RetrieveWithOptions(queryCtx, item.Query, opts)
+		result, err = s.retriever.RetrieveWithOptionsAndMetrics(queryCtx, item.Query, opts)
 	}
 	if err != nil {
-		return nil, err
+		return evaluation.SearchOutcome{}, err
+	}
+	if result != nil {
+		docs = result.Documents
 	}
 	results := make([]evaluation.RetrievedItem, 0, len(docs))
 	for _, doc := range docs {
 		if doc == nil {
 			continue
 		}
+		rawFields := cloneMap(doc.MetaData)
+		rawFields["content"] = doc.Content
 		results = append(results, evaluation.RetrievedItem{
 			ResultID: normalizeResultID(doc),
 			Score:    readFloat(doc.MetaData, "score"),
@@ -239,10 +247,23 @@ func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetC
 				FileName:   readString(doc.MetaData, "file_name"),
 			},
 			Source:    readSource(doc.MetaData),
-			RawFields: cloneMap(doc.MetaData),
+			RawFields: rawFields,
 		})
 	}
-	return results, nil
+	outcome := evaluation.SearchOutcome{
+		Items: results,
+	}
+	if result != nil {
+		outcome.Refused = strings.EqualFold(result.Metrics.EvidenceGateResult, retrieval.EvidenceGateResultRefused)
+		outcome.RefusalReason = result.Metrics.RefusalReason
+		outcome.CitationSupportScore = result.Metrics.CitationSupportScore
+		outcome.ParentFillCount = result.Metrics.ParentFillCount
+		outcome.RewriteApplied = result.Metrics.RewriteApplied
+		outcome.ModelRewriteApplied = result.Metrics.ModelRewriteApplied
+		outcome.DenseContribution = result.Metrics.DenseContribution
+		outcome.SparseContribution = result.Metrics.SparseContribution
+	}
+	return outcome, nil
 }
 
 func normalizeResultID(doc *schema.Document) string {

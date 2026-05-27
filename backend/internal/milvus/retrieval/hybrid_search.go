@@ -313,24 +313,41 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		return &SearchResult{
 			Documents: []*schema.Document{},
 			Metrics: SearchMetrics{
-				EmbeddingMs:          denseMetric.EmbeddingMs,
-				SearchMs:             denseMetric.SearchMs + sparseMS,
-				PostprocessMs:        maxInt64(0, totalMS-denseMetric.EmbeddingMs-(denseMetric.SearchMs+sparseMS)),
-				HitCount:             0,
-				CandidateTopK:        topKDecision.CandidateTopK,
-				FinalTopK:            0,
-				TokenBudget:          topKDecision.TokenBudget,
-				TruncateReason:       topKDecision.TruncateReason,
-				Strategy:             "phase2",
-				RetrieverVersion:     HybridRetrieverVersion,
-				RewriteApplied:       req.RewriteApplied,
-				EmptyReason:          EmptyReasonAfterRetrieve,
-				DenseHits:            len(denseDocs),
-				SparseHits:           len(sparseDocs),
-				EvidenceGateResult:   evidenceOutcome.Result,
-				RefusalReason:        evidenceOutcome.RefusalReason,
-				CitationSupportScore: evidenceOutcome.CitationSupportScore,
-				EvidenceGateError:    evidenceOutcome.Error,
+				EmbeddingMs:           denseMetric.EmbeddingMs,
+				SearchMs:              denseMetric.SearchMs + sparseMS,
+				PostprocessMs:         maxInt64(0, totalMS-denseMetric.EmbeddingMs-(denseMetric.SearchMs+sparseMS)),
+				HitCount:              0,
+				CandidateTopK:         topKDecision.CandidateTopK,
+				FinalTopK:             0,
+				TokenBudget:           topKDecision.TokenBudget,
+				TruncateReason:        topKDecision.TruncateReason,
+				Strategy:              "phase2",
+				RetrieverVersion:      HybridRetrieverVersion,
+				RewriteStrategy:       req.RewriteStrategy,
+				RewriteApplied:        req.RewriteApplied,
+				OriginalQuery:         req.OriginalQuery,
+				RewriteQuery:          req.RewriteQuery,
+				FinalQuery:            req.FinalQuery,
+				DenseQuery:            req.DenseQuery,
+				SparseQuery:           req.SparseQuery,
+				RouteRewriteDense:     resolveRouteRewriteStrategyFromRequest(req, routeDense),
+				RouteRewriteSparse:    resolveRouteRewriteStrategyFromRequest(req, routeSparse),
+				TermDictScope:         req.TermDictScope,
+				TermDictVersion:       req.TermDictVersion,
+				TermHits:              append([]string(nil), req.TermHits...),
+				ModelRewriteApplied:   req.ModelRewriteApplied,
+				ModelRewriteShadow:    req.ModelRewriteShadow,
+				ModelRewriteRiskLevel: req.ModelRewriteRiskLevel,
+				ModelRewriteTerms:     append([]string(nil), req.ModelRewriteTerms...),
+				EmptyReason:           EmptyReasonAfterRetrieve,
+				DenseHits:             len(denseDocs),
+				SparseHits:            len(sparseDocs),
+				ParentChildEnabled:    h.parentChild != nil,
+				ParentFillStrategy:    h.parentChildStrategy(),
+				EvidenceGateResult:    evidenceOutcome.Result,
+				RefusalReason:         evidenceOutcome.RefusalReason,
+				CitationSupportScore:  evidenceOutcome.CitationSupportScore,
+				EvidenceGateError:     evidenceOutcome.Error,
 			},
 		}, nil
 	}
@@ -473,6 +490,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	result.Metrics.RerankVersion = rerankVersion
 	result.Metrics.RerankFallback = rerankFallback
 	result.Metrics.RerankReason = rerankReason
+	result.Metrics.ParentChildEnabled = h.parentChild != nil
+	result.Metrics.ParentFillStrategy = parentFillStats.Strategy
+	result.Metrics.ParentFillCount = parentFillStats.FilledCount
+	result.Metrics.ParentFillFallback = parentFillStats.FallbackCount
+	result.Metrics.ParentFillTokens = parentFillStats.FilledTokens
 	return result, nil
 }
 
@@ -492,35 +514,59 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 	return &SearchResult{
 		Documents: docs,
 		Metrics: SearchMetrics{
-			EmbeddingMs:          denseMetric.EmbeddingMs,
-			SearchMs:             searchStageMS,
-			PostprocessMs:        maxInt64(0, totalMS-denseMetric.EmbeddingMs-searchStageMS),
-			HitCount:             denseHits + sparseHits,
-			CandidateTopK:        topKDecision.CandidateTopK,
-			FinalTopK:            len(docs),
-			TokenBudget:          topKDecision.TokenBudget,
-			TruncateReason:       topKDecision.TruncateReason,
-			Strategy:             resolveRetrieveStrategy(h.parentChild),
-			RetrieverVersion:     HybridRetrieverVersion,
-			RewriteApplied:       req.RewriteApplied,
-			EmptyReason:          emptyReason,
-			DenseHits:            denseHits,
-			SparseHits:           sparseHits,
-			DenseContribution:    denseContribution,
-			SparseContribution:   sparseContribution,
-			TopKPolicyVersion:    topKDecision.PolicyVersion,
-			ScoreDistribution:    topKDecision.ScoreDistribution,
-			RerankGap:            topKDecision.RerankGap,
-			EvidenceDensity:      topKDecision.EvidenceDensity,
-			TopKDecisionReason:   topKDecision.DecisionReason,
-			TokenBudgetRemain:    topKDecision.TokenBudgetRemaining,
-			ContextTokens:        topKDecision.EstimatedContextTokens,
-			EvidenceGateResult:   evidenceOutcome.Result,
-			RefusalReason:        evidenceOutcome.RefusalReason,
-			CitationSupportScore: evidenceOutcome.CitationSupportScore,
-			EvidenceGateError:    evidenceOutcome.Error,
+			EmbeddingMs:           denseMetric.EmbeddingMs,
+			SearchMs:              searchStageMS,
+			PostprocessMs:         maxInt64(0, totalMS-denseMetric.EmbeddingMs-searchStageMS),
+			HitCount:              denseHits + sparseHits,
+			CandidateTopK:         topKDecision.CandidateTopK,
+			FinalTopK:             len(docs),
+			TokenBudget:           topKDecision.TokenBudget,
+			TruncateReason:        topKDecision.TruncateReason,
+			Strategy:              resolveRetrieveStrategy(h.parentChild),
+			RetrieverVersion:      HybridRetrieverVersion,
+			RewriteStrategy:       req.RewriteStrategy,
+			RewriteApplied:        req.RewriteApplied,
+			OriginalQuery:         req.OriginalQuery,
+			RewriteQuery:          req.RewriteQuery,
+			FinalQuery:            req.FinalQuery,
+			DenseQuery:            req.DenseQuery,
+			SparseQuery:           req.SparseQuery,
+			RouteRewriteDense:     resolveRouteRewriteStrategyFromRequest(req, routeDense),
+			RouteRewriteSparse:    resolveRouteRewriteStrategyFromRequest(req, routeSparse),
+			TermDictScope:         req.TermDictScope,
+			TermDictVersion:       req.TermDictVersion,
+			TermHits:              append([]string(nil), req.TermHits...),
+			ModelRewriteApplied:   req.ModelRewriteApplied,
+			ModelRewriteShadow:    req.ModelRewriteShadow,
+			ModelRewriteRiskLevel: req.ModelRewriteRiskLevel,
+			ModelRewriteTerms:     append([]string(nil), req.ModelRewriteTerms...),
+			EmptyReason:           emptyReason,
+			DenseHits:             denseHits,
+			SparseHits:            sparseHits,
+			DenseContribution:     denseContribution,
+			SparseContribution:    sparseContribution,
+			TopKPolicyVersion:     topKDecision.PolicyVersion,
+			ScoreDistribution:     topKDecision.ScoreDistribution,
+			RerankGap:             topKDecision.RerankGap,
+			EvidenceDensity:       topKDecision.EvidenceDensity,
+			TopKDecisionReason:    topKDecision.DecisionReason,
+			TokenBudgetRemain:     topKDecision.TokenBudgetRemaining,
+			ContextTokens:         topKDecision.EstimatedContextTokens,
+			ParentChildEnabled:    h.parentChild != nil,
+			ParentFillStrategy:    h.parentChildStrategy(),
+			EvidenceGateResult:    evidenceOutcome.Result,
+			RefusalReason:         evidenceOutcome.RefusalReason,
+			CitationSupportScore:  evidenceOutcome.CitationSupportScore,
+			EvidenceGateError:     evidenceOutcome.Error,
 		},
 	}
+}
+
+func (h *HybridRetriever) parentChildStrategy() string {
+	if h == nil || h.parentChild == nil {
+		return ""
+	}
+	return strings.TrimSpace(h.parentChild.config.FillStrategy)
 }
 
 func resolveRetrieveStrategy(parentChild *parentChildPostProcessor) string {
@@ -592,6 +638,7 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 	}
 	result.Metrics.RetrieverVersion = HybridRetrieverVersion
 	result.Metrics.Strategy = "phase2"
+	result.Metrics.RewriteStrategy = req.RewriteStrategy
 	result.Metrics.RewriteApplied = req.RewriteApplied
 	result.Metrics.DenseHits = len(result.Documents)
 	return result, nil
