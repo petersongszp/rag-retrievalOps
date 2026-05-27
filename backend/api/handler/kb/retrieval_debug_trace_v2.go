@@ -19,6 +19,9 @@ type retrievalDebugTraceResponse struct {
 	KBIDs             []uint64                            `json:"kb_ids,omitempty"`
 	OriginalQuery     string                              `json:"original_query,omitempty"`
 	RewrittenQuery    string                              `json:"rewritten_query,omitempty"`
+	RewriteStrategy   string                              `json:"rewrite_strategy,omitempty"`
+	RewriteGainBucket string                              `json:"rewrite_gain_bucket,omitempty"`
+	TermHits          []string                            `json:"term_hits,omitempty"`
 	RouteFinalQueries map[string]string                   `json:"route_final_queries,omitempty"`
 	RouteHits         []retrievalDebugRouteHitResponse    `json:"route_hits,omitempty"`
 	FusionResults     retrievalDebugFusionResponse        `json:"fusion_results,omitempty"`
@@ -136,6 +139,24 @@ func buildRetrievalDebugTraceResponse(
 		KBIDs:          parseKBIDs(logEntry),
 		OriginalQuery:  firstNonEmptyString(searchMetrics.OriginalQuery, logQuery(logEntry)),
 		RewrittenQuery: firstNonEmptyString(searchMetrics.RewriteQuery, logRewrite(logEntry)),
+		RewriteStrategy: firstNonEmptyString(
+			searchMetrics.RewriteStrategy,
+			func() string {
+				if logEntry != nil {
+					return strings.TrimSpace(logEntry.RewriteStrategy)
+				}
+				return ""
+			}(),
+		),
+		RewriteGainBucket: firstNonEmptyString(
+			func() string {
+				if logEntry != nil {
+					return strings.TrimSpace(logEntry.RewriteGainBucket)
+				}
+				return ""
+			}(),
+		),
+		TermHits: append([]string(nil), searchMetrics.TermHits...),
 		RouteFinalQueries: map[string]string{
 			"dense":  firstNonEmptyString(searchMetrics.DenseQuery, searchMetrics.FinalQuery, logFinalQuery(logEntry)),
 			"sparse": firstNonEmptyString(searchMetrics.SparseQuery, searchMetrics.FinalQuery, logFinalQuery(logEntry)),

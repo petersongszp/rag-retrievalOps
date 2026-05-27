@@ -355,8 +355,14 @@ export function RetrievalDebugPage() {
                           <Tag color="warning">Contract gap</Tag>
                         )}
                       </Descriptions.Item>
-                      <Descriptions.Item label="term_hits / rewrite_strategy / rewrite_gain_bucket">
-                        <Tag color="warning">Contract gap</Tag>
+                      <Descriptions.Item label="rewrite_strategy">
+                        {renderValue(trace.rewrite_strategy)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="rewrite_gain_bucket">
+                        {renderValue(trace.rewrite_gain_bucket)}
+                      </Descriptions.Item>
+                      <Descriptions.Item label="term_hits">
+                        {renderStringList(trace.term_hits)}
                       </Descriptions.Item>
                     </Descriptions>
                   </Space>

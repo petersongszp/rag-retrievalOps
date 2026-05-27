@@ -532,6 +532,9 @@ export interface RetrievalDebugTrace {
   kb_ids?: number[];
   original_query?: string;
   rewritten_query?: string;
+  rewrite_strategy?: string;
+  rewrite_gain_bucket?: string;
+  term_hits?: string[];
   route_final_queries?: Record<string, string>;
   route_hits?: RetrievalRouteHit[];
   fusion_results?: RetrievalFusionResult;

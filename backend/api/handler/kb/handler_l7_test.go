@@ -113,17 +113,20 @@ func TestBuildRetrieveDebugTraceIncludesParentFillDiff(t *testing.T) {
 
 func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) {
 	logEntry := &model.KBRetrieveLog{
-		RequestID:  "req-l1",
-		Query:      "java lock",
-		FinalQuery: "java lock",
-		KBIDs:      "1,2",
+		RequestID:         "req-l1",
+		Query:             "java lock",
+		FinalQuery:        "java lock",
+		KBIDs:             "1,2",
+		RewriteGainBucket: "route_gain_candidate",
 	}
 	metrics := retrieval.SearchMetrics{
 		OriginalQuery:          "java lock",
 		RewriteQuery:           "java lock aqs",
+		RewriteStrategy:        "rule_based+domain_terms",
 		FinalQuery:             "java lock aqs",
 		DenseQuery:             "java lock",
 		SparseQuery:            "java lock aqs",
+		TermHits:               []string{"aqs", "lock"},
 		CandidateTopK:          10,
 		FinalTopK:              4,
 		TokenBudget:            800,
@@ -165,6 +168,15 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 	}
 	if len(trace.RouteHits) != 2 {
 		t.Fatalf("RouteHits len = %d, want 2", len(trace.RouteHits))
+	}
+	if trace.RewriteStrategy != "rule_based+domain_terms" {
+		t.Fatalf("RewriteStrategy = %q", trace.RewriteStrategy)
+	}
+	if trace.RewriteGainBucket != "route_gain_candidate" {
+		t.Fatalf("RewriteGainBucket = %q", trace.RewriteGainBucket)
+	}
+	if len(trace.TermHits) != 2 || trace.TermHits[0] != "aqs" {
+		t.Fatalf("TermHits = %#v", trace.TermHits)
 	}
 	if trace.TopKDecision.TopKPolicyVersion != "phase3-strategic-v1" {
 		t.Fatalf("TopKPolicyVersion = %q", trace.TopKDecision.TopKPolicyVersion)
