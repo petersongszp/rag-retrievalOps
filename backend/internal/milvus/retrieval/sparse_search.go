@@ -66,7 +66,10 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	if req == nil {
 		return nil, fmt.Errorf("hybrid search request is nil")
 	}
-	query := strings.TrimSpace(req.FinalQuery)
+	query := strings.TrimSpace(req.SparseQuery)
+	if query == "" {
+		query = strings.TrimSpace(req.FinalQuery)
+	}
 	if query == "" {
 		query = strings.TrimSpace(req.Query)
 	}
@@ -78,7 +81,11 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	if topK <= 0 {
 		topK = s.config.DefaultTopK
 	}
-	terms := extractSparseTerms(query, s.config.MaxTerms)
+	termLimit := s.config.MaxTerms
+	if strings.TrimSpace(req.SparseQuery) != "" && !strings.EqualFold(strings.TrimSpace(req.SparseQuery), strings.TrimSpace(req.OriginalQuery)) && termLimit < 10 {
+		termLimit = 10
+	}
+	terms := extractSparseTerms(query, termLimit)
 	if len(terms) == 0 {
 		return []*schema.Document{}, nil
 	}
@@ -145,6 +152,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 				source["collection"] = collection
 			}
 			doc.MetaData["source"] = source
+			annotateParentChildSource(doc)
 			merged[docID] = doc
 		}
 	}
@@ -183,7 +191,8 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 			source["collection"] = collection
 		}
 		doc.MetaData["source"] = source
-		attachRewriteMetadata(doc, req)
+		annotateParentChildSource(doc)
+		attachRewriteMetadata(doc, req, routeSparse)
 		results = append(results, doc)
 	}
 

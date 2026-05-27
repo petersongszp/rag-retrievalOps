@@ -21,19 +21,31 @@ const (
 )
 
 type HybridSearchRequest struct {
-	Query           string
-	OriginalQuery   string
-	RewriteQuery    string
-	FinalQuery      string
-	RewriteStrategy string
-	RewriteApplied  bool
-	Expr            string
-	TopK            int
-	KBScope         string
-	KBID            uint64
-	RequestID       string
-	Collection      string
-	CandidateTopK   int
+	Query                 string
+	OriginalQuery         string
+	RewriteQuery          string
+	FinalQuery            string
+	DenseQuery            string
+	SparseQuery           string
+	RewriteStrategy       string
+	RewriteApplied        bool
+	RouteRewriteStrategy  map[string]string
+	Expr                  string
+	TopK                  int
+	KBScope               string
+	KBID                  uint64
+	Language              DocumentLanguage
+	Category              DocumentCategory
+	RequestID             string
+	Collection            string
+	CandidateTopK         int
+	TermDictScope         string
+	TermDictVersion       string
+	TermHits              []string
+	ModelRewriteApplied   bool
+	ModelRewriteShadow    bool
+	ModelRewriteRiskLevel string
+	ModelRewriteTerms     []string
 }
 
 type HybridRetriever struct {
@@ -41,6 +53,8 @@ type HybridRetriever struct {
 	sparseRetriever *SparseRetriever
 	reranker        Reranker
 	queryRewriter   QueryRewriter
+	parentChild     *parentChildPostProcessor
+	citationChecker *CitationConsistencyChecker
 	config          *HybridRetrieverConfig
 }
 
@@ -52,6 +66,9 @@ type HybridRetrieverConfig struct {
 	RerankerImpl  Reranker
 	QueryRewriter QueryRewriter
 	DynamicTopK   DynamicTopKConfig
+	ParentChild   ParentChildConfig
+	EvidenceGate  EvidenceGateConfig
+	CitationCheck CitationConsistencyConfig
 }
 
 func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConfig) (*HybridRetriever, error) {
@@ -80,6 +97,8 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 		retriever:       retriever,
 		sparseRetriever: sparseRetriever,
 		queryRewriter:   config.QueryRewriter,
+		parentChild:     newParentChildPostProcessor(retriever.client, retriever.config.Collection, config.ParentChild),
+		citationChecker: NewCitationConsistencyChecker(config.CitationCheck),
 		config:          config,
 	}
 	if config.RerankerImpl != nil {
@@ -121,13 +140,16 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 	}
 
 	req := &HybridSearchRequest{
-		Query:         query,
-		OriginalQuery: query,
-		FinalQuery:    query,
-		TopK:          finalTopK,
-		RequestID:     requestID,
-		Collection:    h.retriever.config.Collection,
-		CandidateTopK: candidateTopK,
+		Query:                query,
+		OriginalQuery:        query,
+		FinalQuery:           query,
+		DenseQuery:           query,
+		SparseQuery:          query,
+		RouteRewriteStrategy: map[string]string{},
+		TopK:                 finalTopK,
+		RequestID:            requestID,
+		Collection:           h.retriever.config.Collection,
+		CandidateTopK:        candidateTopK,
 	}
 	if opts != nil {
 		req.Expr = strings.TrimSpace(BuildFilterExpr(opts))
@@ -136,6 +158,8 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 		}
 		req.KBScope = strings.TrimSpace(opts.KBScope)
 		req.KBID = opts.ActiveGlobalKBID
+		req.Language = opts.Language
+		req.Category = opts.Category
 		if strings.TrimSpace(opts.Collection) != "" {
 			req.Collection = strings.TrimSpace(opts.Collection)
 		}
@@ -148,6 +172,8 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 		if strings.TrimSpace(opts.FinalQuery) != "" {
 			req.FinalQuery = strings.TrimSpace(opts.FinalQuery)
 		}
+		req.DenseQuery = firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+		req.SparseQuery = firstNonEmptyQuery(req.SparseQuery, req.FinalQuery, req.OriginalQuery)
 		if strings.TrimSpace(opts.RewriteStrategy) != "" {
 			req.RewriteStrategy = strings.TrimSpace(opts.RewriteStrategy)
 		}
@@ -177,6 +203,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	}
 	if strings.TrimSpace(req.FinalQuery) == "" {
 		req.FinalQuery = req.OriginalQuery
+	}
+	if strings.TrimSpace(req.DenseQuery) == "" {
+		req.DenseQuery = req.FinalQuery
+	}
+	if strings.TrimSpace(req.SparseQuery) == "" {
+		req.SparseQuery = req.FinalQuery
 	}
 	if strings.TrimSpace(req.RequestID) == "" {
 		req.RequestID = fmt.Sprintf("hyb-%d", time.Now().UnixNano())
@@ -264,36 +296,41 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	if denseErr != nil && sparseErr != nil {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L1] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:0,sparse:0} final_count=0 empty_reason=empty-after-retrieve duration_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", totalMS, denseErr.Error(), sparseErr.Error(),
+			"[RAG:L1] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q routes=%s route_hits={dense:0,sparse:0} final_count=0 empty_reason=empty-after-retrieve duration_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, "dense+sparse", totalMS, denseErr.Error(), sparseErr.Error(),
 		)
 		return nil, fmt.Errorf("hybrid retrieval failed: dense=%v sparse=%v", denseErr, sparseErr)
 	}
 
 	rawCandidateCount := len(denseDocs) + len(sparseDocs)
 	if rawCandidateCount == 0 {
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterRetrieve, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterRetrieve, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
 		return &SearchResult{
 			Documents: []*schema.Document{},
 			Metrics: SearchMetrics{
-				EmbeddingMs:      denseMetric.EmbeddingMs,
-				SearchMs:         denseMetric.SearchMs + sparseMS,
-				PostprocessMs:    maxInt64(0, totalMS-denseMetric.EmbeddingMs-(denseMetric.SearchMs+sparseMS)),
-				HitCount:         0,
-				CandidateTopK:    topKDecision.CandidateTopK,
-				FinalTopK:        0,
-				TokenBudget:      topKDecision.TokenBudget,
-				TruncateReason:   topKDecision.TruncateReason,
-				Strategy:         "phase2",
-				RetrieverVersion: HybridRetrieverVersion,
-				RewriteApplied:   req.RewriteApplied,
-				EmptyReason:      EmptyReasonAfterRetrieve,
-				DenseHits:        len(denseDocs),
-				SparseHits:       len(sparseDocs),
+				EmbeddingMs:          denseMetric.EmbeddingMs,
+				SearchMs:             denseMetric.SearchMs + sparseMS,
+				PostprocessMs:        maxInt64(0, totalMS-denseMetric.EmbeddingMs-(denseMetric.SearchMs+sparseMS)),
+				HitCount:             0,
+				CandidateTopK:        topKDecision.CandidateTopK,
+				FinalTopK:            0,
+				TokenBudget:          topKDecision.TokenBudget,
+				TruncateReason:       topKDecision.TruncateReason,
+				Strategy:             "phase2",
+				RetrieverVersion:     HybridRetrieverVersion,
+				RewriteApplied:       req.RewriteApplied,
+				EmptyReason:          EmptyReasonAfterRetrieve,
+				DenseHits:            len(denseDocs),
+				SparseHits:           len(sparseDocs),
+				EvidenceGateResult:   evidenceOutcome.Result,
+				RefusalReason:        evidenceOutcome.RefusalReason,
+				CitationSupportScore: evidenceOutcome.CitationSupportScore,
+				EvidenceGateError:    evidenceOutcome.Error,
 			},
 		}, nil
 	}
@@ -303,22 +340,24 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		SparseWeight: h.config.SparseWeight,
 	})
 	if len(fused) == 0 {
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion), nil
+		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome), nil
 	}
 
 	merged := DeduplicateFusedDocuments(fused)
 	if len(merged) == 0 {
+		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
-			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
-			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
+			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
+			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion), nil
+		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome), nil
 	}
 
 	rerankModel := ""
@@ -341,22 +380,37 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			}
 		}
 	}
+	topKDecision = DecideStrategicTopK(req.FinalQuery, req.CandidateTopK, req.TopK, merged, h.config.DynamicTopK)
 
 	emptyReason := EmptyReasonNone
 	if len(merged) == 0 {
 		emptyReason = EmptyReasonAfterFilter
 	}
 
+	parentFillStats := ParentChildFillStats{}
+	if h.parentChild != nil {
+		merged, parentFillStats = h.parentChild.Fill(ctx, merged)
+	}
+
 	beforeTruncateCount := len(merged)
 	merged, topKDecision = ApplyTokenBudgetGuard(merged, topKDecision, h.config.DynamicTopK)
 	truncatedCount := beforeTruncateCount - len(merged)
 	if len(merged) == 0 && emptyReason == EmptyReasonNone {
-		emptyReason = EmptyReasonAfterFilter
+		if h.parentChild != nil && beforeTruncateCount > 0 {
+			emptyReason = EmptyReasonAfterParentBudget
+		} else {
+			emptyReason = EmptyReasonAfterFilter
+		}
 	}
 
+	citationCandidateCount := len(merged)
+	citationOutcome := h.evaluateCitationConsistency(req.FinalQuery, merged)
+	merged, citationOutcome = h.tryRefineUnsupportedCitations(req.FinalQuery, merged, citationOutcome)
+	truncatedCount += citationCandidateCount - len(merged)
+	evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, merged, topKDecision, citationOutcome)
 	totalMS := time.Since(start).Milliseconds()
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.OriginalQuery,
 		req.RewriteQuery,
@@ -367,13 +421,33 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		topKDecision.CandidateTopK,
 		topKDecision.FinalTopK,
 		topKDecision.TokenBudget,
+		topKDecision.TokenBudgetRemaining,
+		topKDecision.EstimatedContextTokens,
 		topKDecision.TruncateReason,
+		topKDecision.PolicyVersion,
+		topKDecision.ScoreDistribution,
+		topKDecision.RerankGap,
+		topKDecision.EvidenceDensity,
+		topKDecision.DecisionReason,
+		evidenceOutcome.Result,
+		evidenceOutcome.RefusalReason,
+		citationOutcome.Supported,
+		evidenceOutcome.CitationSupportScore,
+		len(citationOutcome.UnsupportedClaims),
+		citationOutcome.Version,
+		citationOutcome.Latency.Milliseconds(),
+		citationOutcome.Error,
+		evidenceOutcome.Error,
 		"dense+sparse",
 		len(denseDocs),
 		len(sparseDocs),
 		len(merged),
 		truncatedCount,
 		emptyReason,
+		parentFillStats.Strategy,
+		parentFillStats.FilledCount,
+		parentFillStats.FallbackCount,
+		parentFillStats.FilledTokens,
 		totalMS,
 		denseMS,
 		sparseMS,
@@ -386,7 +460,13 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		toLogError(sparseErr),
 	)
 
-	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason)
+	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome)
+	result.Metrics.CitationSupported = citationOutcome.Supported
+	result.Metrics.UnsupportedClaims = append([]string(nil), citationOutcome.UnsupportedClaims...)
+	result.Metrics.UnsupportedClaimCount = len(citationOutcome.UnsupportedClaims)
+	result.Metrics.CitationCheckVersion = citationOutcome.Version
+	result.Metrics.CitationCheckLatencyMs = citationOutcome.Latency.Milliseconds()
+	result.Metrics.CitationCheckError = citationOutcome.Error
 	result.Metrics.TruncatedCount = truncatedCount
 	result.Metrics.RerankMs = rerankMS
 	result.Metrics.RerankModel = rerankModel
@@ -405,30 +485,49 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 	totalMS int64,
 	docs []*schema.Document,
 	emptyReason string,
+	evidenceOutcome EvidenceGateOutcome,
 ) *SearchResult {
 	denseContribution, sparseContribution := countRouteContributions(docs)
 	searchStageMS := denseMetric.SearchMs + sparseMS
 	return &SearchResult{
 		Documents: docs,
 		Metrics: SearchMetrics{
-			EmbeddingMs:        denseMetric.EmbeddingMs,
-			SearchMs:           searchStageMS,
-			PostprocessMs:      maxInt64(0, totalMS-denseMetric.EmbeddingMs-searchStageMS),
-			HitCount:           denseHits + sparseHits,
-			CandidateTopK:      topKDecision.CandidateTopK,
-			FinalTopK:          len(docs),
-			TokenBudget:        topKDecision.TokenBudget,
-			TruncateReason:     topKDecision.TruncateReason,
-			Strategy:           "phase2",
-			RetrieverVersion:   HybridRetrieverVersion,
-			RewriteApplied:     req.RewriteApplied,
-			EmptyReason:        emptyReason,
-			DenseHits:          denseHits,
-			SparseHits:         sparseHits,
-			DenseContribution:  denseContribution,
-			SparseContribution: sparseContribution,
+			EmbeddingMs:          denseMetric.EmbeddingMs,
+			SearchMs:             searchStageMS,
+			PostprocessMs:        maxInt64(0, totalMS-denseMetric.EmbeddingMs-searchStageMS),
+			HitCount:             denseHits + sparseHits,
+			CandidateTopK:        topKDecision.CandidateTopK,
+			FinalTopK:            len(docs),
+			TokenBudget:          topKDecision.TokenBudget,
+			TruncateReason:       topKDecision.TruncateReason,
+			Strategy:             resolveRetrieveStrategy(h.parentChild),
+			RetrieverVersion:     HybridRetrieverVersion,
+			RewriteApplied:       req.RewriteApplied,
+			EmptyReason:          emptyReason,
+			DenseHits:            denseHits,
+			SparseHits:           sparseHits,
+			DenseContribution:    denseContribution,
+			SparseContribution:   sparseContribution,
+			TopKPolicyVersion:    topKDecision.PolicyVersion,
+			ScoreDistribution:    topKDecision.ScoreDistribution,
+			RerankGap:            topKDecision.RerankGap,
+			EvidenceDensity:      topKDecision.EvidenceDensity,
+			TopKDecisionReason:   topKDecision.DecisionReason,
+			TokenBudgetRemain:    topKDecision.TokenBudgetRemaining,
+			ContextTokens:        topKDecision.EstimatedContextTokens,
+			EvidenceGateResult:   evidenceOutcome.Result,
+			RefusalReason:        evidenceOutcome.RefusalReason,
+			CitationSupportScore: evidenceOutcome.CitationSupportScore,
+			EvidenceGateError:    evidenceOutcome.Error,
 		},
 	}
+}
+
+func resolveRetrieveStrategy(parentChild *parentChildPostProcessor) string {
+	if parentChild != nil {
+		return "phase3-parent-child"
+	}
+	return "phase2"
 }
 
 func countRouteContributions(docs []*schema.Document) (int, int) {
@@ -469,7 +568,8 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 		RewriteStrategy:  req.RewriteStrategy,
 		RewriteApplied:   req.RewriteApplied,
 	}
-	result, err := h.retriever.RetrieveWithOptionsAndMetrics(ctx, req.FinalQuery, opts)
+	denseQuery := firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	result, err := h.retriever.RetrieveWithOptionsAndMetrics(ctx, denseQuery, opts)
 	if err != nil {
 		return nil, err
 	}
@@ -487,7 +587,8 @@ func (h *HybridRetriever) searchDenseWithMetrics(ctx context.Context, req *Hybri
 			source["collection"] = collection
 		}
 		doc.MetaData["source"] = source
-		attachRewriteMetadata(doc, req)
+		annotateParentChildSource(doc)
+		attachRewriteMetadata(doc, req, routeDense)
 	}
 	result.Metrics.RetrieverVersion = HybridRetrieverVersion
 	result.Metrics.Strategy = "phase2"
@@ -506,6 +607,57 @@ func (h *HybridRetriever) observeRouteMetric(route string, duration time.Duratio
 	metrics.ObserveRetrieveRoute(route, duration, status, errCode, hitCount)
 }
 
+func (h *HybridRetriever) evaluateEvidenceGate(query string, docs []*schema.Document, topKDecision TopKDecision, citationOutcome CitationConsistencyOutcome) EvidenceGateOutcome {
+	if h == nil {
+		return EvidenceGateOutcome{Result: EvidenceGateResultDisabled}
+	}
+	return EvaluateEvidenceGate(query, docs, SearchMetrics{
+		EvidenceDensity:        topKDecision.EvidenceDensity,
+		CitationSupportScore:   citationOutcome.SupportScore,
+		CitationSupported:      citationOutcome.Supported,
+		UnsupportedClaims:      append([]string(nil), citationOutcome.UnsupportedClaims...),
+		UnsupportedClaimCount:  len(citationOutcome.UnsupportedClaims),
+		CitationCheckVersion:   citationOutcome.Version,
+		CitationCheckLatencyMs: citationOutcome.Latency.Milliseconds(),
+		CitationCheckError:     citationOutcome.Error,
+	}, h.config.EvidenceGate)
+}
+
+func (h *HybridRetriever) evaluateCitationConsistency(query string, docs []*schema.Document) CitationConsistencyOutcome {
+	if h == nil || h.citationChecker == nil {
+		return CitationConsistencyOutcome{}
+	}
+	return h.citationChecker.Check(query, docs)
+}
+
+func (h *HybridRetriever) tryRefineUnsupportedCitations(query string, docs []*schema.Document, current CitationConsistencyOutcome) ([]*schema.Document, CitationConsistencyOutcome) {
+	if h == nil || h.citationChecker == nil || !h.config.CitationCheck.Enabled {
+		return docs, current
+	}
+	if current.Supported || len(docs) <= 1 {
+		return docs, current
+	}
+
+	supportedDocs := make([]*schema.Document, 0, len(docs))
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		if value, ok := doc.MetaData["citation_supported"]; ok && castBool(value) {
+			supportedDocs = append(supportedDocs, doc)
+		}
+	}
+	if len(supportedDocs) == 0 || len(supportedDocs) == len(docs) {
+		return docs, current
+	}
+
+	refined := h.citationChecker.Check(query, supportedDocs)
+	if refined.SupportScore > current.SupportScore || (refined.Supported && !current.Supported) {
+		return supportedDocs, refined
+	}
+	return docs, current
+}
+
 func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewriter QueryRewriter) {
 	if req == nil {
 		return
@@ -516,24 +668,48 @@ func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewr
 	if rewriter == nil {
 		req.Query = req.OriginalQuery
 		req.FinalQuery = req.OriginalQuery
+		req.DenseQuery = req.OriginalQuery
+		req.SparseQuery = req.OriginalQuery
 		req.RewriteQuery = ""
 		req.RewriteStrategy = RewriteStrategyNone
 		req.RewriteApplied = false
+		req.RouteRewriteStrategy = map[string]string{}
 		return
 	}
 
-	result := rewriter.Rewrite(ctx, req.OriginalQuery)
+	result := rewriter.Rewrite(ctx, QueryRewriteRequest{
+		Query:         req.OriginalQuery,
+		KBID:          req.KBID,
+		KBScope:       req.KBScope,
+		Language:      req.Language,
+		Category:      req.Category,
+		Collection:    req.Collection,
+		RequestID:     req.RequestID,
+		CandidateTopK: req.CandidateTopK,
+	})
 	req.Query = req.OriginalQuery
 	req.RewriteQuery = strings.TrimSpace(result.RewriteQuery)
 	req.FinalQuery = strings.TrimSpace(result.FinalQuery)
 	if req.FinalQuery == "" {
 		req.FinalQuery = req.OriginalQuery
 	}
+	req.DenseQuery = firstNonEmptyQuery(result.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	req.SparseQuery = firstNonEmptyQuery(result.SparseQuery, req.FinalQuery, req.OriginalQuery)
 	req.RewriteStrategy = formatRewriteStrategy(result)
-	req.RewriteApplied = result.Applied && !strings.EqualFold(req.FinalQuery, req.OriginalQuery)
+	req.RewriteApplied = result.Applied
+	req.RouteRewriteStrategy = cloneStringMap(result.RouteStrategies)
+	req.TermDictScope = result.TermDictScope
+	req.TermDictVersion = result.TermDictVersion
+	req.TermHits = append([]string(nil), result.TermHits...)
+	req.ModelRewriteApplied = result.ModelRewriteApplied
+	req.ModelRewriteShadow = result.ModelRewriteShadow
+	req.ModelRewriteRiskLevel = result.ModelRewriteRiskLevel
+	req.ModelRewriteTerms = append([]string(nil), result.ModelRewriteTerms...)
 	if !req.RewriteApplied {
 		req.RewriteQuery = ""
 		req.FinalQuery = req.OriginalQuery
+		req.DenseQuery = req.OriginalQuery
+		req.SparseQuery = req.OriginalQuery
 	}
 }
 
@@ -561,7 +737,7 @@ func toLogError(err error) string {
 	return err.Error()
 }
 
-func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest) {
+func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest, route string) {
 	if doc == nil || req == nil {
 		return
 	}
@@ -571,8 +747,72 @@ func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest) {
 	doc.MetaData["original_query"] = req.OriginalQuery
 	doc.MetaData["rewrite_query"] = req.RewriteQuery
 	doc.MetaData["final_query"] = req.FinalQuery
+	doc.MetaData["dense_query"] = req.DenseQuery
+	doc.MetaData["sparse_query"] = req.SparseQuery
+	doc.MetaData["route_final_query"] = resolveRouteQuery(req, route)
+	doc.MetaData["route_rewrite_strategy"] = resolveRouteRewriteStrategyFromRequest(req, route)
 	doc.MetaData["rewrite_strategy"] = req.RewriteStrategy
 	doc.MetaData["rewrite_applied"] = req.RewriteApplied
+	if req.TermDictScope != "" {
+		doc.MetaData["term_dict_scope"] = req.TermDictScope
+	}
+	if req.TermDictVersion != "" {
+		doc.MetaData["term_dict_version"] = req.TermDictVersion
+	}
+	if len(req.TermHits) > 0 {
+		doc.MetaData["term_hits"] = append([]string(nil), req.TermHits...)
+	}
+	if req.ModelRewriteApplied {
+		doc.MetaData["model_rewrite_applied"] = true
+	}
+	if req.ModelRewriteShadow {
+		doc.MetaData["model_rewrite_shadow"] = true
+	}
+	if req.ModelRewriteRiskLevel != "" {
+		doc.MetaData["model_rewrite_risk_level"] = req.ModelRewriteRiskLevel
+	}
+	if len(req.ModelRewriteTerms) > 0 {
+		doc.MetaData["model_rewrite_terms"] = append([]string(nil), req.ModelRewriteTerms...)
+	}
+}
+
+func resolveRouteQuery(req *HybridSearchRequest, route string) string {
+	if req == nil {
+		return ""
+	}
+	switch strings.TrimSpace(strings.ToLower(route)) {
+	case routeSparse:
+		return firstNonEmptyQuery(req.SparseQuery, req.FinalQuery, req.OriginalQuery)
+	default:
+		return firstNonEmptyQuery(req.DenseQuery, req.FinalQuery, req.OriginalQuery)
+	}
+}
+
+func resolveRouteRewriteStrategyFromRequest(req *HybridSearchRequest, route string) string {
+	if req == nil || len(req.RouteRewriteStrategy) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(req.RouteRewriteStrategy[strings.TrimSpace(strings.ToLower(route))])
+}
+
+func firstNonEmptyQuery(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
+}
+
+func cloneStringMap(source map[string]string) map[string]string {
+	if len(source) == 0 {
+		return map[string]string{}
+	}
+	cloned := make(map[string]string, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func getStringMetadata(metadata map[string]interface{}, key string) string {

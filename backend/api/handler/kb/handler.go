@@ -103,9 +103,19 @@ type citation struct {
 }
 
 type source struct {
-	Route            string `json:"route"`
-	Collection       string `json:"collection"`
-	RetrieverVersion string `json:"retriever_version"`
+	Route                string  `json:"route"`
+	Collection           string  `json:"collection"`
+	RetrieverVersion     string  `json:"retriever_version"`
+	ParentID             string  `json:"parent_id"`
+	ChildID              string  `json:"child_id"`
+	SectionTitle         string  `json:"section_title"`
+	HierarchyPath        string  `json:"hierarchy_path"`
+	ParentFillStrategy   string  `json:"parent_fill_strategy"`
+	ParentFillTokens     int     `json:"parent_fill_tokens"`
+	CitationSupported    bool    `json:"citation_supported"`
+	CitationSupportScore float64 `json:"citation_support_score"`
+	CitationCheckVersion string  `json:"citation_check_version"`
+	LowSupportCitation   bool    `json:"low_support_citation"`
 }
 
 type retrieveItem struct {
@@ -115,9 +125,29 @@ type retrieveItem struct {
 	Source   source   `json:"source"`
 }
 
+type refusalPayload struct {
+	Reason               string   `json:"reason"`
+	Message              string   `json:"message"`
+	Suggestions          []string `json:"suggestions,omitempty"`
+	CitationSupportScore float64  `json:"citation_support_score,omitempty"`
+}
+
+type citationCheckResponse struct {
+	Supported             bool     `json:"supported"`
+	SupportScore          float64  `json:"support_score"`
+	UnsupportedClaims     []string `json:"unsupported_claims,omitempty"`
+	UnsupportedClaimCount int      `json:"unsupported_claim_count"`
+	Version               string   `json:"version,omitempty"`
+	LatencyMs             int64    `json:"latency_ms,omitempty"`
+	Error                 string   `json:"error,omitempty"`
+}
+
 type retrieveResponse struct {
-	RequestID string         `json:"request_id"`
-	Items     []retrieveItem `json:"items"`
+	RequestID          string                 `json:"request_id"`
+	Items              []retrieveItem         `json:"items"`
+	EvidenceGateResult string                 `json:"evidence_gate_result,omitempty"`
+	CitationCheck      *citationCheckResponse `json:"citation_check,omitempty"`
+	Refusal            *refusalPayload        `json:"refusal,omitempty"`
 }
 
 type releaseStatusResponse struct {
@@ -784,38 +814,47 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		metrics.ObserveRetrieveStrategy(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, releaseDecision.Reason, metricsStatus)
 		metrics.ObserveRetrieveEmptyReason(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve))
 		persistRetrieveLog(&model.KBRetrieveLog{
-			RequestID:          requestID,
-			UserID:             userID,
-			KBIDs:              formatKBIDs(kbIDs),
-			Query:              req.Query,
-			FinalQuery:         req.Query,
-			Expr:               expr,
-			TopK:               topK,
-			CandidateTopK:      searchResult.Metrics.CandidateTopK,
-			FinalTopK:          searchResult.Metrics.FinalTopK,
-			TokenBudget:        searchResult.Metrics.TokenBudget,
-			TruncateReason:     searchResult.Metrics.TruncateReason,
-			Strategy:           searchResult.Metrics.Strategy,
-			ReleaseStage:       searchResult.Metrics.ReleaseStage,
-			ReleaseReason:      searchResult.Metrics.ReleaseReason,
-			Routes:             resolveRetrieveRoutes(useHybrid),
-			Collection:         collection,
-			RetrieverVersion:   searchResult.Metrics.RetrieverVersion,
-			EmptyReason:        firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
-			ResultStatus:       classifyRetrieveResultStatus(metricsStatus),
-			ErrorCode:          metricsErrorCode,
-			ErrorMsg:           searchErr.Error(),
-			EmbeddingMs:        searchResult.Metrics.EmbeddingMs,
-			SearchMs:           searchResult.Metrics.SearchMs,
-			PostprocessMs:      searchResult.Metrics.PostprocessMs,
-			RerankMs:           searchResult.Metrics.RerankMs,
-			RerankModel:        searchResult.Metrics.RerankModel,
-			DenseHits:          searchResult.Metrics.DenseHits,
-			SparseHits:         searchResult.Metrics.SparseHits,
-			DenseContribution:  searchResult.Metrics.DenseContribution,
-			SparseContribution: searchResult.Metrics.SparseContribution,
-			DurationMs:         durationMs,
-			TimeoutMs:          retrieveTimeout.Milliseconds(),
+			RequestID:              requestID,
+			UserID:                 userID,
+			KBIDs:                  formatKBIDs(kbIDs),
+			Query:                  req.Query,
+			FinalQuery:             req.Query,
+			Expr:                   expr,
+			TopK:                   topK,
+			CandidateTopK:          searchResult.Metrics.CandidateTopK,
+			FinalTopK:              searchResult.Metrics.FinalTopK,
+			TokenBudget:            searchResult.Metrics.TokenBudget,
+			TruncateReason:         searchResult.Metrics.TruncateReason,
+			Strategy:               searchResult.Metrics.Strategy,
+			ReleaseStage:           searchResult.Metrics.ReleaseStage,
+			ReleaseReason:          searchResult.Metrics.ReleaseReason,
+			Routes:                 resolveRetrieveRoutes(useHybrid),
+			Collection:             collection,
+			RetrieverVersion:       searchResult.Metrics.RetrieverVersion,
+			EmptyReason:            firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
+			EvidenceGateResult:     searchResult.Metrics.EvidenceGateResult,
+			RefusalReason:          searchResult.Metrics.RefusalReason,
+			CitationSupported:      searchResult.Metrics.CitationSupported,
+			CitationSupportScore:   searchResult.Metrics.CitationSupportScore,
+			UnsupportedClaimCount:  searchResult.Metrics.UnsupportedClaimCount,
+			CitationCheckVersion:   searchResult.Metrics.CitationCheckVersion,
+			CitationCheckLatencyMs: searchResult.Metrics.CitationCheckLatencyMs,
+			EvidenceGateError:      searchResult.Metrics.EvidenceGateError,
+			CitationCheckError:     searchResult.Metrics.CitationCheckError,
+			ResultStatus:           classifyRetrieveResultStatus(metricsStatus),
+			ErrorCode:              metricsErrorCode,
+			ErrorMsg:               searchErr.Error(),
+			EmbeddingMs:            searchResult.Metrics.EmbeddingMs,
+			SearchMs:               searchResult.Metrics.SearchMs,
+			PostprocessMs:          searchResult.Metrics.PostprocessMs,
+			RerankMs:               searchResult.Metrics.RerankMs,
+			RerankModel:            searchResult.Metrics.RerankModel,
+			DenseHits:              searchResult.Metrics.DenseHits,
+			SparseHits:             searchResult.Metrics.SparseHits,
+			DenseContribution:      searchResult.Metrics.DenseContribution,
+			SparseContribution:     searchResult.Metrics.SparseContribution,
+			DurationMs:             durationMs,
+			TimeoutMs:              retrieveTimeout.Milliseconds(),
 		})
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
@@ -862,16 +901,38 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 				SnippetOffset: computeSnippetOffset(doc.Content, queryLower),
 			},
 			Source: source{
-				Route:            route,
-				Collection:       firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
-				RetrieverVersion: firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
+				Route:                route,
+				Collection:           firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
+				RetrieverVersion:     firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
+				ParentID:             getStringMetadata(doc.MetaData, "parent_id"),
+				ChildID:              firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),
+				SectionTitle:         getStringMetadata(doc.MetaData, "section_title"),
+				HierarchyPath:        getStringMetadata(doc.MetaData, "hierarchy_path"),
+				ParentFillStrategy:   getStringMetadata(doc.MetaData, "parent_fill_strategy"),
+				ParentFillTokens:     getIntMetadata(doc.MetaData, "parent_fill_tokens"),
+				CitationSupported:    getBoolMetadata(doc.MetaData, "citation_supported"),
+				CitationSupportScore: getFloat64Metadata(doc.MetaData, "citation_support_score"),
+				CitationCheckVersion: getStringMetadata(doc.MetaData, "citation_check_version"),
+				LowSupportCitation:   getBoolMetadata(doc.MetaData, "low_support_citation"),
 			},
 		})
 	}
 
+	evidenceOutcome := resolveEvidenceGateOutcome(req.Query, docs, searchMetrics)
+	searchMetrics.EvidenceGateResult = evidenceOutcome.Result
+	searchMetrics.RefusalReason = evidenceOutcome.RefusalReason
+	searchMetrics.CitationSupportScore = evidenceOutcome.CitationSupportScore
+	searchMetrics.EvidenceGateError = evidenceOutcome.Error
+	citationCheck := buildCitationCheckResponse(searchMetrics)
+	refusal := buildStandardRefusalPayload(evidenceOutcome)
+
 	resultStatus := model.RetrieveResultStatusSuccess
 	emptyReason := searchMetrics.EmptyReason
-	if len(items) == 0 {
+	if refusal != nil {
+		items = []retrieveItem{}
+		resultStatus = model.RetrieveResultStatusFilteredOut
+		emptyReason = retrieval.EmptyReasonEvidenceRefusal
+	} else if len(items) == 0 {
 		if searchMetrics.HitCount > 0 {
 			resultStatus = model.RetrieveResultStatusFilteredOut
 			emptyReason = firstNonEmptyString(emptyReason, retrieval.EmptyReasonAfterFilter)
@@ -894,47 +955,56 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	metrics.ObserveRetrieveRouteContribution("sparse", searchMetrics.Strategy, searchMetrics.ReleaseStage, countRoute(items, "sparse"))
 
 	retrieveLog := &model.KBRetrieveLog{
-		RequestID:          requestID,
-		UserID:             userID,
-		KBIDs:              formatKBIDs(kbIDs),
-		Query:              req.Query,
-		FinalQuery:         firstNonEmptyString(extractFinalQuery(docs), req.Query),
-		Expr:               expr,
-		TopK:               topK,
-		CandidateTopK:      searchMetrics.CandidateTopK,
-		FinalTopK:          searchMetrics.FinalTopK,
-		TokenBudget:        searchMetrics.TokenBudget,
-		TruncateReason:     searchMetrics.TruncateReason,
-		Rewrite:            extractRewriteQuery(docs),
-		RewriteStrategy:    extractRewriteStrategy(docs),
-		RewriteApplied:     searchMetrics.RewriteApplied || extractRewriteApplied(docs),
-		Strategy:           searchMetrics.Strategy,
-		ReleaseStage:       searchMetrics.ReleaseStage,
-		ReleaseReason:      searchMetrics.ReleaseReason,
-		Routes:             resolveRetrieveRoutes(useHybrid),
-		Collection:         collection,
-		RetrieverVersion:   searchMetrics.RetrieverVersion,
-		EmptyReason:        emptyReason,
-		FinalCount:         len(items),
-		TruncatedCount:     searchMetrics.TruncatedCount,
-		DenseHits:          searchMetrics.DenseHits,
-		SparseHits:         searchMetrics.SparseHits,
-		DenseContribution:  searchMetrics.DenseContribution,
-		SparseContribution: searchMetrics.SparseContribution,
-		ResultStatus:       resultStatus,
-		EmbeddingMs:        searchMetrics.EmbeddingMs,
-		SearchMs:           searchMetrics.SearchMs,
-		PostprocessMs:      searchMetrics.PostprocessMs,
-		RerankMs:           searchMetrics.RerankMs,
-		RerankModel:        searchMetrics.RerankModel,
-		DurationMs:         durationMs,
-		TimeoutMs:          retrieveTimeout.Milliseconds(),
+		RequestID:              requestID,
+		UserID:                 userID,
+		KBIDs:                  formatKBIDs(kbIDs),
+		Query:                  req.Query,
+		FinalQuery:             firstNonEmptyString(extractFinalQuery(docs), req.Query),
+		Expr:                   expr,
+		TopK:                   topK,
+		CandidateTopK:          searchMetrics.CandidateTopK,
+		FinalTopK:              searchMetrics.FinalTopK,
+		TokenBudget:            searchMetrics.TokenBudget,
+		TruncateReason:         searchMetrics.TruncateReason,
+		Rewrite:                extractRewriteQuery(docs),
+		RewriteStrategy:        extractRewriteStrategy(docs),
+		RewriteApplied:         searchMetrics.RewriteApplied || extractRewriteApplied(docs),
+		Strategy:               searchMetrics.Strategy,
+		ReleaseStage:           searchMetrics.ReleaseStage,
+		ReleaseReason:          searchMetrics.ReleaseReason,
+		Routes:                 resolveRetrieveRoutes(useHybrid),
+		Collection:             collection,
+		RetrieverVersion:       searchMetrics.RetrieverVersion,
+		EmptyReason:            emptyReason,
+		FinalCount:             len(items),
+		TruncatedCount:         searchMetrics.TruncatedCount,
+		DenseHits:              searchMetrics.DenseHits,
+		SparseHits:             searchMetrics.SparseHits,
+		DenseContribution:      searchMetrics.DenseContribution,
+		SparseContribution:     searchMetrics.SparseContribution,
+		EvidenceGateResult:     searchMetrics.EvidenceGateResult,
+		RefusalReason:          searchMetrics.RefusalReason,
+		CitationSupported:      searchMetrics.CitationSupported,
+		CitationSupportScore:   searchMetrics.CitationSupportScore,
+		UnsupportedClaimCount:  searchMetrics.UnsupportedClaimCount,
+		CitationCheckVersion:   searchMetrics.CitationCheckVersion,
+		CitationCheckLatencyMs: searchMetrics.CitationCheckLatencyMs,
+		EvidenceGateError:      searchMetrics.EvidenceGateError,
+		CitationCheckError:     searchMetrics.CitationCheckError,
+		ResultStatus:           resultStatus,
+		EmbeddingMs:            searchMetrics.EmbeddingMs,
+		SearchMs:               searchMetrics.SearchMs,
+		PostprocessMs:          searchMetrics.PostprocessMs,
+		RerankMs:               searchMetrics.RerankMs,
+		RerankModel:            searchMetrics.RerankModel,
+		DurationMs:             durationMs,
+		TimeoutMs:              retrieveTimeout.Milliseconds(),
 	}
 	persistRetrieveLog(retrieveLog)
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
 			retrieveLog.Strategy,
 			retrieveLog.ReleaseStage,
@@ -953,6 +1023,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			searchMetrics.FinalTopK,
 			searchMetrics.TokenBudget,
 			searchMetrics.TruncateReason,
+			retrieveLog.EvidenceGateResult,
+			retrieveLog.RefusalReason,
+			retrieveLog.CitationSupported,
+			retrieveLog.CitationSupportScore,
+			retrieveLog.UnsupportedClaimCount,
+			retrieveLog.CitationCheckVersion,
+			retrieveLog.CitationCheckLatencyMs,
+			retrieveLog.CitationCheckError,
+			retrieveLog.EvidenceGateError,
 			retrieveLog.Routes,
 			len(items),
 			searchMetrics.HitCount,
@@ -973,7 +1052,13 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	}
 
 	metricsResultCount = len(items)
-	response.Success(ctx, c, retrieveResponse{RequestID: requestID, Items: items})
+	response.Success(ctx, c, retrieveResponse{
+		RequestID:          requestID,
+		Items:              items,
+		EvidenceGateResult: searchMetrics.EvidenceGateResult,
+		CitationCheck:      citationCheck,
+		Refusal:            refusal,
+	})
 }
 
 func resolveAppErrorCode(err error, fallback string) string {
@@ -1361,6 +1446,39 @@ func getFloat64Metadata(metadata map[string]interface{}, key string) float64 {
 		}
 	}
 	return 0
+}
+
+func getBoolMetadata(metadata map[string]interface{}, key string) bool {
+	if metadata == nil {
+		return false
+	}
+	value, ok := metadata[key]
+	if !ok || value == nil {
+		return false
+	}
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	default:
+		return strings.EqualFold(strings.TrimSpace(fmt.Sprint(v)), "true")
+	}
+}
+
+func buildCitationCheckResponse(metrics retrieval.SearchMetrics) *citationCheckResponse {
+	if metrics.CitationCheckVersion == "" && metrics.CitationCheckLatencyMs == 0 && metrics.CitationCheckError == "" && metrics.UnsupportedClaimCount == 0 {
+		return nil
+	}
+	return &citationCheckResponse{
+		Supported:             metrics.CitationSupported,
+		SupportScore:          metrics.CitationSupportScore,
+		UnsupportedClaims:     append([]string(nil), metrics.UnsupportedClaims...),
+		UnsupportedClaimCount: metrics.UnsupportedClaimCount,
+		Version:               metrics.CitationCheckVersion,
+		LatencyMs:             metrics.CitationCheckLatencyMs,
+		Error:                 metrics.CitationCheckError,
+	}
 }
 
 func getStringMetadata(metadata map[string]interface{}, key string) string {

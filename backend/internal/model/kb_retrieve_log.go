@@ -35,45 +35,54 @@ type KBRetrieveLogListFilter struct {
 type (
 	_KBRetrieveLog struct{}
 	KBRetrieveLog  struct {
-		ID                 uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
-		RequestID          string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
-		UserID             uint                 `json:"user_id" gorm:"index;not null"`
-		KBIDs              string               `json:"kb_ids" gorm:"size:500"`
-		Query              string               `json:"query" gorm:"size:2000;not null"`
-		FinalQuery         string               `json:"final_query" gorm:"size:2000"`
-		Expr               string               `json:"expr" gorm:"size:2000"`
-		TopK               int                  `json:"top_k"`
-		CandidateTopK      int                  `json:"candidate_topk"`
-		FinalTopK          int                  `json:"final_topk"`
-		TokenBudget        int                  `json:"token_budget"`
-		TruncateReason     string               `json:"truncate_reason" gorm:"size:64"`
-		Rewrite            string               `json:"rewrite" gorm:"size:1000"`
-		RewriteStrategy    string               `json:"rewrite_strategy" gorm:"size:255"`
-		RewriteApplied     bool                 `json:"rewrite_applied"`
-		Strategy           string               `json:"strategy" gorm:"size:20;index"`
-		ReleaseStage       string               `json:"release_stage" gorm:"size:32;index"`
-		ReleaseReason      string               `json:"release_reason" gorm:"size:255"`
-		Routes             string               `json:"routes" gorm:"size:200"`
-		Collection         string               `json:"collection" gorm:"size:200"`
-		RetrieverVersion   string               `json:"retriever_version" gorm:"size:50"`
-		EmptyReason        string               `json:"empty_reason" gorm:"size:64;index"`
-		FinalCount         int                  `json:"final_count"`
-		TruncatedCount     int                  `json:"truncated_count"`
-		DenseHits          int                  `json:"dense_hits"`
-		SparseHits         int                  `json:"sparse_hits"`
-		DenseContribution  int                  `json:"dense_contribution"`
-		SparseContribution int                  `json:"sparse_contribution"`
-		ResultStatus       RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
-		ErrorCode          string               `json:"error_code" gorm:"size:64"`
-		ErrorMsg           string               `json:"error_msg" gorm:"size:1000"`
-		EmbeddingMs        int64                `json:"embedding_ms"`
-		SearchMs           int64                `json:"search_ms"`
-		PostprocessMs      int64                `json:"postprocess_ms"`
-		RerankMs           int64                `json:"rerank_ms"`
-		RerankModel        string               `json:"rerank_model" gorm:"size:128"`
-		DurationMs         int64                `json:"duration_ms"`
-		TimeoutMs          int64                `json:"timeout_ms"`
-		CreatedAt          time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
+		ID                     uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
+		RequestID              string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
+		UserID                 uint                 `json:"user_id" gorm:"index;not null"`
+		KBIDs                  string               `json:"kb_ids" gorm:"size:500"`
+		Query                  string               `json:"query" gorm:"size:2000;not null"`
+		FinalQuery             string               `json:"final_query" gorm:"size:2000"`
+		Expr                   string               `json:"expr" gorm:"size:2000"`
+		TopK                   int                  `json:"top_k"`
+		CandidateTopK          int                  `json:"candidate_topk"`
+		FinalTopK              int                  `json:"final_topk"`
+		TokenBudget            int                  `json:"token_budget"`
+		TruncateReason         string               `json:"truncate_reason" gorm:"size:64"`
+		Rewrite                string               `json:"rewrite" gorm:"size:1000"`
+		RewriteStrategy        string               `json:"rewrite_strategy" gorm:"size:255"`
+		RewriteApplied         bool                 `json:"rewrite_applied"`
+		Strategy               string               `json:"strategy" gorm:"size:20;index"`
+		ReleaseStage           string               `json:"release_stage" gorm:"size:32;index"`
+		ReleaseReason          string               `json:"release_reason" gorm:"size:255"`
+		Routes                 string               `json:"routes" gorm:"size:200"`
+		Collection             string               `json:"collection" gorm:"size:200"`
+		RetrieverVersion       string               `json:"retriever_version" gorm:"size:50"`
+		EmptyReason            string               `json:"empty_reason" gorm:"size:64;index"`
+		EvidenceGateResult     string               `json:"evidence_gate_result" gorm:"size:32;index"`
+		RefusalReason          string               `json:"refusal_reason" gorm:"size:64;index"`
+		CitationSupported      bool                 `json:"citation_supported"`
+		CitationSupportScore   float64              `json:"citation_support_score"`
+		UnsupportedClaimCount  int                  `json:"unsupported_claim_count"`
+		CitationCheckVersion   string               `json:"citation_check_version" gorm:"size:64"`
+		CitationCheckLatencyMs int64                `json:"citation_check_latency_ms"`
+		EvidenceGateError      string               `json:"evidence_gate_error" gorm:"size:500"`
+		CitationCheckError     string               `json:"citation_check_error" gorm:"size:500"`
+		FinalCount             int                  `json:"final_count"`
+		TruncatedCount         int                  `json:"truncated_count"`
+		DenseHits              int                  `json:"dense_hits"`
+		SparseHits             int                  `json:"sparse_hits"`
+		DenseContribution      int                  `json:"dense_contribution"`
+		SparseContribution     int                  `json:"sparse_contribution"`
+		ResultStatus           RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
+		ErrorCode              string               `json:"error_code" gorm:"size:64"`
+		ErrorMsg               string               `json:"error_msg" gorm:"size:1000"`
+		EmbeddingMs            int64                `json:"embedding_ms"`
+		SearchMs               int64                `json:"search_ms"`
+		PostprocessMs          int64                `json:"postprocess_ms"`
+		RerankMs               int64                `json:"rerank_ms"`
+		RerankModel            string               `json:"rerank_model" gorm:"size:128"`
+		DurationMs             int64                `json:"duration_ms"`
+		TimeoutMs              int64                `json:"timeout_ms"`
+		CreatedAt              time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
 	}
 )
 

@@ -16,30 +16,47 @@ const DenseRetrieverVersion = "phase1-dense-v1"
 
 // SearchMetrics carries retrieve-stage observability fields used across L4-L8.
 type SearchMetrics struct {
-	EmbeddingMs        int64
-	SearchMs           int64
-	PostprocessMs      int64
-	HitCount           int
-	TruncatedCount     int
-	CandidateTopK      int
-	FinalTopK          int
-	TokenBudget        int
-	TruncateReason     string
-	Strategy           string
-	ReleaseStage       string
-	ReleaseReason      string
-	RetrieverVersion   string
-	RewriteApplied     bool
-	EmptyReason        string
-	RerankMs           int64
-	RerankModel        string
-	RerankVersion      string
-	RerankFallback     bool
-	RerankReason       string
-	DenseHits          int
-	SparseHits         int
-	DenseContribution  int
-	SparseContribution int
+	EmbeddingMs            int64
+	SearchMs               int64
+	PostprocessMs          int64
+	HitCount               int
+	TruncatedCount         int
+	CandidateTopK          int
+	FinalTopK              int
+	TokenBudget            int
+	TruncateReason         string
+	Strategy               string
+	ReleaseStage           string
+	ReleaseReason          string
+	RetrieverVersion       string
+	RewriteApplied         bool
+	EmptyReason            string
+	RerankMs               int64
+	RerankModel            string
+	RerankVersion          string
+	RerankFallback         bool
+	RerankReason           string
+	DenseHits              int
+	SparseHits             int
+	DenseContribution      int
+	SparseContribution     int
+	TopKPolicyVersion      string
+	ScoreDistribution      string
+	RerankGap              float64
+	EvidenceDensity        float64
+	TopKDecisionReason     string
+	TokenBudgetRemain      int
+	ContextTokens          int
+	EvidenceGateResult     string
+	RefusalReason          string
+	CitationSupportScore   float64
+	CitationSupported      bool
+	UnsupportedClaims      []string
+	UnsupportedClaimCount  int
+	CitationCheckVersion   string
+	CitationCheckLatencyMs int64
+	EvidenceGateError      string
+	CitationCheckError     string
 }
 
 // SearchResult bundles documents with observable metrics.
@@ -170,6 +187,15 @@ func SearchWithExprAndMetrics(
 			if i < len(result.Scores) {
 				doc.MetaData["score"] = result.Scores[i]
 			}
+			doc.MetaData["retriever_version"] = DenseRetrieverVersion
+			source := ensureSourceMetadata(doc)
+			source["route"] = routeDense
+			source["retriever_version"] = DenseRetrieverVersion
+			if collectionName != "" {
+				source["collection"] = collectionName
+			}
+			doc.MetaData["source"] = source
+			annotateParentChildSource(doc)
 
 			documents = append(documents, doc)
 		}

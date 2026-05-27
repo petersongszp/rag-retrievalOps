@@ -15,6 +15,18 @@ func (s *DocumentSplitterService) SplitMarkdown(ctx context.Context, markdownCon
 		return nil, fmt.Errorf("markdown content is empty")
 	}
 
+	doc := &schema.Document{
+		Content: markdownContent,
+	}
+	return s.SplitMarkdownDocument(ctx, doc)
+}
+
+// SplitMarkdownDocument 使用 Markdown 专用分隔符切割单个文档，并补齐父子块元数据。
+func (s *DocumentSplitterService) SplitMarkdownDocument(ctx context.Context, doc *schema.Document) ([]*schema.Document, error) {
+	if doc == nil || doc.Content == "" {
+		return nil, fmt.Errorf("markdown document is empty")
+	}
+
 	// 创建专门用于 Markdown 的配置
 	// 使用适合 Markdown 的分隔符，优先级从高到低
 	markdownSeparators := []string{
@@ -57,18 +69,13 @@ func (s *DocumentSplitterService) SplitMarkdown(ctx context.Context, markdownCon
 		return nil, fmt.Errorf("failed to create markdown splitter: %w", err)
 	}
 
-	// 创建文档对象
-	doc := &schema.Document{
-		Content: markdownContent,
-	}
-
 	// 执行分割
 	results, err := markdownSplitter.Transform(ctx, []*schema.Document{doc})
 	if err != nil {
 		return nil, fmt.Errorf("failed to split markdown document: %w", err)
 	}
 
-	return results, nil
+	return s.annotateSplitChunks(doc, results), nil
 }
 
 // SplitMarkdownDocuments 批量切割多个 Markdown 文档
@@ -118,10 +125,16 @@ func (s *DocumentSplitterService) SplitMarkdownDocuments(ctx context.Context, do
 		return nil, fmt.Errorf("failed to create markdown splitter: %w", err)
 	}
 
-	// 执行分割
-	results, err := markdownSplitter.Transform(ctx, docs)
-	if err != nil {
-		return nil, fmt.Errorf("failed to split markdown documents: %w", err)
+	results := make([]*schema.Document, 0)
+	for _, doc := range docs {
+		if doc == nil {
+			continue
+		}
+		splitResults, err := markdownSplitter.Transform(ctx, []*schema.Document{doc})
+		if err != nil {
+			return nil, fmt.Errorf("failed to split markdown documents: %w", err)
+		}
+		results = append(results, s.annotateSplitChunks(doc, splitResults)...)
 	}
 
 	return results, nil

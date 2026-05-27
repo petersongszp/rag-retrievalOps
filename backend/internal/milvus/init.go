@@ -145,11 +145,32 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 			DefaultTopK: candidateTopK,
 		},
 		DynamicTopK: retrieval.DynamicTopKConfig{
-			Enabled:         cfg.RAG.FeatureFlags.EnableDynamicTopK,
-			MinTopK:         cfg.RAG.Phase2.MinTopK,
-			MaxTopK:         cfg.RAG.Phase2.MaxTopK,
-			TokenBudget:     cfg.RAG.Phase2.TokenBudget,
-			MinAnswerChunks: cfg.RAG.Phase2.MinAnswerChunks,
+			Enabled:              cfg.RAG.FeatureFlags.EnableDynamicTopK,
+			MinTopK:              cfg.RAG.Phase2.MinTopK,
+			MaxTopK:              cfg.RAG.Phase2.MaxTopK,
+			TokenBudget:          cfg.RAG.Phase2.TokenBudget,
+			MinAnswerChunks:      cfg.RAG.Phase2.MinAnswerChunks,
+			StrategicEnabled:     cfg.RAG.FeatureFlags.EnableStrategicTopK,
+			StrategicMinTopK:     cfg.RAG.Phase3.StrategicTopKMinK,
+			StrategicMaxTopK:     cfg.RAG.Phase3.StrategicTopKMaxK,
+			StrategicBudgetRatio: cfg.RAG.Phase3.StrategicTopKBudgetRatio,
+		},
+		ParentChild: retrieval.ParentChildConfig{
+			Enabled:      cfg.RAG.FeatureFlags.EnableParentChildRetrieval,
+			FillStrategy: cfg.RAG.Phase3.ParentChildFillStrategy,
+			WindowSize:   cfg.RAG.Phase3.ParentChildWindowSize,
+			MaxTokens:    cfg.RAG.Phase3.ParentChildMaxTokens,
+		},
+		EvidenceGate: retrieval.EvidenceGateConfig{
+			Enabled:             cfg.RAG.FeatureFlags.EnableEvidenceRefusal,
+			MinRerankScore:      cfg.RAG.Phase3.EvidenceMinRerankScore,
+			MinEvidenceDensity:  cfg.RAG.Phase3.EvidenceMinDensity,
+			MinCitationCoverage: cfg.RAG.Phase3.EvidenceMinCitationCoverage,
+		},
+		CitationCheck: retrieval.CitationConsistencyConfig{
+			Enabled:   cfg.RAG.FeatureFlags.EnableCitationConsistency,
+			Threshold: cfg.RAG.Phase3.CitationCheckThreshold,
+			Version:   cfg.RAG.Phase3.CitationCheckVersion,
 		},
 	}
 	fallbackReranker := retrieval.NewJaccardReranker(&retrieval.JaccardRerankerConfig{
@@ -174,7 +195,13 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	}
 	if cfg.RAG.FeatureFlags.EnableQueryRewrite {
 		hybridConfig.QueryRewriter = retrieval.NewControlledQueryRewriter(&retrieval.QueryRewriterConfig{
-			MaxExpansions: cfg.RAG.Phase2.RewriteMaxExpansions,
+			MaxExpansions:              cfg.RAG.Phase2.RewriteMaxExpansions,
+			EnableDomainTerms:          cfg.RAG.FeatureFlags.EnableDomainTerms,
+			EnableRouteSpecificRewrite: cfg.RAG.FeatureFlags.EnableRouteSpecificRewrite,
+			EnableModelAssistedRewrite: cfg.RAG.FeatureFlags.EnableModelAssistedRewrite,
+			DomainTermTimeout:          time.Duration(cfg.RAG.Phase3.DomainTermTimeoutMS) * time.Millisecond,
+			ModelRewriteTimeout:        time.Duration(cfg.RAG.Phase3.ModelRewriteTimeoutMS) * time.Millisecond,
+			ModelRewriteShadowRatio:    cfg.RAG.Phase3.ModelRewriteShadowRatio,
 		})
 	}
 	hybridRetriever, err := retrieval.NewHybridRetriever(retrieverService, hybridConfig)

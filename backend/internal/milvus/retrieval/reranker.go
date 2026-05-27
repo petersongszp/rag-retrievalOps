@@ -244,18 +244,92 @@ func annotateRerankMetadata(doc *schema.Document, score float64, version string,
 	source["rerank_version"] = version
 	source["rerank_latency_ms"] = latencyMS
 	doc.MetaData["source"] = source
+	annotateParentChildSource(doc)
 }
 
 func ensureSourceMetadata(doc *schema.Document) map[string]interface{} {
 	source := make(map[string]interface{})
 	if doc != nil && doc.MetaData != nil {
-		if existing, ok := doc.MetaData["source"].(map[string]interface{}); ok && existing != nil {
-			for key, value := range existing {
-				source[key] = value
+		switch existing := doc.MetaData["source"].(type) {
+		case map[string]interface{}:
+			if existing != nil {
+				for key, value := range existing {
+					source[key] = value
+				}
+			}
+		case string:
+			if strings.TrimSpace(existing) != "" {
+				source["origin"] = strings.TrimSpace(existing)
+			}
+		default:
+			if existing != nil {
+				if value := strings.TrimSpace(fmt.Sprint(existing)); value != "" {
+					source["origin"] = value
+				}
 			}
 		}
 	}
 	return source
+}
+
+func annotateParentChildSource(doc *schema.Document) {
+	if doc == nil {
+		return
+	}
+	if doc.MetaData == nil {
+		doc.MetaData = make(map[string]interface{})
+	}
+
+	source := ensureSourceMetadata(doc)
+	copyMetadataFieldsToMap(source, doc.MetaData,
+		"document_id",
+		"chunk_id",
+		"parent_id",
+		"child_id",
+		"chunk_index",
+		"section_title",
+		"hierarchy_path",
+		"parent_start_offset",
+		"parent_end_offset",
+		"child_start_offset",
+		"child_end_offset",
+		"parent_build_strategy",
+		"parent_build_version",
+		"parent_token_count",
+	)
+
+	parentChildAvailable := false
+	if value, ok := doc.MetaData["parent_child_available"]; ok {
+		parentChildAvailable = castBool(value)
+	} else {
+		parentChildAvailable = strings.TrimSpace(readMetadataString(doc, "parent_id")) != "" &&
+			strings.TrimSpace(readMetadataString(doc, "child_id")) != ""
+		doc.MetaData["parent_child_available"] = parentChildAvailable
+	}
+	source["parent_child_available"] = parentChildAvailable
+	doc.MetaData["source"] = source
+}
+
+func copyMetadataFieldsToMap(target map[string]interface{}, metadata map[string]interface{}, keys ...string) {
+	if target == nil || metadata == nil {
+		return
+	}
+	for _, key := range keys {
+		if value, exists := metadata[key]; exists && value != nil {
+			target[key] = value
+		}
+	}
+}
+
+func castBool(value interface{}) bool {
+	switch v := value.(type) {
+	case bool:
+		return v
+	case string:
+		return strings.EqualFold(strings.TrimSpace(v), "true")
+	default:
+		return strings.EqualFold(strings.TrimSpace(fmt.Sprint(v)), "true")
+	}
 }
 
 func tokenize(text string) map[string]struct{} {

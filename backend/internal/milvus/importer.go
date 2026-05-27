@@ -8,6 +8,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 // MarkdownImporter Markdown 文档导入器
@@ -110,15 +112,19 @@ func (mi *MarkdownImporter) ImportFile(ctx context.Context, filePath string, opt
 		metadata.Title = title
 	}
 
+	doc := &schema.Document{
+		Content:  string(content),
+		MetaData: metadata.ToMap(),
+	}
+
 	// 使用 SplitMarkdown 分割文档
-	chunks, err := mi.manager.SplitterService.SplitMarkdown(ctx, string(content))
+	chunks, err := mi.manager.SplitterService.SplitMarkdownDocument(ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to split markdown file %s: %w", filePath, err)
 	}
 
-	// 为每个块添加元数据和唯一 ID
-	enrichedChunks := EnrichDocumentsWithMetadata(chunks, metadata)
-	for i, chunk := range enrichedChunks {
+	// 为每个块添加唯一 ID
+	for i, chunk := range chunks {
 		if chunk.ID == "" {
 			// 生成唯一 ID：语言类型 + 文档分类 + 时间戳 + 块索引
 			chunk.ID = generateChunkID(metadata.Language, metadata.Category, i)
@@ -126,7 +132,7 @@ func (mi *MarkdownImporter) ImportFile(ctx context.Context, filePath string, opt
 	}
 
 	// 存储到 Milvus
-	docIDs, err := mi.manager.IndexerService.Store(ctx, enrichedChunks)
+	docIDs, err := mi.manager.IndexerService.Store(ctx, chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store documents to Milvus: %w", err)
 	}
@@ -135,7 +141,7 @@ func (mi *MarkdownImporter) ImportFile(ctx context.Context, filePath string, opt
 		TotalFiles:   1,
 		SuccessFiles: 1,
 		FailedFiles:  0,
-		TotalChunks:  len(enrichedChunks),
+		TotalChunks:  len(chunks),
 		DocumentIDs:  docIDs,
 		Errors:       nil,
 	}, nil
@@ -402,20 +408,23 @@ func (mi *MarkdownImporter) ImportText(ctx context.Context, content string, opts
 		}
 	}
 
+	doc := &schema.Document{
+		Content:  content,
+		MetaData: metadata.ToMap(),
+	}
+
 	// ========================================
 	// 核心步骤1：使用 SplitMarkdown 切割文档
 	// ========================================
 	// SplitMarkdown 会根据 Markdown 的语义结构（标题、段落、代码块等）
 	// 将长文本切割成适合向量检索的小块
-	chunks, err := mi.manager.SplitterService.SplitMarkdown(ctx, content)
+	chunks, err := mi.manager.SplitterService.SplitMarkdownDocument(ctx, doc)
 	if err != nil {
 		return nil, fmt.Errorf("failed to split text content: %w", err)
 	}
 
-	// 为每个块添加元数据和唯一 ID
-	// 元数据包含：语言、分类、标题、来源等信息，方便后续检索和过滤
-	enrichedChunks := EnrichDocumentsWithMetadata(chunks, metadata)
-	for i, chunk := range enrichedChunks {
+	// 为每个块添加唯一 ID
+	for i, chunk := range chunks {
 		if chunk.ID == "" {
 			// 生成唯一 ID：语言类型_文档分类_时间戳_块索引
 			chunk.ID = generateChunkID(metadata.Language, metadata.Category, i)
@@ -426,7 +435,7 @@ func (mi *MarkdownImporter) ImportText(ctx context.Context, content string, opts
 	// 核心步骤2：使用 Store 上传到 Milvus
 	// ========================================
 	// Store 会：1) 计算每个块的向量嵌入 2) 存储到 Milvus 数据库
-	docIDs, err := mi.manager.IndexerService.Store(ctx, enrichedChunks)
+	docIDs, err := mi.manager.IndexerService.Store(ctx, chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store documents to Milvus: %w", err)
 	}
@@ -436,8 +445,8 @@ func (mi *MarkdownImporter) ImportText(ctx context.Context, content string, opts
 		TotalFiles:   1, // 虽然不是文件，但计为1个文档
 		SuccessFiles: 1,
 		FailedFiles:  0,
-		TotalChunks:  len(enrichedChunks), // 切片后的块数
-		DocumentIDs:  docIDs,              // Milvus 返回的文档ID列表
+		TotalChunks:  len(chunks), // 切片后的块数
+		DocumentIDs:  docIDs,      // Milvus 返回的文档ID列表
 		Errors:       nil,
 	}, nil
 }
