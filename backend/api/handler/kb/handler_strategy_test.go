@@ -133,6 +133,9 @@ func newAdminStrategyTestServer() *server.Hertz {
 	h.GET("/api/admin/kb/strategy/versions", ListStrategyVersions)
 	h.GET("/api/admin/kb/strategy/versions/:version_id", GetStrategyVersion)
 	h.POST("/api/admin/kb/strategy/rollback", RollbackStrategy)
+	h.GET("/api/admin/kb/strategy/impact", GetStrategyImpact)
+	h.GET("/api/admin/kb/strategy/gates", GetStrategyGates)
+	h.GET("/api/admin/kb/strategy/operations", ListStrategyOperations)
 	return h
 }
 
