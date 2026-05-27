@@ -293,6 +293,37 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		h.observeRouteMetric(routeRes.route, routeRes.duration, routeRes.err, len(routeRes.docs))
 	}
 
+	debugTrace := &DebugTrace{
+		RouteHits: []RouteDebugHit{
+			{
+				Route:     routeDense,
+				Query:     req.DenseQuery,
+				Hits:      SnapshotDocuments(denseDocs),
+				LatencyMs: denseMS,
+				Error:     toLogError(denseErr),
+			},
+			{
+				Route:     routeSparse,
+				Query:     req.SparseQuery,
+				Hits:      SnapshotDocuments(sparseDocs),
+				LatencyMs: sparseMS,
+				Error:     toLogError(sparseErr),
+			},
+		},
+		StageDurations: map[string]int64{
+			"dense_ms":  denseMS,
+			"sparse_ms": sparseMS,
+		},
+	}
+	if denseErr != nil || sparseErr != nil {
+		debugTrace.Degradation = DegradationDebugInfo{
+			Enabled:          true,
+			Reason:           "route_error",
+			FallbackStrategy: "continue_with_available_routes",
+			ErrorCode:        firstNonEmptyString(errorCodeFromRouteErr(denseErr), errorCodeFromRouteErr(sparseErr)),
+		}
+	}
+
 	if denseErr != nil && sparseErr != nil {
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
@@ -305,6 +336,10 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	rawCandidateCount := len(denseDocs) + len(sparseDocs)
 	if rawCandidateCount == 0 {
 		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
+		debugTrace.Fusion = FusionDebugInfo{
+			Before: SnapshotDocuments(append(append([]*schema.Document(nil), denseDocs...), sparseDocs...)),
+			After:  nil,
+		}
 		totalMS := time.Since(start).Milliseconds()
 		log.Printf(
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
@@ -349,13 +384,19 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				CitationSupportScore:  evidenceOutcome.CitationSupportScore,
 				EvidenceGateError:     evidenceOutcome.Error,
 			},
+			Debug: debugTrace,
 		}, nil
 	}
 
+	fusionBefore := append(append([]*schema.Document(nil), denseDocs...), sparseDocs...)
 	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
 		DenseWeight:  h.config.DenseWeight,
 		SparseWeight: h.config.SparseWeight,
 	})
+	debugTrace.Fusion = FusionDebugInfo{
+		Before: SnapshotDocuments(fusionBefore),
+		After:  SnapshotFusedDocuments(fused),
+	}
 	if len(fused) == 0 {
 		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
@@ -363,10 +404,15 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome), nil
+		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
 	}
 
 	merged := DeduplicateFusedDocuments(fused)
+	debugTrace.Dedupe = DedupeDebugInfo{
+		BeforeCount: len(fused),
+		AfterCount:  len(merged),
+		Removed:     RemovedFusedSnapshots(fused, merged),
+	}
 	if len(merged) == 0 {
 		evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, nil, topKDecision, CitationConsistencyOutcome{})
 		totalMS := time.Since(start).Milliseconds()
@@ -374,9 +420,10 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome), nil
+		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
 	}
 
+	beforeRerank := append([]*schema.Document(nil), merged...)
 	rerankModel := ""
 	rerankVersion := ""
 	rerankFallback := false
@@ -397,6 +444,14 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			}
 		}
 	}
+	debugTrace.Rerank = RerankDebugInfo{
+		Before:        SnapshotDocuments(beforeRerank),
+		After:         SnapshotDocuments(merged),
+		RerankModel:   rerankModel,
+		RerankVersion: rerankVersion,
+		Fallback:      rerankFallback,
+		Reason:        rerankReason,
+	}
 	topKDecision = DecideStrategicTopK(req.FinalQuery, req.CandidateTopK, req.TopK, merged, h.config.DynamicTopK)
 
 	emptyReason := EmptyReasonNone
@@ -405,11 +460,20 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	}
 
 	parentFillStats := ParentChildFillStats{}
+	beforeParentFill := append([]*schema.Document(nil), merged...)
 	if h.parentChild != nil {
 		merged, parentFillStats = h.parentChild.Fill(ctx, merged)
 	}
+	debugTrace.ParentChild = ParentChildDebugInfo{
+		ChildHits:      SnapshotDocuments(beforeParentFill),
+		ParentContexts: ParentContextSnapshots(merged),
+	}
+	if parentFillStats.FallbackCount > 0 {
+		debugTrace.ParentChild.FallbackReason = "partial_parent_fill_fallback"
+	}
 
 	beforeTruncateCount := len(merged)
+	beforeFilter := append([]*schema.Document(nil), merged...)
 	merged, topKDecision = ApplyTokenBudgetGuard(merged, topKDecision, h.config.DynamicTopK)
 	truncatedCount := beforeTruncateCount - len(merged)
 	if len(merged) == 0 && emptyReason == EmptyReasonNone {
@@ -424,8 +488,32 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	citationOutcome := h.evaluateCitationConsistency(req.FinalQuery, merged)
 	merged, citationOutcome = h.tryRefineUnsupportedCitations(req.FinalQuery, merged, citationOutcome)
 	truncatedCount += citationCandidateCount - len(merged)
+	debugTrace.Filter = FilterDebugInfo{
+		BeforeCount:    len(beforeFilter),
+		AfterCount:     len(merged),
+		Removed:        RemovedSnapshots(beforeFilter, merged),
+		TruncateReason: topKDecision.TruncateReason,
+	}
 	evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, merged, topKDecision, citationOutcome)
 	totalMS := time.Since(start).Milliseconds()
+	debugTrace.FinalResults = SnapshotDocuments(merged)
+	debugTrace.StageDurations["rerank_ms"] = rerankMS
+	debugTrace.StageDurations["total_ms"] = totalMS
+	if rerankFallback {
+		debugTrace.Degradation = DegradationDebugInfo{
+			Enabled:          true,
+			Reason:           firstNonEmptyString(rerankReason, "rerank_fallback"),
+			FallbackStrategy: "use_pre_rerank_order",
+		}
+	}
+	if evidenceOutcome.Result == EvidenceGateResultDegradedPass {
+		debugTrace.Degradation = DegradationDebugInfo{
+			Enabled:          true,
+			Reason:           firstNonEmptyString(evidenceOutcome.Error, "evidence_gate_degraded"),
+			FallbackStrategy: "return_results_without_strict_evidence_gate",
+			ErrorCode:        "evidence_gate_degraded",
+		}
+	}
 	log.Printf(
 		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
@@ -477,7 +565,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		toLogError(sparseErr),
 	)
 
-	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome)
+	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome, debugTrace)
 	result.Metrics.CitationSupported = citationOutcome.Supported
 	result.Metrics.UnsupportedClaims = append([]string(nil), citationOutcome.UnsupportedClaims...)
 	result.Metrics.UnsupportedClaimCount = len(citationOutcome.UnsupportedClaims)
@@ -508,9 +596,20 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 	docs []*schema.Document,
 	emptyReason string,
 	evidenceOutcome EvidenceGateOutcome,
+	debugTrace *DebugTrace,
 ) *SearchResult {
 	denseContribution, sparseContribution := countRouteContributions(docs)
 	searchStageMS := denseMetric.SearchMs + sparseMS
+	if debugTrace != nil {
+		for index := range debugTrace.RouteHits {
+			switch debugTrace.RouteHits[index].Route {
+			case routeDense:
+				debugTrace.RouteHits[index].Contribution = denseContribution
+			case routeSparse:
+				debugTrace.RouteHits[index].Contribution = sparseContribution
+			}
+		}
+	}
 	return &SearchResult{
 		Documents: docs,
 		Metrics: SearchMetrics{
@@ -559,6 +658,7 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 			CitationSupportScore:  evidenceOutcome.CitationSupportScore,
 			EvidenceGateError:     evidenceOutcome.Error,
 		},
+		Debug: debugTrace,
 	}
 }
 
@@ -782,6 +882,18 @@ func toLogError(err error) string {
 		return ""
 	}
 	return err.Error()
+}
+
+func errorCodeFromRouteErr(err error) string {
+	if err == nil {
+		return ""
+	}
+	switch {
+	case strings.Contains(strings.ToLower(err.Error()), "timeout"):
+		return "timeout"
+	default:
+		return "route_error"
+	}
 }
 
 func attachRewriteMetadata(doc *schema.Document, req *HybridSearchRequest, route string) {

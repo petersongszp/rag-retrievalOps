@@ -983,11 +983,11 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			DurationMs:             durationMs,
 			TimeoutMs:              retrieveTimeout.Milliseconds(),
 		}
-		retrieveLog.DebugTrace = encodeRetrieveDebugTrace(buildRetrieveDebugTrace(
+		retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 			retrieveLog,
 			searchResult.Metrics,
 			nil,
-			nil,
+			searchResult.Debug,
 		))
 		persistRetrieveLog(retrieveLog)
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
@@ -1141,11 +1141,11 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		DurationMs:             durationMs,
 		TimeoutMs:              retrieveTimeout.Milliseconds(),
 	}
-	retrieveLog.DebugTrace = encodeRetrieveDebugTrace(buildRetrieveDebugTrace(
+	retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 		retrieveLog,
 		searchMetrics,
-		docs,
 		items,
+		searchResult.Debug,
 	))
 	persistRetrieveLog(retrieveLog)
 
@@ -2507,13 +2507,13 @@ func GetRetrieveDebugView(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	trace, err := decodeRetrieveDebugTrace(logEntry.DebugTrace)
+	trace, err := decodeRetrievalDebugTraceResponse(logEntry.DebugTrace)
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewInternalError("failed to decode retrieve debug trace", err))
 		return
 	}
 	if trace == nil {
-		fallback := buildRetrieveDebugTrace(logEntry, retrieval.SearchMetrics{
+		fallback := buildRetrievalDebugTraceResponse(logEntry, retrieval.SearchMetrics{
 			OriginalQuery:          logEntry.Query,
 			RewriteQuery:           logEntry.Rewrite,
 			FinalQuery:             logEntry.FinalQuery,
@@ -2544,6 +2544,12 @@ func GetRetrieveDebugView(ctx context.Context, c *app.RequestContext) {
 			SparseContribution:     logEntry.SparseContribution,
 		}, nil, nil)
 		trace = &fallback
+	}
+	if trace.RequestID == "" {
+		trace.RequestID = logEntry.RequestID
+	}
+	if trace.CreatedAt.IsZero() {
+		trace.CreatedAt = logEntry.CreatedAt
 	}
 
 	response.Success(ctx, c, trace)
