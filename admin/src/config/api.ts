@@ -21,6 +21,8 @@ export const KB_ADMIN_API = {
   LIST_RETRIEVE_AUDIT_LOGS: `${API_BASE_URL}/admin/kb/retrieve/audit`,
   GET_RETRIEVE_AUDIT_LOG: (requestId: string) =>
     `${API_BASE_URL}/admin/kb/retrieve/audit/${requestId}`,
+  GET_RETRIEVE_DEBUG_TRACE: (requestId: string) =>
+    `${API_BASE_URL}/admin/kb/retrieve/audit/${requestId}/debug`,
 
   LIST_INGEST_LOGS: `${API_BASE_URL}/admin/kb/logs/ingest`,
   GET_INGEST_LOG_DETAIL: (jobId: number | string) =>
@@ -47,4 +49,15 @@ export const KB_ADMIN_API = {
     `${API_BASE_URL}/admin/kb/eval/runs/${runId}/cases`,
   EXPORT_EVAL_REPORT: (runId: string, format: 'json' | 'markdown') =>
     `${API_BASE_URL}/admin/kb/eval/runs/${runId}/report/export?format=${format}`,
+
+  LIST_STRATEGY_FLAGS: `${API_BASE_URL}/admin/kb/strategy/flags`,
+  UPDATE_STRATEGY_FLAG: (flagKey: string) =>
+    `${API_BASE_URL}/admin/kb/strategy/flags/${flagKey}`,
+  LIST_STRATEGY_VERSIONS: `${API_BASE_URL}/admin/kb/strategy/versions`,
+  GET_STRATEGY_VERSION: (versionId: string) =>
+    `${API_BASE_URL}/admin/kb/strategy/versions/${versionId}`,
+  ROLLBACK_STRATEGY: `${API_BASE_URL}/admin/kb/strategy/rollback`,
+  GET_STRATEGY_IMPACT: `${API_BASE_URL}/admin/kb/strategy/impact`,
+  GET_STRATEGY_GATES: `${API_BASE_URL}/admin/kb/strategy/gates`,
+  LIST_STRATEGY_OPERATIONS: `${API_BASE_URL}/admin/kb/strategy/operations`,
 };

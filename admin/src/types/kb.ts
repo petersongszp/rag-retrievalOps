@@ -96,6 +96,22 @@ export interface KBRetrieveLog {
   collection?: string;
   retriever_version?: string;
   empty_reason?: string;
+  parent_child_enabled?: boolean;
+  parent_fill_strategy?: string;
+  parent_fill_count?: number;
+  parent_fill_fallback?: number;
+  parent_fill_tokens?: number;
+  topk_decision_reason?: string;
+  evidence_gate_result?: string;
+  refusal_reason?: string;
+  citation_supported?: boolean;
+  citation_support_score?: number;
+  rewrite_gain_bucket?: string;
+  unsupported_claim_count?: number;
+  citation_check_version?: string;
+  citation_check_latency_ms?: number;
+  evidence_gate_error?: string;
+  citation_check_error?: string;
   final_count: number;
   truncated_count: number;
   dense_hits: number;
@@ -404,4 +420,227 @@ export interface EvalCaseImportResult {
   imported: number;
   failed: number;
   errors: EvalCaseImportError[];
+}
+
+export interface RetrievalDebugDocument {
+  document_id?: number;
+  chunk_id?: string;
+  parent_id?: string;
+  file_name?: string;
+  route?: string;
+  score?: number;
+  rerank_score?: number;
+  content?: string;
+  collection?: string;
+  section_title?: string;
+  hierarchy_path?: string;
+  parent_fill_applied?: boolean;
+  parent_fill_strategy?: string;
+  parent_fill_reason?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface RetrievalRouteHit {
+  route: string;
+  query?: string;
+  hits?: RetrievalDebugDocument[];
+  contribution?: number;
+  latency_ms?: number;
+  error?: string;
+}
+
+export interface RetrievalFusionResult {
+  before?: RetrievalDebugDocument[];
+  after?: RetrievalDebugDocument[];
+}
+
+export interface RetrievalDedupeResult {
+  before_count?: number;
+  after_count?: number;
+  removed?: RetrievalDebugDocument[];
+}
+
+export interface RetrievalRerankResult {
+  before?: RetrievalDebugDocument[];
+  after?: RetrievalDebugDocument[];
+  rerank_model?: string;
+  rerank_version?: string;
+  fallback?: boolean;
+  reason?: string;
+}
+
+export interface RetrievalFilterResult {
+  before_count?: number;
+  after_count?: number;
+  removed?: RetrievalDebugDocument[];
+  truncate_reason?: string;
+}
+
+export interface ParentChildDebugInfo {
+  parent_child_enabled?: boolean;
+  parent_fill_strategy?: string;
+  parent_fill_count?: number;
+  parent_fill_tokens?: number;
+  child_hits?: RetrievalDebugDocument[];
+  parent_contexts?: RetrievalDebugDocument[];
+  parent_child_available?: boolean;
+  fallback_reason?: string;
+}
+
+export interface TopKDecisionDebugInfo {
+  topk_policy_version?: string;
+  candidate_topk?: number;
+  final_topk?: number;
+  score_distribution?: string;
+  rerank_gap?: number;
+  evidence_density?: number;
+  token_budget?: number;
+  token_budget_remaining?: number;
+  topk_decision_reason?: string;
+}
+
+export interface EvidenceGateDebugInfo {
+  evidence_gate_result?: string;
+  refusal_reason?: string;
+  thresholds?: {
+    min_rerank_score?: number;
+    min_density?: number;
+    min_citation_coverage?: number;
+  };
+  evidence_gate_error?: string;
+  refusal_template_version?: string;
+}
+
+export interface CitationCheckDebugInfo {
+  citation_supported?: boolean;
+  citation_support_score?: number;
+  unsupported_claims?: string[];
+  citation_check_version?: string;
+  citation_check_latency_ms?: number;
+}
+
+export interface RetrievalDebugDegradation {
+  enabled?: boolean;
+  reason?: string;
+  fallback_strategy?: string;
+  error_code?: string;
+}
+
+export interface RetrievalDebugTrace {
+  request_id?: string;
+  debug_available?: boolean;
+  kb_ids?: number[];
+  original_query?: string;
+  rewritten_query?: string;
+  route_final_queries?: Record<string, string>;
+  route_hits?: RetrievalRouteHit[];
+  fusion_results?: RetrievalFusionResult;
+  dedupe_results?: RetrievalDedupeResult;
+  rerank_results?: RetrievalRerankResult;
+  filter_results?: RetrievalFilterResult;
+  parent_child?: ParentChildDebugInfo;
+  topk_decision?: TopKDecisionDebugInfo;
+  evidence_gate?: EvidenceGateDebugInfo;
+  citation_check?: CitationCheckDebugInfo;
+  final_results?: RetrieveItem[];
+  stage_durations?: Record<string, number>;
+  degradation?: RetrievalDebugDegradation;
+  contract_gaps?: string[];
+  created_at?: string;
+}
+
+export type StrategyFlagStatus =
+  | 'enabled'
+  | 'disabled'
+  | 'shadow'
+  | 'canary'
+  | 'rolling_back'
+  | 'error';
+
+export interface StrategyFlag {
+  flag_key: string;
+  label?: string;
+  status?: StrategyFlagStatus;
+  enabled?: boolean;
+  rollout_percentage?: number;
+  strategy_version?: string;
+  risk_level?: string;
+  updated_at?: string;
+}
+
+export interface StrategyVersion {
+  version_id: string;
+  flag_key: string;
+  label?: string;
+  created_at?: string;
+  created_by?: string;
+  gate_status?: string;
+  baseline_report_id?: string;
+  candidate_report_id?: string;
+  metadata?: Record<string, unknown>;
+}
+
+export interface StrategyImpact {
+  flag_key?: string;
+  version?: string;
+  range: MetricsRange;
+  from?: string;
+  to?: string;
+  sample_size?: number;
+  baseline_sample_size?: number;
+  candidate_sample_size?: number;
+  sample_size_too_small?: boolean;
+  parent_fill_gain?: number;
+  rewrite_gain?: number;
+  route_contribution?: Record<string, number>;
+  evidence_refusal_rate?: number;
+  refusal_false_positive_rate?: number;
+  citation_support_score?: number;
+  citation_precision_delta?: number;
+  p95_latency_delta_ms?: number;
+  avg_context_tokens_delta?: number;
+  empty_rate_delta?: number;
+  error_rate_delta?: number;
+  contract_gaps?: string[];
+}
+
+export interface StrategyGateSummary {
+  flag_key?: string;
+  version?: string;
+  gate_status?: string;
+  passed?: boolean;
+  failed_rules?: string[];
+  baseline_report_id?: string;
+  candidate_report_id?: string;
+  last_eval_run_id?: string;
+  contract_gaps?: string[];
+}
+
+export interface StrategyOperationLog {
+  id: string;
+  operator_id?: number;
+  operation?: string;
+  flag_key?: string;
+  from_status?: StrategyFlagStatus;
+  to_status?: StrategyFlagStatus;
+  from_rollout_percentage?: number;
+  to_rollout_percentage?: number;
+  reason?: string;
+  created_at?: string;
+}
+
+export interface StrategyRollbackRequest {
+  target_version?: string;
+  flag_keys?: string[];
+  reason: string;
+}
+
+export interface StrategyRollbackResult {
+  rollback_id?: string;
+  status?: string;
+  changed_flags?: StrategyFlag[];
+  target_version?: string;
+  started_at?: string;
+  finished_at?: string;
+  error_msg?: string;
 }

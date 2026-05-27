@@ -1,7 +1,7 @@
 'use client';
 
-import { useMemo } from 'react';
 import Link from 'next/link';
+import { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AppstoreOutlined,
@@ -32,8 +32,18 @@ type NavItem = {
 
 const navItems: NavItem[] = [
   { key: '/dashboard', label: '概览', href: '/dashboard', icon: <BarChartOutlined /> },
-  { key: '/knowledge-bases', label: '知识库', href: '/knowledge-bases', icon: <DatabaseOutlined /> },
-  { key: '/retrieval-lab', label: '检索实验室', href: '/retrieval-lab', icon: <ExperimentOutlined /> },
+  {
+    key: '/knowledge-bases',
+    label: '知识库',
+    href: '/knowledge-bases',
+    icon: <DatabaseOutlined />,
+  },
+  {
+    key: '/retrieval-lab',
+    label: '检索实验室',
+    href: '/retrieval-lab',
+    icon: <ExperimentOutlined />,
+  },
   {
     key: '/trace-logs',
     label: '链路日志',
@@ -54,8 +64,18 @@ const navItems: NavItem[] = [
       { key: '/evaluation/runs', label: '评测运行', href: '/evaluation/runs' },
     ],
   },
-  { key: '/quality-monitor', label: '质量监控', href: '/quality-monitor', icon: <AppstoreOutlined /> },
-  { key: '/strategy-center', label: '策略中心', icon: <SettingOutlined />, disabled: true },
+  {
+    key: '/quality-monitor',
+    label: '质量监控',
+    href: '/quality-monitor',
+    icon: <AppstoreOutlined />,
+  },
+  {
+    key: '/strategy-center',
+    label: '策略中心',
+    href: '/strategy-center',
+    icon: <SettingOutlined />,
+  },
   { key: '/cost-ops', label: '成本运营', icon: <WalletOutlined />, disabled: true },
   { key: '/audit', label: '审计', icon: <FolderOpenOutlined />, disabled: true },
 ];
@@ -78,6 +98,9 @@ function getSelectedNavKey(pathname: string): string {
   }
   if (pathname.startsWith('/evaluation')) {
     return '/evaluation';
+  }
+  if (pathname.startsWith('/strategy-center')) {
+    return '/strategy-center';
   }
   if (pathname.startsWith('/quality-monitor')) {
     return '/quality-monitor';
@@ -132,6 +155,13 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith('/knowledge-bases')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '知识库' }];
     }
+    if (pathname.startsWith('/retrieval-lab/debug')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/retrieval-lab">检索实验室</Link> },
+        { title: '调试详情' },
+      ];
+    }
     if (pathname.startsWith('/retrieval-lab')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '检索实验室' }];
     }
@@ -180,6 +210,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith('/quality-monitor')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '质量监控' }];
     }
+    if (pathname.startsWith('/strategy-center')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '策略中心' }];
+    }
 
     return [{ title: '概览' }];
   }, [pathname, selectedBase?.name]);
@@ -220,7 +253,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
           <div className="border-t border-slate-200 px-5 py-4">
             <Text type="secondary">
-              当前版本已接入 P2 评测闭环，策略中心与治理模块继续按后续阶段推进。
+              当前版本已接入 P2
+              评测闭环。策略中心先开放页面骨架，成本运营与审计模块继续按后续阶段推进。
             </Text>
           </div>
         </div>
