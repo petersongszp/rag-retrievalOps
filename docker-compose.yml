@@ -178,6 +178,7 @@ services:
     volumes:
       - ./backend/config.yaml:/app/config.yaml
       - ./backend/logs:/app/logs
+      - ./backend/runtime:/app/runtime
     networks:
       - app-network
 
