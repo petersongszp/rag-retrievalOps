@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  BellOutlined,
+  FolderOpenOutlined,
   ReloadOutlined,
   SyncOutlined,
   WarningOutlined,
@@ -352,6 +354,33 @@ export function DashboardPage() {
             />
             <Text type="secondary" style={{ fontSize: 12 }}>
               点击查看失败任务
+            </Text>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/cost-ops/cost')}>
+            <Statistic title="P4 成本治理" value={latestCostPer1K} precision={4} suffix="/1k" />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              打开成本看板与高成本 Query
+            </Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/audit')}>
+            <Statistic title="审计覆盖入口" value={metrics?.retrieve_request_count?.length ?? 0} prefix={<FolderOpenOutlined />} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              查看审计事件、脱敏详情与导出
+            </Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/alerts')}>
+            <Statistic title="治理告警入口" value={metrics?.error_type_topn?.length ?? 0} prefix={<BellOutlined />} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              查看告警确认、解决与治理门禁
             </Text>
           </Card>
         </Col>

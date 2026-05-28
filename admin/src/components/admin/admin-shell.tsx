@@ -5,12 +5,14 @@ import { useMemo } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AppstoreOutlined,
+  AlertOutlined,
   BarChartOutlined,
   BookOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
   FileSearchOutlined,
   FolderOpenOutlined,
+  InboxOutlined,
   SettingOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
@@ -76,8 +78,23 @@ const navItems: NavItem[] = [
     href: '/strategy-center',
     icon: <SettingOutlined />,
   },
-  { key: '/cost-ops', label: '成本运营', icon: <WalletOutlined />, disabled: true },
-  { key: '/audit', label: '审计', icon: <FolderOpenOutlined />, disabled: true },
+  {
+    key: '/cost-ops',
+    label: '成本运营',
+    icon: <WalletOutlined />,
+    children: [
+      { key: '/cost-ops/cost', label: '成本看板', href: '/cost-ops/cost' },
+      { key: '/cost-ops/vector-db', label: 'Vector DB', href: '/cost-ops/vector-db' },
+    ],
+  },
+  { key: '/audit', label: '审计中心', href: '/audit', icon: <FolderOpenOutlined /> },
+  { key: '/alerts', label: '告警中心', href: '/alerts', icon: <AlertOutlined /> },
+  {
+    key: '/reports',
+    label: '报告',
+    icon: <InboxOutlined />,
+    children: [{ key: '/reports/weekly', label: '周报', href: '/reports/weekly' }],
+  },
 ];
 
 function getSelectedNavKey(pathname: string): string {
@@ -102,6 +119,21 @@ function getSelectedNavKey(pathname: string): string {
   if (pathname.startsWith('/strategy-center')) {
     return '/strategy-center';
   }
+  if (pathname.startsWith('/cost-ops/cost')) {
+    return '/cost-ops/cost';
+  }
+  if (pathname.startsWith('/cost-ops/vector-db')) {
+    return '/cost-ops/vector-db';
+  }
+  if (pathname.startsWith('/audit')) {
+    return '/audit';
+  }
+  if (pathname.startsWith('/alerts')) {
+    return '/alerts';
+  }
+  if (pathname.startsWith('/reports/weekly')) {
+    return '/reports/weekly';
+  }
   if (pathname.startsWith('/quality-monitor')) {
     return '/quality-monitor';
   }
@@ -123,6 +155,12 @@ function getOpenKeys(pathname: string): string[] {
   }
   if (pathname.startsWith('/evaluation')) {
     return ['/evaluation'];
+  }
+  if (pathname.startsWith('/cost-ops')) {
+    return ['/cost-ops'];
+  }
+  if (pathname.startsWith('/reports')) {
+    return ['/reports'];
   }
   return [];
 }
@@ -213,6 +251,33 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     if (pathname.startsWith('/strategy-center')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '策略中心' }];
     }
+    if (pathname.startsWith('/cost-ops/cost')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '成本运营' },
+        { title: '成本看板' },
+      ];
+    }
+    if (pathname.startsWith('/cost-ops/vector-db')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '成本运营' },
+        { title: 'Vector DB' },
+      ];
+    }
+    if (pathname.startsWith('/audit')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '审计中心' }];
+    }
+    if (pathname.startsWith('/alerts')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '告警中心' }];
+    }
+    if (pathname.startsWith('/reports/weekly')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '报告' },
+        { title: '周报' },
+      ];
+    }
 
     return [{ title: '概览' }];
   }, [pathname, selectedBase?.name]);
@@ -253,8 +318,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
           <div className="border-t border-slate-200 px-5 py-4">
             <Text type="secondary">
-              当前版本已接入 P2
-              评测闭环。策略中心先开放页面骨架，成本运营与审计模块继续按后续阶段推进。
+              当前版本已接入 P4 治理能力骨架，支持成本、向量运维、审计、告警与周报逐步联调。
             </Text>
           </div>
         </div>
