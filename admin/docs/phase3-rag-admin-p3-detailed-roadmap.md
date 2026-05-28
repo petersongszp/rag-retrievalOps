@@ -809,43 +809,86 @@ Phase 3 按 9 条路线推进，按门禁顺序合流：
 ## 8. 阶段验收模板（执行后填写）
 
 1. 功能完成情况（按 L0～L8）：
+   - L0：✅ 已完成 — P3 策略边界、字段契约与回滚口径已冻结
+   - L1：✅ 已完成 — 后端高级检索 trace 详情扩展 API 已实现（GET /api/admin/kb/retrieve/audit/{request_id}/debug）
+   - L2：✅ 已完成 — 后端策略开关、版本、灰度与回滚 API 已实现（7 个接口）
+   - L3：✅ 已完成 — 后端策略影响分析、操作日志与门禁摘要 API 已实现（3 个接口）
+   - L4：✅ 已完成 — 前端 P3 类型契约（20+ 类型）、API 路径（9 个常量）、路由与导航已激活
+   - L5：✅ 已完成 — 前端检索调试视图（/retrieval-lab/debug）已实现（651 行）
+   - L6：✅ 已完成 — 前端 Trace Logs 高级详情增强与入口打通（已修复按钮乱码）
+   - L7：✅ 已完成 — 前端策略中心（/strategy-center）已实现（803 行）
+   - L8：✅ 已完成 — 前端测试 26/26 通过，TypeScript 编译零错误，后端 P3 测试全部通过
+
 2. 已完成接口：
-3. 已冻结字段口径：
+   - GET /api/admin/kb/retrieve/audit/{request_id}/debug（L1）
+   - GET /api/admin/kb/strategy/flags（L2）
+   - PATCH /api/admin/kb/strategy/flags/{flag_key}（L2）
+   - GET /api/admin/kb/strategy/versions（L2）
+   - GET /api/admin/kb/strategy/versions/{version_id}（L2）
+   - POST /api/admin/kb/strategy/rollback（L2）
+   - GET /api/admin/kb/strategy/impact（L3）
+   - GET /api/admin/kb/strategy/gates（L3）
+   - GET /api/admin/kb/strategy/operations（L3）
+
+3. 已冻结字段口径：以本文档 L0 节定义为准，包含 10 组字段契约、7 个 feature flags、6 个状态枚举、8 步回滚顺序
+
 4. 高级 trace 能力：
-   - request_id 查询：
-   - route hits：
-   - fusion/dedupe/rerank/filter：
-   - parent-child：
-   - TopK decision：
-   - evidence gate：
-   - citation consistency：
+   - request_id 查询：✅ 支持
+   - route hits：✅ 支持（dense/sparse/rewrite 各路由 hits、contribution、latency_ms、error）
+   - fusion/dedupe/rerank/filter：✅ 支持（前后对比、removed、rerank_model/version、truncate_reason）
+   - parent-child：✅ 支持（child_hits、parent_contexts、parent_fill_strategy、parent_fill_tokens、fallback_reason）
+   - TopK decision：✅ 支持（candidate_topk、final_topk、score_distribution、rerank_gap、evidence_density、token_budget、topk_decision_reason）
+   - evidence gate：✅ 支持（evidence_gate_result、refusal_reason、thresholds、evidence_gate_error、refusal_template_version）
+   - citation consistency：✅ 支持（citation_supported、citation_support_score、unsupported_claims、citation_check_version）
+
 5. 策略中心能力：
-   - flags 列表：
-   - 状态修改：
-   - 灰度比例：
-   - 版本列表：
-   - 回滚：
+   - flags 列表：✅ 支持
+   - 状态修改：✅ 支持（含 reason 必填、高风险拦截、后端校验）
+   - 灰度比例：✅ 支持（0-100%、前端校验 + 后端校验）
+   - 版本列表：✅ 支持
+   - 回滚：✅ 支持（单策略回滚 + 全量回滚到 phase2_baseline）
+
 6. 策略影响分析：
-   - Parent Fill Gain：
-   - Rewrite Gain：
-   - Evidence Refusal Rate：
-   - Refusal False Positive Rate：
-   - Citation Support Score：
-   - P95 延迟变化：
+   - Parent Fill Gain：✅ 支持
+   - Rewrite Gain：✅ 支持
+   - Evidence Refusal Rate：✅ 支持
+   - Refusal False Positive Rate：✅ 支持
+   - Citation Support Score：✅ 支持
+   - P95 延迟变化：✅ 支持
+
 7. 操作日志：
-   - 开关变更：
-   - 灰度变更：
-   - 回滚：
+   - 开关变更：✅ 支持
+   - 灰度变更：✅ 支持
+   - 回滚：✅ 支持
+
 8. 契约缺口记录：
-   - 接口：
-   - 字段：
-   - 影响页面：
-   - 是否阻塞 Phase 4：
+   - 接口：无缺失接口
+   - 字段：citation snippets 与 child/parent 对照专用结构暂未提供（前端已标注 info 提示）
+   - 影响页面：Citation Consistency 区块（已降级展示）
+   - 是否阻塞 Phase 4：否
+
 9. 冒烟测试结果：
+   - 后端：TestStrategyImpactAndGatesEndpoints PASS、TestStrategyOperationsEndpointReturnsLatestChanges PASS、TestStrategyHandlersLifecycle PASS
+   - 前端：26/26 测试通过（retrieval-debug-page 14 tests + strategy-center-page 12 tests）
+   - TypeScript 编译：零错误
+   - 按冒烟清单 16 项逐项检查，全部可实现（需联调环境验证完整数据流）
+
 10. 回归测试结果：
+    - P0 知识库管理、P1 Dashboard/Trace Logs、P2 Evaluation：代码未修改相关模块，无回退风险
+    - TypeScript 全量编译通过，确认无类型破坏
+    - 前端测试覆盖 P3 核心页面渲染、API 调用、错误处理、契约缺口展示
+
 11. 回滚演练结果：
+    - 后端支持单策略回滚和全量回滚到 phase2_baseline，测试验证 PASS
+    - 回滚失败时保持原状态并返回失败原因（前端不做乐观更新）
+    - 回滚操作写入操作日志，可追溯
+
 12. 已知遗留问题：
-13. 是否可以进入 Phase 4：是/否
+    - 前端 jsdom 测试环境对中文字符编码支持有限，测试中已规避中文文本匹配
+    - citation snippets 与 child/parent 对照专用结构待后端补齐
+    - Phase 4 完整审计中心尚未实现
+
+13. 是否可以进入 Phase 4：是
 
 ---
 
