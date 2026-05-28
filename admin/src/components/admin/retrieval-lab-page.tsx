@@ -455,7 +455,7 @@ export function RetrievalLabPage() {
                     );
                   }}
                 >
-                  鏌ョ湅璋冭瘯瑙嗗浘
+                  查看调试视图
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={() => void openSaveModal()}>
                   保存为评测样本
