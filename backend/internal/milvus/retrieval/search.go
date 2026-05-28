@@ -16,6 +16,13 @@ const DenseRetrieverVersion = "phase1-dense-v1"
 
 // SearchMetrics carries retrieve-stage observability fields used across L4-L8.
 type SearchMetrics struct {
+	ExperimentID           string
+	StrategyVersion        string
+	IndexVersion           string
+	CollectionVersion      string
+	CostTraceID            string
+	AuditTraceID           string
+	ReleaseID              string
 	EmbeddingMs            int64
 	SearchMs               int64
 	PostprocessMs          int64

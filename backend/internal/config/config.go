@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/phase3"
 
 	"gopkg.in/yaml.v3"
@@ -216,20 +217,27 @@ type RAGConfig struct {
 }
 
 type RAGFeatureFlags struct {
-	EnableProdGuard            bool `yaml:"enable_prod_guard"`
-	EnableIngestRetry          bool `yaml:"enable_ingest_retry"`
-	EnableRetrieveAudit        bool `yaml:"enable_retrieve_audit"`
-	EnableHybridRetrieval      bool `yaml:"enable_hybrid_retrieval"`
-	EnableQueryRewrite         bool `yaml:"enable_query_rewrite"`
-	EnableDynamicTopK          bool `yaml:"enable_dynamic_topk"`
-	EnableAdvancedRerank       bool `yaml:"enable_advanced_rerank"`
-	EnableParentChildRetrieval bool `yaml:"enable_parent_child_retrieval"`
-	EnableStrategicTopK        bool `yaml:"enable_strategic_topk"`
-	EnableEvidenceRefusal      bool `yaml:"enable_evidence_refusal"`
-	EnableCitationConsistency  bool `yaml:"enable_citation_consistency"`
-	EnableDomainTerms          bool `yaml:"enable_domain_terms"`
-	EnableRouteSpecificRewrite bool `yaml:"enable_route_specific_rewrite"`
-	EnableModelAssistedRewrite bool `yaml:"enable_model_assisted_rewrite"`
+	EnableProdGuard             bool `yaml:"enable_prod_guard"`
+	EnableIngestRetry           bool `yaml:"enable_ingest_retry"`
+	EnableRetrieveAudit         bool `yaml:"enable_retrieve_audit"`
+	EnableHybridRetrieval       bool `yaml:"enable_hybrid_retrieval"`
+	EnableQueryRewrite          bool `yaml:"enable_query_rewrite"`
+	EnableDynamicTopK           bool `yaml:"enable_dynamic_topk"`
+	EnableAdvancedRerank        bool `yaml:"enable_advanced_rerank"`
+	EnableParentChildRetrieval  bool `yaml:"enable_parent_child_retrieval"`
+	EnableStrategicTopK         bool `yaml:"enable_strategic_topk"`
+	EnableEvidenceRefusal       bool `yaml:"enable_evidence_refusal"`
+	EnableCitationConsistency   bool `yaml:"enable_citation_consistency"`
+	EnableDomainTerms           bool `yaml:"enable_domain_terms"`
+	EnableRouteSpecificRewrite  bool `yaml:"enable_route_specific_rewrite"`
+	EnableModelAssistedRewrite  bool `yaml:"enable_model_assisted_rewrite"`
+	EnableExperimentPlatform    bool `yaml:"enable_experiment_platform"`
+	EnableIndexLifecycle        bool `yaml:"enable_index_lifecycle"`
+	EnableCostDashboard         bool `yaml:"enable_cost_dashboard"`
+	EnableComplianceAudit       bool `yaml:"enable_compliance_audit"`
+	EnableWeeklyReport          bool `yaml:"enable_weekly_report"`
+	EnableMilvusOpsTooling      bool `yaml:"enable_milvus_ops_tooling"`
+	EnableCollectionSwitchGuard bool `yaml:"enable_collection_switch_guard"`
 }
 
 func (f RAGFeatureFlags) Phase3StrategyFlags() map[string]bool {
@@ -408,6 +416,9 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	if err := cfg.writePhase2BaselineSnapshot(configPath); err != nil {
+		return nil, err
+	}
+	if err := cfg.writePhase3BaselineSnapshot(configPath); err != nil {
 		return nil, err
 	}
 
@@ -782,6 +793,41 @@ func (c *Config) applyRAGEnvOverrides() error {
 	} else if ok {
 		c.RAG.FeatureFlags.EnableModelAssistedRewrite = value
 	}
+	if value, ok, err := readEnvBool(governance.FlagExperimentPlatform); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableExperimentPlatform = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagIndexLifecycle); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableIndexLifecycle = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagCostDashboard); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableCostDashboard = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagComplianceAudit); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableComplianceAudit = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagWeeklyReport); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableWeeklyReport = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagMilvusOpsTooling); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableMilvusOpsTooling = value
+	}
+	if value, ok, err := readEnvBool(governance.FlagCollectionSwitchGuard); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableCollectionSwitchGuard = value
+	}
 	if value, ok, err := readEnvInt("RAG_MAX_RETRY_COUNT"); err != nil {
 		return err
 	} else if ok {
@@ -964,7 +1010,7 @@ func (c *Config) LogRAGSnapshot() {
 		return
 	}
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t experiment_platform:%t index_lifecycle:%t cost_dashboard:%t compliance_audit:%t weekly_report:%t milvus_ops_tooling:%t collection_switch_guard:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} phase4_metrics=%s milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -983,6 +1029,13 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.FeatureFlags.EnableDomainTerms,
 		c.RAG.FeatureFlags.EnableRouteSpecificRewrite,
 		c.RAG.FeatureFlags.EnableModelAssistedRewrite,
+		c.RAG.FeatureFlags.EnableExperimentPlatform,
+		c.RAG.FeatureFlags.EnableIndexLifecycle,
+		c.RAG.FeatureFlags.EnableCostDashboard,
+		c.RAG.FeatureFlags.EnableComplianceAudit,
+		c.RAG.FeatureFlags.EnableWeeklyReport,
+		c.RAG.FeatureFlags.EnableMilvusOpsTooling,
+		c.RAG.FeatureFlags.EnableCollectionSwitchGuard,
 		c.RAG.Thresholds.MaxRetryCount,
 		c.RAG.Thresholds.RetryBackoffMS,
 		c.RAG.Thresholds.RetrieveTimeoutMS,
@@ -1018,6 +1071,7 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.Release.CanaryPercent,
 		c.RAG.Release.BatchPercent,
 		len(c.RAG.Release.UserAllowlist),
+		strings.Join(governance.MetricKeys(), ","),
 		maskAddress(c.Milvus.Address),
 		c.Milvus.DatabaseName,
 		c.Milvus.CollectionName,
@@ -1114,6 +1168,16 @@ func (c *Config) buildRAGStrategyDigest() string {
 		"thresholds": c.RAG.Thresholds,
 		"phase2":     c.RAG.Phase2,
 		"phase3":     c.RAG.Phase3,
+		"phase4": map[string]interface{}{
+			"experiment_platform":     c.RAG.FeatureFlags.EnableExperimentPlatform,
+			"index_lifecycle":         c.RAG.FeatureFlags.EnableIndexLifecycle,
+			"cost_dashboard":          c.RAG.FeatureFlags.EnableCostDashboard,
+			"compliance_audit":        c.RAG.FeatureFlags.EnableComplianceAudit,
+			"weekly_report":           c.RAG.FeatureFlags.EnableWeeklyReport,
+			"milvus_ops_tooling":      c.RAG.FeatureFlags.EnableMilvusOpsTooling,
+			"collection_switch_guard": c.RAG.FeatureFlags.EnableCollectionSwitchGuard,
+			"metric_keys":             governance.MetricKeys(),
+		},
 	}
 	data, err := json.Marshal(payload)
 	if err != nil {
@@ -1246,6 +1310,83 @@ func (c *Config) writePhase2BaselineSnapshot(configPath string) error {
 		return fmt.Errorf("failed to write phase2 baseline snapshot: %w", err)
 	}
 	log.Printf("[RAG:L0] phase2 baseline snapshot created: %s", snapshotPath)
+	return nil
+}
+
+func (c *Config) writePhase3BaselineSnapshot(configPath string) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	baseDir := filepath.Dir(configPath)
+	snapshotDir := filepath.Join(baseDir, "docs", "baseline", "phase3")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		return fmt.Errorf("failed to create phase3 baseline dir: %w", err)
+	}
+	snapshotPath := filepath.Join(snapshotDir, "baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check phase3 baseline snapshot: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"snapshot_type":   "phase3_baseline",
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"config_version":  c.ConfigVersion,
+		"strategy_digest": c.buildRAGStrategyDigest(),
+		"rag": map[string]interface{}{
+			"enabled":       c.RAG.Enabled,
+			"environment":   c.RAG.Environment,
+			"feature_flags": c.RAG.FeatureFlags,
+			"thresholds":    c.RAG.Thresholds,
+			"phase2":        c.RAG.Phase2,
+			"phase3":        c.RAG.Phase3,
+			"release":       c.RAG.Release,
+		},
+		"phase4_governance": map[string]interface{}{
+			"feature_flags": governance.FeatureFlagKeys(),
+			"metric_keys":   governance.MetricKeys(),
+			"trace_fields": []string{
+				"experiment_id",
+				"strategy_version",
+				"index_version",
+				"collection_version",
+				"cost_trace_id",
+				"audit_trace_id",
+				"release_id",
+			},
+			"degrade_contract": []string{
+				"governance collection failures do not block retrieval",
+				"audit persistence failures emit alert and enter compensation queue",
+				"cost collection failures affect dashboard only",
+				"collection switch guard failures must block switching",
+			},
+		},
+		"metrics_snapshot": map[string]interface{}{
+			"recall_at_k":              nil,
+			"mrr":                      nil,
+			"ndcg":                     nil,
+			"citation_precision":       nil,
+			"citation_support_score":   nil,
+			"retrieval_p95_ms":         nil,
+			"avg_context_tokens":       nil,
+			"quality_score":            nil,
+			"cost_per_1k_queries":      nil,
+			"strategy_regression_rate": nil,
+			"rollback_success_rate":    nil,
+			"audit_coverage_rate":      nil,
+			"collection_health_score":  nil,
+			"notes":                    "Fill in after the frozen Phase 3 regression run completes.",
+		},
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase3 baseline snapshot: %w", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write phase3 baseline snapshot: %w", err)
+	}
+	log.Printf("[RAG:L0] phase3 baseline snapshot created: %s", snapshotPath)
 	return nil
 }
 

@@ -209,6 +209,10 @@ rag:
 	if _, err := os.Stat(phase2SnapshotPath); err != nil {
 		t.Fatalf("expected phase2 baseline snapshot to be created, got err: %v", err)
 	}
+	phase3SnapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase3", "baseline_snapshot.json")
+	if _, err := os.Stat(phase3SnapshotPath); err != nil {
+		t.Fatalf("expected phase3 baseline snapshot to be created, got err: %v", err)
+	}
 }
 
 func TestRAGFeatureFlagsPhase3StrategyFlags(t *testing.T) {
@@ -250,5 +254,50 @@ func TestRAGFeatureFlagsGetAndSetPhase3StrategyFlag(t *testing.T) {
 	}
 	if _, ok := flags.GetPhase3StrategyFlag("RAG_UNKNOWN_FLAG"); ok {
 		t.Fatal("GetPhase3StrategyFlag should reject unmanaged flag")
+	}
+}
+
+func TestLoadConfig_Phase4FeatureFlagsFromEnv(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "config.yaml")
+
+	baseConfig := `
+rag:
+  enabled: true
+  environment: dev
+Milvus:
+  Address: localhost:19530
+  CollectionName: documents
+Embedding:
+  APIKey: test-key
+  Model: bge-m3
+  BaseURL: https://example.com/v1
+  Dimensions: 1024
+`
+	if err := os.WriteFile(basePath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write base config: %v", err)
+	}
+
+	t.Setenv("RAG_ENABLE_EXPERIMENT_PLATFORM", "true")
+	t.Setenv("RAG_ENABLE_INDEX_LIFECYCLE", "true")
+	t.Setenv("RAG_ENABLE_COST_DASHBOARD", "true")
+	t.Setenv("RAG_ENABLE_COMPLIANCE_AUDIT", "true")
+	t.Setenv("RAG_ENABLE_WEEKLY_REPORT", "true")
+	t.Setenv("RAG_ENABLE_MILVUS_OPS_TOOLING", "true")
+	t.Setenv("RAG_ENABLE_COLLECTION_SWITCH_GUARD", "true")
+
+	cfg, err := LoadConfig(basePath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !cfg.RAG.FeatureFlags.EnableExperimentPlatform ||
+		!cfg.RAG.FeatureFlags.EnableIndexLifecycle ||
+		!cfg.RAG.FeatureFlags.EnableCostDashboard ||
+		!cfg.RAG.FeatureFlags.EnableComplianceAudit ||
+		!cfg.RAG.FeatureFlags.EnableWeeklyReport ||
+		!cfg.RAG.FeatureFlags.EnableMilvusOpsTooling ||
+		!cfg.RAG.FeatureFlags.EnableCollectionSwitchGuard {
+		t.Fatalf("expected phase4 governance flags to load from env, got %+v", cfg.RAG.FeatureFlags)
 	}
 }

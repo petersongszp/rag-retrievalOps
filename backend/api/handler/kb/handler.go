@@ -27,6 +27,7 @@ import (
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
+	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/release"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
@@ -932,6 +933,13 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		errorStatus := classifyRetrieveResultStatus(metricsStatus)
 		retrieveLog := &model.KBRetrieveLog{
 			RequestID:              requestID,
+			ExperimentID:           searchResult.Metrics.ExperimentID,
+			StrategyVersion:        searchResult.Metrics.StrategyVersion,
+			IndexVersion:           searchResult.Metrics.IndexVersion,
+			CollectionVersion:      searchResult.Metrics.CollectionVersion,
+			CostTraceID:            searchResult.Metrics.CostTraceID,
+			AuditTraceID:           searchResult.Metrics.AuditTraceID,
+			ReleaseID:              searchResult.Metrics.ReleaseID,
 			UserID:                 userID,
 			KBIDs:                  formatKBIDs(kbIDs),
 			Query:                  req.Query,
@@ -941,6 +949,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			CandidateTopK:          searchResult.Metrics.CandidateTopK,
 			FinalTopK:              searchResult.Metrics.FinalTopK,
 			TokenBudget:            searchResult.Metrics.TokenBudget,
+			ContextTokens:          searchResult.Metrics.ContextTokens,
 			TruncateReason:         searchResult.Metrics.TruncateReason,
 			Rewrite:                searchResult.Metrics.RewriteQuery,
 			RewriteStrategy:        searchResult.Metrics.RewriteStrategy,
@@ -1090,6 +1099,13 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	retrieveLog := &model.KBRetrieveLog{
 		RequestID:              requestID,
+		ExperimentID:           searchMetrics.ExperimentID,
+		StrategyVersion:        searchMetrics.StrategyVersion,
+		IndexVersion:           searchMetrics.IndexVersion,
+		CollectionVersion:      searchMetrics.CollectionVersion,
+		CostTraceID:            searchMetrics.CostTraceID,
+		AuditTraceID:           searchMetrics.AuditTraceID,
+		ReleaseID:              searchMetrics.ReleaseID,
 		UserID:                 userID,
 		KBIDs:                  formatKBIDs(kbIDs),
 		Query:                  req.Query,
@@ -1099,6 +1115,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		CandidateTopK:          searchMetrics.CandidateTopK,
 		FinalTopK:              searchMetrics.FinalTopK,
 		TokenBudget:            searchMetrics.TokenBudget,
+		ContextTokens:          searchMetrics.ContextTokens,
 		TruncateReason:         searchMetrics.TruncateReason,
 		Rewrite:                firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
 		RewriteStrategy:        firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),
@@ -1987,6 +2004,19 @@ func persistRetrieveLog(entry *model.KBRetrieveLog) {
 	go func() {
 		if err := model.KBRetrieveLogDao.Create(entry); err != nil {
 			log.Printf("[KB Retrieve Audit] failed to persist retrieve log request_id=%s err=%v", entry.RequestID, err)
+			metrics.IncError("retrieve_audit", "persist_failed")
+			traceID := firstNonEmptyString(entry.AuditTraceID, entry.RequestID)
+			governance.EnqueueCompensation(
+				"retrieve_audit",
+				traceID,
+				entry.RequestID,
+				"persist_retrieve_log_failed",
+				map[string]interface{}{
+					"request_id":       entry.RequestID,
+					"audit_trace_id":   entry.AuditTraceID,
+					"strategy_version": entry.StrategyVersion,
+				},
+			)
 		}
 	}()
 }
