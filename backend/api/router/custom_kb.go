@@ -83,6 +83,7 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 		group.GET("/cost/high-cost-queries", kb.ListHighCostQueries)
 		group.GET("/vector/collections", kb.ListVectorCollections)
 		group.GET("/vector/collections/:name/health", kb.GetVectorCollectionHealth)
+		group.GET("/vector/collections/:name/capacity", kb.GetVectorCollectionCapacity)
 		group.POST("/vector/collections/:name/rebuild", kb.RebuildVectorCollection)
 		group.POST("/vector/collections/:name/switch", kb.SwitchVectorCollection)
 		group.POST("/vector/collections/:name/rollback", kb.RollbackVectorCollection)
