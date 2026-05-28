@@ -303,6 +303,8 @@
 
 **对应后端**：`rag-enterprise-fusion-roadmap.md` Phase 4 企业治理与规模化期。
 
+**详细执行文档**：`admin/docs/phase4-rag-admin-p4-detailed-roadmap.md`。
+
 **目标**：让管理台达到企业级可运维标准，形成质量、成本、安全、合规闭环。
 
 #### 5.4.1 前端任务
