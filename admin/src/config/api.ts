@@ -77,4 +77,5 @@ export const KB_ADMIN_API = {
   ROLLBACK_ACTIVE_INDEX: `${API_BASE_URL}/admin/kb/index-lifecycle/rollback`,
   LIST_INDEX_OPERATIONS: `${API_BASE_URL}/admin/kb/index-lifecycle/operations`,
   LIST_AUDIT_EVENTS: `${API_BASE_URL}/admin/kb/audit/events`,
+  GET_WEEKLY_REPORT: `${API_BASE_URL}/admin/kb/weekly-report`,
 };

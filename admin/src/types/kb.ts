@@ -780,3 +780,17 @@ export interface AuditEvent {
   reason?: string;
   created_at?: string;
 }
+
+export interface WeeklyReport {
+  generated_at?: string;
+  window_start?: string;
+  window_end?: string;
+  quality_summary?: MetricsOverview;
+  release_summary?: Record<string, unknown>;
+  experiment_summary?: ExperimentSummary[];
+  index_registry?: IndexRegistryRecord[];
+  index_operations?: IndexOperationLog[];
+  audit_events?: AuditEvent[];
+  risks?: string[];
+  next_actions?: string[];
+}
