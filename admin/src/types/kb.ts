@@ -695,3 +695,57 @@ export interface ExperimentSummary {
   error_rate_delta?: number;
   updated_at?: string;
 }
+
+export type CollectionRole = 'active' | 'candidate' | 'standby' | 'rollback' | 'deprecated';
+export type IndexBuildStatus =
+  | 'pending'
+  | 'building'
+  | 'ready'
+  | 'failed'
+  | 'switched'
+  | 'rolled_back';
+
+export interface IndexRegistryRecord {
+  id: number;
+  index_version: string;
+  collection_name: string;
+  collection_role: CollectionRole;
+  embedding_model?: string;
+  embedding_dimension?: number;
+  metric_type?: string;
+  index_type?: string;
+  index_params?: string;
+  build_status?: IndexBuildStatus;
+  build_started_at?: string;
+  build_finished_at?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface IndexOperationLog {
+  id: number;
+  index_version: string;
+  collection_name: string;
+  operation: string;
+  from_role?: string;
+  to_role?: string;
+  operator_id?: number;
+  operation_reason?: string;
+  health_status?: string;
+  rollback_target?: string;
+  created_at?: string;
+}
+
+export interface IndexHealthReport {
+  index_version: string;
+  collection_name: string;
+  collection_role: string;
+  collection_exists: boolean;
+  dimension_match: boolean;
+  metric_type_match: boolean;
+  load_healthy: boolean;
+  query_smoke_healthy: boolean;
+  checked_at?: string;
+  message?: string;
+}

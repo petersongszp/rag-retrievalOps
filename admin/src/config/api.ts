@@ -66,4 +66,14 @@ export const KB_ADMIN_API = {
   ROLLBACK_EXPERIMENT: (experimentId: string) =>
     `${API_BASE_URL}/admin/kb/experiments/${experimentId}/rollback`,
   GET_EXPERIMENT_SUMMARY: `${API_BASE_URL}/admin/kb/experiments/summary`,
+
+  LIST_INDEX_REGISTRY: `${API_BASE_URL}/admin/kb/index-lifecycle/registry`,
+  REGISTER_INDEX_FROM_CONFIG: `${API_BASE_URL}/admin/kb/index-lifecycle/register`,
+  BUILD_CANDIDATE_INDEX: `${API_BASE_URL}/admin/kb/index-lifecycle/build`,
+  GET_INDEX_HEALTH: (indexVersion: string) =>
+    `${API_BASE_URL}/admin/kb/index-lifecycle/health/${indexVersion}`,
+  SWITCH_ACTIVE_INDEX: (indexVersion: string) =>
+    `${API_BASE_URL}/admin/kb/index-lifecycle/switch/${indexVersion}`,
+  ROLLBACK_ACTIVE_INDEX: `${API_BASE_URL}/admin/kb/index-lifecycle/rollback`,
+  LIST_INDEX_OPERATIONS: `${API_BASE_URL}/admin/kb/index-lifecycle/operations`,
 };
