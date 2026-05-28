@@ -4,6 +4,8 @@ import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import {
+  BellOutlined,
+  FolderOpenOutlined,
   ReloadOutlined,
   SyncOutlined,
   WarningOutlined,
@@ -14,6 +16,7 @@ import { KB_ADMIN_API } from '@/config/api';
 import type {
   MetricsOverview,
   MetricsOverviewBucketCount,
+  MetricsOverviewCostBreakdown,
   MetricsOverviewBucketP95,
   MetricsOverviewBucketRate,
   MetricsRange,
@@ -255,6 +258,15 @@ export function DashboardPage() {
     [metrics?.retrieve_empty_rate, metricsRange]
   );
 
+  const costSeries = useMemo(
+    () =>
+      (metrics?.cost_overview ?? []).map((item: MetricsOverviewCostBreakdown) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: Number(item.cost_per_1k_queries.toFixed(4)),
+      })),
+    [metrics?.cost_overview, metricsRange]
+  );
+
   const latestIngestRate = metrics?.ingest_success_rate.at(-1)?.rate ?? 0;
   const totalRequests = (metrics?.retrieve_request_count ?? []).reduce(
     (sum, item) => sum + item.count,
@@ -262,6 +274,8 @@ export function DashboardPage() {
   );
   const latestP95 = metrics?.retrieve_p95_ms.at(-1)?.p95_ms ?? 0;
   const latestEmptyRate = metrics?.retrieve_empty_rate.at(-1)?.rate ?? 0;
+  const latestCostPer1K = metrics?.cost_overview?.at(-1)?.cost_per_1k_queries ?? 0;
+  const latestAvgContextTokens = metrics?.cost_overview?.at(-1)?.avg_context_tokens ?? 0;
 
   return (
     <div className="space-y-6">
@@ -346,6 +360,33 @@ export function DashboardPage() {
       </Row>
 
       <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/cost-ops/cost')}>
+            <Statistic title="P4 成本治理" value={latestCostPer1K} precision={4} suffix="/1k" />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              打开成本看板与高成本 Query
+            </Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/audit')}>
+            <Statistic title="审计覆盖入口" value={metrics?.retrieve_request_count?.length ?? 0} prefix={<FolderOpenOutlined />} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              查看审计事件、脱敏详情与导出
+            </Text>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/alerts')}>
+            <Statistic title="治理告警入口" value={metrics?.error_type_topn?.length ?? 0} prefix={<BellOutlined />} />
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              查看告警确认、解决与治理门禁
+            </Text>
+          </Card>
+        </Col>
+      </Row>
+
+      <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
           <Card title="知识库管理" extra={<Link href="/knowledge-bases">打开</Link>}>
             <Paragraph style={{ marginBottom: 0 }}>
@@ -423,6 +464,15 @@ export function DashboardPage() {
                   helper="result_status = no_result 的占比"
                   data={emptyRateSeries}
                   color="#7c3aed"
+                />
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="每千次问答成本"
+                  value={`$${latestCostPer1K.toFixed(4)}`}
+                  helper={`平均上下文 ${latestAvgContextTokens.toFixed(0)} tokens`}
+                  data={costSeries}
+                  color="#8b5cf6"
                 />
               </Col>
               <Col xs={24}>

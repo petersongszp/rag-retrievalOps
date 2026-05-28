@@ -11,6 +11,14 @@ func TestKBRetrieveLogP1JSONContract(t *testing.T) {
 
 	expected := map[string]string{
 		"RequestID":              "request_id",
+		"ExperimentID":           "experiment_id",
+		"ExperimentGroup":        "experiment_group",
+		"StrategyVersion":        "strategy_version",
+		"IndexVersion":           "index_version",
+		"CollectionVersion":      "collection_version",
+		"CostTraceID":            "cost_trace_id",
+		"AuditTraceID":           "audit_trace_id",
+		"ReleaseID":              "release_id",
 		"UserID":                 "user_id",
 		"KBIDs":                  "kb_ids",
 		"Query":                  "query",
@@ -20,6 +28,8 @@ func TestKBRetrieveLogP1JSONContract(t *testing.T) {
 		"CandidateTopK":          "candidate_topk",
 		"FinalTopK":              "final_topk",
 		"TokenBudget":            "token_budget",
+		"ContextTokens":          "context_tokens",
+		"QueryType":              "query_type",
 		"TruncateReason":         "truncate_reason",
 		"Rewrite":                "rewrite",
 		"RewriteStrategy":        "rewrite_strategy",

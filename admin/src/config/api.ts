@@ -60,4 +60,54 @@ export const KB_ADMIN_API = {
   GET_STRATEGY_IMPACT: `${API_BASE_URL}/admin/kb/strategy/impact`,
   GET_STRATEGY_GATES: `${API_BASE_URL}/admin/kb/strategy/gates`,
   LIST_STRATEGY_OPERATIONS: `${API_BASE_URL}/admin/kb/strategy/operations`,
+
+  LIST_EXPERIMENTS: `${API_BASE_URL}/admin/kb/experiments`,
+  SAVE_EXPERIMENT: `${API_BASE_URL}/admin/kb/experiments`,
+  ROLLBACK_EXPERIMENT: (experimentId: string) =>
+    `${API_BASE_URL}/admin/kb/experiments/${experimentId}/rollback`,
+  GET_EXPERIMENT_SUMMARY: `${API_BASE_URL}/admin/kb/experiments/summary`,
+
+  LIST_INDEX_REGISTRY: `${API_BASE_URL}/admin/kb/index-lifecycle/registry`,
+  REGISTER_INDEX_FROM_CONFIG: `${API_BASE_URL}/admin/kb/index-lifecycle/register`,
+  BUILD_CANDIDATE_INDEX: `${API_BASE_URL}/admin/kb/index-lifecycle/build`,
+  GET_INDEX_HEALTH: (indexVersion: string) =>
+    `${API_BASE_URL}/admin/kb/index-lifecycle/health/${indexVersion}`,
+  SWITCH_ACTIVE_INDEX: (indexVersion: string) =>
+    `${API_BASE_URL}/admin/kb/index-lifecycle/switch/${indexVersion}`,
+  ROLLBACK_ACTIVE_INDEX: `${API_BASE_URL}/admin/kb/index-lifecycle/rollback`,
+  LIST_INDEX_OPERATIONS: `${API_BASE_URL}/admin/kb/index-lifecycle/operations`,
+  LIST_AUDIT_EVENTS: `${API_BASE_URL}/admin/kb/audit/events`,
+  GET_WEEKLY_REPORT: `${API_BASE_URL}/admin/kb/weekly-report`,
+
+  COST_SUMMARY: `${API_BASE_URL}/admin/kb/cost/summary`,
+  COST_TIMESERIES: `${API_BASE_URL}/admin/kb/cost/timeseries`,
+  COST_BY_KB: `${API_BASE_URL}/admin/kb/cost/by-kb`,
+  COST_BY_STRATEGY: `${API_BASE_URL}/admin/kb/cost/by-strategy`,
+  COST_BY_MODEL: `${API_BASE_URL}/admin/kb/cost/by-model`,
+  HIGH_COST_QUERIES: `${API_BASE_URL}/admin/kb/cost/high-cost-queries`,
+
+  LIST_VECTOR_COLLECTIONS: `${API_BASE_URL}/admin/kb/vector/collections`,
+  GET_VECTOR_COLLECTION_HEALTH: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/health`,
+  REBUILD_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/rebuild`,
+  SWITCH_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/switch`,
+  ROLLBACK_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/rollback`,
+  LIST_VECTOR_OPERATIONS: `${API_BASE_URL}/admin/kb/vector/operations`,
+
+  LIST_ALERTS: `${API_BASE_URL}/admin/kb/alerts`,
+  ACK_ALERT: (alertId: string | number) => `${API_BASE_URL}/admin/kb/alerts/${alertId}/ack`,
+  RESOLVE_ALERT: (alertId: string | number) =>
+    `${API_BASE_URL}/admin/kb/alerts/${alertId}/resolve`,
+
+  LIST_WEEKLY_REPORTS: `${API_BASE_URL}/admin/kb/reports/weekly`,
+  GET_WEEKLY_REPORT_DETAIL: (reportId: string | number) =>
+    `${API_BASE_URL}/admin/kb/reports/weekly/${reportId}`,
+  EXPORT_WEEKLY_REPORT: (reportId: string | number) =>
+    `${API_BASE_URL}/admin/kb/reports/weekly/${reportId}/export`,
+
+  LIST_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates`,
+  CHECK_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates/check`,
 };

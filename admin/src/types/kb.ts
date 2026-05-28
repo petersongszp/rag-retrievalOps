@@ -76,9 +76,12 @@ export interface RetrieveResponse {
 export interface KBRetrieveLog {
   id: number;
   request_id: string;
+  experiment_id?: string;
+  experiment_group?: 'baseline' | 'candidate' | 'shadow';
   user_id: number;
   kb_ids: string;
   query: string;
+  query_type?: string;
   final_query?: string;
   expr?: string;
   top_k: number;
@@ -172,6 +175,18 @@ export interface MetricsOverviewErrorType {
   count: number;
 }
 
+export interface MetricsOverviewCostBreakdown {
+  bucket: string;
+  total_cost: number;
+  cost_per_1k_queries: number;
+  embedding_cost: number;
+  retrieval_cost: number;
+  rerank_cost: number;
+  llm_cost: number;
+  vector_storage_cost: number;
+  avg_context_tokens: number;
+}
+
 export interface MetricsOverview {
   range: MetricsRange;
   ingest_success_rate: MetricsOverviewBucketRate[];
@@ -179,6 +194,7 @@ export interface MetricsOverview {
   retrieve_p95_ms: MetricsOverviewBucketP95[];
   retrieve_empty_rate: MetricsOverviewBucketRate[];
   error_type_topn: MetricsOverviewErrorType[];
+  cost_overview?: MetricsOverviewCostBreakdown[];
 }
 
 export interface ListResponse<T> {
@@ -646,4 +662,245 @@ export interface StrategyRollbackResult {
   started_at?: string;
   finished_at?: string;
   error_msg?: string;
+}
+
+export type ExperimentStrategyType = 'rewrite' | 'candidate_topk';
+export type ExperimentStatus = 'draft' | 'running' | 'paused' | 'stopped' | 'finished';
+export type ExperimentEnvironment = 'all' | 'internal' | 'external';
+export type ExperimentGroup = 'baseline' | 'candidate' | 'shadow';
+
+export interface ExperimentConfig {
+  experiment_id: string;
+  experiment_name: string;
+  strategy_type: ExperimentStrategyType;
+  baseline_version: string;
+  candidate_version: string;
+  traffic_ratio: number;
+  target_kb_ids?: number[];
+  target_query_types?: string[];
+  target_environment?: ExperimentEnvironment;
+  shadow_mode: boolean;
+  start_time?: string;
+  end_time?: string;
+  owner?: string;
+  status?: ExperimentStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExperimentSummary {
+  experiment_id: string;
+  experiment_name: string;
+  strategy_type: ExperimentStrategyType;
+  status?: ExperimentStatus;
+  shadow_mode: boolean;
+  traffic_ratio: number;
+  baseline_version: string;
+  candidate_version: string;
+  start_time?: string;
+  end_time?: string;
+  owner?: string;
+  baseline_sample_size?: number;
+  candidate_sample_size?: number;
+  shadow_sample_size?: number;
+  avg_duration_delta_ms?: number;
+  avg_context_tokens_delta?: number;
+  error_rate_delta?: number;
+  updated_at?: string;
+}
+
+export type CollectionRole = 'active' | 'candidate' | 'standby' | 'rollback' | 'deprecated';
+export type IndexBuildStatus =
+  | 'pending'
+  | 'building'
+  | 'ready'
+  | 'failed'
+  | 'switched'
+  | 'rolled_back';
+
+export interface IndexRegistryRecord {
+  id: number;
+  index_version: string;
+  collection_name: string;
+  collection_role: CollectionRole;
+  embedding_model?: string;
+  embedding_dimension?: number;
+  metric_type?: string;
+  index_type?: string;
+  index_params?: string;
+  build_status?: IndexBuildStatus;
+  build_started_at?: string;
+  build_finished_at?: string;
+  created_by?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface IndexOperationLog {
+  id: number;
+  index_version: string;
+  collection_name: string;
+  operation: string;
+  from_role?: string;
+  to_role?: string;
+  operator_id?: number;
+  operation_reason?: string;
+  health_status?: string;
+  rollback_target?: string;
+  created_at?: string;
+}
+
+export interface IndexHealthReport {
+  index_version: string;
+  collection_name: string;
+  collection_role: string;
+  collection_exists: boolean;
+  dimension_match: boolean;
+  metric_type_match: boolean;
+  load_healthy: boolean;
+  query_smoke_healthy: boolean;
+  checked_at?: string;
+  message?: string;
+}
+
+export interface AuditEvent {
+  id: number;
+  audit_trace_id: string;
+  request_id?: string;
+  operator_id?: number;
+  user_id?: number;
+  kb_id?: number;
+  document_id?: number;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  before?: string;
+  after?: string;
+  result?: string;
+  reason?: string;
+  created_at?: string;
+}
+
+export type GovernanceAlertCategory = 'quality' | 'stability' | 'cost' | 'capacity' | 'audit';
+
+export type GovernanceFeatureFlag =
+  | 'RAG_ENABLE_COST_GOVERNANCE'
+  | 'RAG_ENABLE_AUDIT_CENTER'
+  | 'RAG_ENABLE_VECTOR_OPS'
+  | 'RAG_ENABLE_GOVERNANCE_ALERTS'
+  | 'RAG_ENABLE_WEEKLY_REPORT';
+
+export interface ContractGapAware {
+  contract_gaps?: string[];
+}
+
+export interface CostSummary extends ContractGapAware {
+  range: string;
+  total_estimated_cost?: number;
+  currency?: string;
+  cost_per_1k_queries?: number;
+  embedding_cost?: number;
+  llm_cost?: number;
+  rerank_cost?: number;
+  vector_storage_cost?: number;
+  index_rebuild_cost?: number;
+  avg_context_tokens?: number;
+  avg_candidate_count?: number;
+  high_cost_query_count?: number;
+}
+
+export interface CostTimeseriesPoint extends ContractGapAware {
+  bucket: string;
+  total_estimated_cost?: number;
+  cost_per_1k_queries?: number;
+  embedding_cost?: number;
+  llm_cost?: number;
+  rerank_cost?: number;
+  vector_storage_cost?: number;
+  index_rebuild_cost?: number;
+  avg_context_tokens?: number;
+  avg_candidate_count?: number;
+}
+
+export interface CostDimensionBreakdown extends ContractGapAware {
+  key: string;
+  label?: string;
+  total_estimated_cost?: number;
+  cost_per_1k_queries?: number;
+  request_count?: number;
+  share?: number;
+}
+
+export interface HighCostQuery extends ContractGapAware {
+  request_id: string;
+  kb_id?: number;
+  query_type?: string;
+  strategy_version?: string;
+  experiment_id?: string;
+  model_name?: string;
+  estimated_cost?: number;
+  currency?: string;
+  context_tokens?: number;
+  candidate_count?: number;
+  final_count?: number;
+  created_at?: string;
+}
+
+export interface AuditEventDetail extends AuditEvent, ContractGapAware {
+  actor_name?: string;
+  ip?: string;
+  user_agent?: string;
+  sensitive_fields_masked?: string[];
+  trace_id?: string;
+}
+
+export interface GovernanceAlert extends ContractGapAware {
+  id: string;
+  title: string;
+  category: GovernanceAlertCategory;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'acknowledged' | 'resolved';
+  kb_id?: number;
+  target_type?: string;
+  target_id?: string;
+  summary?: string;
+  metric_key?: string;
+  metric_value?: number;
+  threshold?: number;
+  request_id?: string;
+  trace_id?: string;
+  created_at?: string;
+  acknowledged_at?: string;
+  resolved_at?: string;
+}
+
+export interface GovernanceGateSummary extends ContractGapAware {
+  generated_at?: string;
+  passed: boolean;
+  cost_guard_passed?: boolean;
+  audit_guard_passed?: boolean;
+  index_guard_passed?: boolean;
+  experiment_guard_passed?: boolean;
+  release_guard_passed?: boolean;
+  collection_health_score?: number;
+  audit_coverage_rate?: number;
+  rollback_success_rate?: number;
+  strategy_regression_rate?: number;
+  cost_per_1k_queries?: number;
+  risks?: string[];
+}
+
+export interface WeeklyReport {
+  generated_at?: string;
+  window_start?: string;
+  window_end?: string;
+  quality_summary?: MetricsOverview;
+  release_summary?: Record<string, unknown>;
+  experiment_summary?: ExperimentSummary[];
+  index_registry?: IndexRegistryRecord[];
+  index_operations?: IndexOperationLog[];
+  audit_events?: AuditEvent[];
+  risks?: string[];
+  next_actions?: string[];
+  contract_gaps?: string[];
 }

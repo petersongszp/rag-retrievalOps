@@ -37,6 +37,14 @@ type (
 	KBRetrieveLog  struct {
 		ID                     uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
 		RequestID              string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
+		ExperimentID           string               `json:"experiment_id" gorm:"size:128;index"`
+		ExperimentGroup        string               `json:"experiment_group" gorm:"size:32;index"`
+		StrategyVersion        string               `json:"strategy_version" gorm:"size:128;index"`
+		IndexVersion           string               `json:"index_version" gorm:"size:128"`
+		CollectionVersion      string               `json:"collection_version" gorm:"size:128"`
+		CostTraceID            string               `json:"cost_trace_id" gorm:"size:128;index"`
+		AuditTraceID           string               `json:"audit_trace_id" gorm:"size:128;index"`
+		ReleaseID              string               `json:"release_id" gorm:"size:128;index"`
 		UserID                 uint                 `json:"user_id" gorm:"index;not null"`
 		KBIDs                  string               `json:"kb_ids" gorm:"size:500"`
 		Query                  string               `json:"query" gorm:"size:2000;not null"`
@@ -46,6 +54,8 @@ type (
 		CandidateTopK          int                  `json:"candidate_topk"`
 		FinalTopK              int                  `json:"final_topk"`
 		TokenBudget            int                  `json:"token_budget"`
+		ContextTokens          int                  `json:"context_tokens"`
+		QueryType              string               `json:"query_type" gorm:"size:64;index"`
 		TruncateReason         string               `json:"truncate_reason" gorm:"size:64"`
 		Rewrite                string               `json:"rewrite" gorm:"size:1000"`
 		RewriteStrategy        string               `json:"rewrite_strategy" gorm:"size:255"`

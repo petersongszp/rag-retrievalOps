@@ -46,6 +46,11 @@ type HybridSearchRequest struct {
 	ModelRewriteShadow    bool
 	ModelRewriteRiskLevel string
 	ModelRewriteTerms     []string
+	QueryType             string
+	ForceRewriteOff       bool
+	ExperimentID          string
+	StrategyVersion       string
+	ReleaseID             string
 }
 
 type HybridRetriever struct {
@@ -178,6 +183,11 @@ func (h *HybridRetriever) SearchWithMetrics(ctx context.Context, query string, o
 			req.RewriteStrategy = strings.TrimSpace(opts.RewriteStrategy)
 		}
 		req.RewriteApplied = opts.RewriteApplied
+		req.QueryType = strings.TrimSpace(opts.QueryType)
+		req.ForceRewriteOff = opts.ForceRewriteOff
+		req.ExperimentID = strings.TrimSpace(opts.ExperimentID)
+		req.StrategyVersion = strings.TrimSpace(opts.StrategyVersion)
+		req.ReleaseID = strings.TrimSpace(opts.ReleaseID)
 	}
 
 	return h.SearchWithRequestAndMetrics(ctx, req)
@@ -834,6 +844,17 @@ func (req *HybridSearchRequest) applyControlledRewrite(ctx context.Context, rewr
 		RequestID:     req.RequestID,
 		CandidateTopK: req.CandidateTopK,
 	})
+	if req.ForceRewriteOff {
+		req.Query = req.OriginalQuery
+		req.RewriteQuery = ""
+		req.FinalQuery = req.OriginalQuery
+		req.DenseQuery = req.OriginalQuery
+		req.SparseQuery = req.OriginalQuery
+		req.RewriteStrategy = "experiment_force_rewrite_off"
+		req.RewriteApplied = false
+		req.RouteRewriteStrategy = map[string]string{}
+		return
+	}
 	req.Query = req.OriginalQuery
 	req.RewriteQuery = strings.TrimSpace(result.RewriteQuery)
 	req.FinalQuery = strings.TrimSpace(result.FinalQuery)

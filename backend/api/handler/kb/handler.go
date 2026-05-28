@@ -27,6 +27,8 @@ import (
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
+	"interview-agents/internal/rag/experiment"
+	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/release"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
@@ -484,6 +486,18 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		response.InternalServerError(ctx, c, "failed to enqueue ingest task")
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: fmt.Sprintf("audit-upload-%d-%d", job.ID, doc.ID),
+		OperatorID:   userID,
+		UserID:       userID,
+		KBID:         kbID,
+		DocumentID:   doc.ID,
+		Action:       governance.ActionDocumentUpload,
+		ResourceType: "document",
+		ResourceID:   strconv.FormatUint(doc.ID, 10),
+		AfterData:    fmt.Sprintf(`{"file_name":"%s","job_id":%d}`, doc.FileName, job.ID),
+		Result:       "accepted",
+	})
 
 	response.Success(ctx, c, uploadDocumentResponse{
 		DocumentID: doc.ID,
@@ -783,6 +797,18 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to delete document", err))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: firstNonEmptyString("audit-delete-"+c.Param("document_id"), c.Param("document_id")),
+		OperatorID:   userID,
+		UserID:       userID,
+		KBID:         mustDocumentKBID(documentID),
+		DocumentID:   documentID,
+		Action:       governance.ActionDocumentDelete,
+		ResourceType: "document",
+		ResourceID:   strconv.FormatUint(documentID, 10),
+		Result:       "deleted",
+		Reason:       getOperationReason(c),
+	})
 
 	if config.Global.RAG.Enabled {
 		if manager, err := milvus.GetMilvusManager(); err == nil {
@@ -880,6 +906,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.Success(ctx, c, retrieveResponse{RequestID: requestID, Items: []retrieveItem{}})
 		return
 	}
+	experimentDecision := experiment.Decide(&config.Global, userID, middleware.GetUserRole(c), kbIDs, req.Query, requestID, topK)
+	queryType := firstNonEmptyString(experimentDecision.Override.QueryType, "general")
 
 	collection := config.Global.Milvus.GetCollection("knowledge")
 	if collection == "" {
@@ -900,14 +928,25 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchErr    error
 	)
 	if useHybrid {
-		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, &retrieval.RetrieveOptions{
+		searchOpts := &retrieval.RetrieveOptions{
 			TopK:             topK,
 			Collection:       collection,
 			KBScope:          "global",
 			ActiveGlobalKBID: activeGlobalKBID,
 			RequestID:        requestID,
 			OriginalQuery:    req.Query,
-		})
+			QueryType:        queryType,
+			ExperimentID:     experimentDecision.ExperimentID,
+			StrategyVersion:  experimentDecision.CandidateVersion,
+			ReleaseID:        experimentDecision.ExperimentID,
+		}
+		if experimentDecision.Matched {
+			searchOpts.ForceRewriteOff = experimentDecision.Override.ForceRewriteOff
+			if experimentDecision.Override.CandidateTopK > 0 {
+				searchOpts.CandidateTopK = experimentDecision.Override.CandidateTopK
+			}
+		}
+		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, searchOpts)
 	} else {
 		searchResult, searchErr = retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	}
@@ -918,6 +957,18 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	searchResult.Metrics.Strategy = releaseDecision.Strategy
 	searchResult.Metrics.ReleaseStage = releaseDecision.Stage
 	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
+	searchResult.Metrics.QueryType = queryType
+	searchResult.Metrics.ExperimentID = experimentDecision.ExperimentID
+	searchResult.Metrics.StrategyVersion = searchResult.Metrics.StrategyVersion
+	switch experimentDecision.Group {
+	case experiment.GroupCandidate, experiment.GroupShadow:
+		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.CandidateVersion, searchResult.Metrics.StrategyVersion)
+	case experiment.GroupBaseline:
+		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.BaselineVersion, searchResult.Metrics.StrategyVersion)
+	}
+	searchResult.Metrics.ReleaseID = firstNonEmptyString(experimentDecision.ExperimentID, searchResult.Metrics.ReleaseID)
+	searchResult.Metrics.ExperimentGroup = experimentDecision.Group
+	searchResult.Metrics.CollectionVersion = firstNonEmptyString(searchResult.Metrics.CollectionVersion, collection)
 	if searchResult.Metrics.RetrieverVersion == "" {
 		if useHybrid {
 			searchResult.Metrics.RetrieverVersion = retrieval.HybridRetrieverVersion
@@ -932,6 +983,14 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		errorStatus := classifyRetrieveResultStatus(metricsStatus)
 		retrieveLog := &model.KBRetrieveLog{
 			RequestID:              requestID,
+			ExperimentID:           searchResult.Metrics.ExperimentID,
+			ExperimentGroup:        searchResult.Metrics.ExperimentGroup,
+			StrategyVersion:        searchResult.Metrics.StrategyVersion,
+			IndexVersion:           searchResult.Metrics.IndexVersion,
+			CollectionVersion:      searchResult.Metrics.CollectionVersion,
+			CostTraceID:            searchResult.Metrics.CostTraceID,
+			AuditTraceID:           searchResult.Metrics.AuditTraceID,
+			ReleaseID:              searchResult.Metrics.ReleaseID,
 			UserID:                 userID,
 			KBIDs:                  formatKBIDs(kbIDs),
 			Query:                  req.Query,
@@ -941,6 +1000,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			CandidateTopK:          searchResult.Metrics.CandidateTopK,
 			FinalTopK:              searchResult.Metrics.FinalTopK,
 			TokenBudget:            searchResult.Metrics.TokenBudget,
+			ContextTokens:          searchResult.Metrics.ContextTokens,
+			QueryType:              queryType,
 			TruncateReason:         searchResult.Metrics.TruncateReason,
 			Rewrite:                searchResult.Metrics.RewriteQuery,
 			RewriteStrategy:        searchResult.Metrics.RewriteStrategy,
@@ -990,6 +1051,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			searchResult.Debug,
 		))
 		persistRetrieveLog(retrieveLog)
+		persistCostTrace(buildRetrieveCostTrace(retrieveLog))
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
 	}
@@ -1090,6 +1152,14 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	retrieveLog := &model.KBRetrieveLog{
 		RequestID:              requestID,
+		ExperimentID:           searchMetrics.ExperimentID,
+		ExperimentGroup:        searchMetrics.ExperimentGroup,
+		StrategyVersion:        searchMetrics.StrategyVersion,
+		IndexVersion:           searchMetrics.IndexVersion,
+		CollectionVersion:      searchMetrics.CollectionVersion,
+		CostTraceID:            searchMetrics.CostTraceID,
+		AuditTraceID:           searchMetrics.AuditTraceID,
+		ReleaseID:              searchMetrics.ReleaseID,
 		UserID:                 userID,
 		KBIDs:                  formatKBIDs(kbIDs),
 		Query:                  req.Query,
@@ -1099,6 +1169,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		CandidateTopK:          searchMetrics.CandidateTopK,
 		FinalTopK:              searchMetrics.FinalTopK,
 		TokenBudget:            searchMetrics.TokenBudget,
+		ContextTokens:          searchMetrics.ContextTokens,
+		QueryType:              queryType,
 		TruncateReason:         searchMetrics.TruncateReason,
 		Rewrite:                firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
 		RewriteStrategy:        firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),
@@ -1148,6 +1220,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchResult.Debug,
 	))
 	persistRetrieveLog(retrieveLog)
+	persistCostTrace(buildRetrieveCostTrace(retrieveLog))
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
@@ -1984,11 +2057,133 @@ func computeSnippetOffset(content, queryLower string) int {
 }
 
 func persistRetrieveLog(entry *model.KBRetrieveLog) {
+	if repository.GetDB() == nil {
+		log.Printf("[KB Retrieve Audit] skip persist because db is not initialized request_id=%s", entry.RequestID)
+		return
+	}
 	go func() {
 		if err := model.KBRetrieveLogDao.Create(entry); err != nil {
 			log.Printf("[KB Retrieve Audit] failed to persist retrieve log request_id=%s err=%v", entry.RequestID, err)
+			metrics.IncError("retrieve_audit", "persist_failed")
+			traceID := firstNonEmptyString(entry.AuditTraceID, entry.RequestID)
+			governance.EnqueueCompensation(
+				"retrieve_audit",
+				traceID,
+				entry.RequestID,
+				"persist_retrieve_log_failed",
+				map[string]interface{}{
+					"request_id":       entry.RequestID,
+					"audit_trace_id":   entry.AuditTraceID,
+					"strategy_version": entry.StrategyVersion,
+				},
+			)
 		}
 	}()
+}
+
+func persistCostTrace(entry *model.KBCostTrace) {
+	if entry == nil {
+		return
+	}
+	if repository.GetDB() == nil {
+		log.Printf("[KB Cost] skip persist because db is not initialized cost_trace_id=%s", entry.CostTraceID)
+		return
+	}
+	go func() {
+		if err := model.KBCostTraceDao.Create(entry); err != nil {
+			log.Printf("[KB Cost] failed to persist cost trace cost_trace_id=%s err=%v", entry.CostTraceID, err)
+			metrics.IncError("cost_trace", "persist_failed")
+		}
+	}()
+}
+
+func persistAuditEvent(entry *model.KBAuditEvent) {
+	if entry == nil {
+		return
+	}
+	if repository.GetDB() == nil {
+		log.Printf("[KB Audit] skip persist because db is not initialized audit_trace_id=%s action=%s", entry.AuditTraceID, entry.Action)
+		return
+	}
+	go func() {
+		if err := model.KBAuditEventDao.Create(entry); err != nil {
+			log.Printf("[KB Audit] failed to persist audit event audit_trace_id=%s action=%s err=%v", entry.AuditTraceID, entry.Action, err)
+			metrics.IncError("audit_event", "persist_failed")
+			governance.EnqueueCompensation(
+				"audit_event",
+				firstNonEmptyString(entry.AuditTraceID, entry.RequestID),
+				entry.RequestID,
+				"persist_audit_event_failed",
+				map[string]interface{}{
+					"action":        entry.Action,
+					"resource_type": entry.ResourceType,
+					"resource_id":   entry.ResourceID,
+				},
+			)
+		}
+	}()
+}
+
+func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
+	if logEntry == nil {
+		return nil
+	}
+	kbID := firstKBIDFromCSV(logEntry.KBIDs)
+	embeddingTokens := maxInt(logEntry.CandidateTopK*24, 0)
+	completionTokens := maxInt(logEntry.FinalCount*48, 0)
+	retrievalCost := float64(logEntry.DenseHits+logEntry.SparseHits) * 0.00002
+	rerankCost := float64(maxInt(logEntry.CandidateTopK, logEntry.FinalTopK)) * 0.00003
+	embeddingCost := float64(embeddingTokens) * 0.0000008
+	llmCost := float64(logEntry.ContextTokens+completionTokens) * 0.0000015
+	vectorStorageCost := float64(maxInt(logEntry.FinalCount, 1)) * 0.000005
+	totalCost := embeddingCost + retrievalCost + rerankCost + llmCost + vectorStorageCost
+
+	return &model.KBCostTrace{
+		RequestID:               logEntry.RequestID,
+		CostTraceID:             firstNonEmptyString(logEntry.CostTraceID, logEntry.RequestID),
+		KBID:                    kbID,
+		UserID:                  logEntry.UserID,
+		ExperimentID:            logEntry.ExperimentID,
+		StrategyVersion:         logEntry.StrategyVersion,
+		QueryType:               logEntry.QueryType,
+		EmbeddingTokens:         embeddingTokens,
+		ContextTokens:           logEntry.ContextTokens,
+		CompletionTokens:        completionTokens,
+		RetrievalCandidateCount: logEntry.DenseHits + logEntry.SparseHits,
+		RerankCandidateCount:    maxInt(logEntry.CandidateTopK, logEntry.FinalTopK),
+		LLMModel:                firstNonEmptyString(logEntry.RerankModel, "rag-answer-estimator"),
+		EmbeddingCost:           embeddingCost,
+		RetrievalCost:           retrievalCost,
+		RerankCost:              rerankCost,
+		LLMCost:                 llmCost,
+		VectorStorageCost:       vectorStorageCost,
+		TotalCost:               totalCost,
+	}
+}
+
+func firstKBIDFromCSV(raw string) uint64 {
+	for _, part := range strings.Split(strings.TrimSpace(raw), ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		value, err := strconv.ParseUint(part, 10, 64)
+		if err == nil {
+			return value
+		}
+	}
+	return 0
+}
+
+func mustDocumentKBID(documentID uint64) uint64 {
+	if documentID == 0 {
+		return 0
+	}
+	doc, err := model.KBDocumentDao.GetByID(documentID)
+	if err != nil || doc == nil {
+		return 0
+	}
+	return doc.KbID
 }
 
 func classifyRetrieveResultStatus(metricsStatus string) model.RetrieveResultStatus {
@@ -2429,6 +2624,61 @@ func buildRetrieveErrorTopN(logs []*model.KBRetrieveLog) []metricsOverviewErrorT
 	return items
 }
 
+func buildCostOverviewSeries(costs []*model.KBCostTrace, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewCostBreakdown {
+	if len(costs) == 0 {
+		return []metricsOverviewCostBreakdown{}
+	}
+
+	type aggregate struct {
+		totalCost         float64
+		embeddingCost     float64
+		retrievalCost     float64
+		rerankCost        float64
+		llmCost           float64
+		vectorStorageCost float64
+		contextTokens     int
+		queries           int
+	}
+
+	aggregates := make([]aggregate, bucketCount)
+	for _, item := range costs {
+		if item == nil {
+			continue
+		}
+		index := bucketIndex(item.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		aggregates[index].totalCost += item.TotalCost
+		aggregates[index].embeddingCost += item.EmbeddingCost
+		aggregates[index].retrievalCost += item.RetrievalCost
+		aggregates[index].rerankCost += item.RerankCost
+		aggregates[index].llmCost += item.LLMCost
+		aggregates[index].vectorStorageCost += item.VectorStorageCost
+		aggregates[index].contextTokens += item.ContextTokens
+		aggregates[index].queries++
+	}
+
+	series := make([]metricsOverviewCostBreakdown, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		item := metricsOverviewCostBreakdown{
+			Bucket:            start.Add(time.Duration(i) * bucketSize),
+			TotalCost:         aggregates[i].totalCost,
+			EmbeddingCost:     aggregates[i].embeddingCost,
+			RetrievalCost:     aggregates[i].retrievalCost,
+			RerankCost:        aggregates[i].rerankCost,
+			LLMCost:           aggregates[i].llmCost,
+			VectorStorageCost: aggregates[i].vectorStorageCost,
+		}
+		if aggregates[i].queries > 0 {
+			item.CostPer1KQueries = aggregates[i].totalCost / float64(aggregates[i].queries) * 1000
+			item.AvgContextTokens = float64(aggregates[i].contextTokens) / float64(aggregates[i].queries)
+		}
+		series = append(series, item)
+	}
+	return series
+}
+
 func bucketIndex(ts, start time.Time, bucketSize time.Duration, bucketCount int) int {
 	if ts.Before(start) {
 		return -1
@@ -2591,6 +2841,18 @@ type metricsOverviewErrorType struct {
 	Count     int    `json:"count"`
 }
 
+type metricsOverviewCostBreakdown struct {
+	Bucket            time.Time `json:"bucket"`
+	TotalCost         float64   `json:"total_cost"`
+	CostPer1KQueries  float64   `json:"cost_per_1k_queries"`
+	EmbeddingCost     float64   `json:"embedding_cost"`
+	RetrievalCost     float64   `json:"retrieval_cost"`
+	RerankCost        float64   `json:"rerank_cost"`
+	LLMCost           float64   `json:"llm_cost"`
+	VectorStorageCost float64   `json:"vector_storage_cost"`
+	AvgContextTokens  float64   `json:"avg_context_tokens"`
+}
+
 type metricsOverviewResponse struct {
 	Range                        string                         `json:"range"`
 	IngestSuccessRate            []metricsOverviewBucketRate    `json:"ingest_success_rate"`
@@ -2605,6 +2867,7 @@ type metricsOverviewResponse struct {
 	RouteContributionTotal       map[string]int                 `json:"route_contribution_total"`
 	RewriteGainBucketCounts      map[string]int                 `json:"rewrite_gain_bucket_counts"`
 	ErrorTypeTopN                []metricsOverviewErrorType     `json:"error_type_topn"`
+	CostOverview                 []metricsOverviewCostBreakdown `json:"cost_overview"`
 }
 
 type ingestLogDetailResponse struct {
@@ -2730,6 +2993,11 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load retrieve logs for metrics overview", err))
 		return
 	}
+	costTraces, err := model.KBCostTraceDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load cost traces for metrics overview", err))
+		return
+	}
 
 	ingestJobs, err := model.KBIngestJobDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
 	if err != nil {
@@ -2751,6 +3019,7 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 		RouteContributionTotal:       buildRouteContributionTotal(retrieveLogs),
 		RewriteGainBucketCounts:      buildRewriteGainBucketCounts(retrieveLogs),
 		ErrorTypeTopN:                buildRetrieveErrorTopN(retrieveLogs),
+		CostOverview:                 buildCostOverviewSeries(costTraces, startInclusive, bucketSize, bucketCount),
 	})
 }
 

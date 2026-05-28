@@ -32,4 +32,9 @@ type RetrieveOptions struct {
 	FinalQuery       string
 	RewriteStrategy  string
 	RewriteApplied   bool
+	QueryType        string
+	ForceRewriteOff  bool
+	ExperimentID     string
+	StrategyVersion  string
+	ReleaseID        string
 }

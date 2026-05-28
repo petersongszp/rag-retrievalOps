@@ -102,11 +102,21 @@ func TestKBRetrieveLogTableName(t *testing.T) {
 func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	log := KBRetrieveLog{
 		RequestID:              "test-req-001",
+		ExperimentID:           "exp-001",
+		ExperimentGroup:        "candidate",
+		StrategyVersion:        "p3-baseline-v1",
+		IndexVersion:           "idx-v1",
+		CollectionVersion:      "col-v1",
+		CostTraceID:            "cost-001",
+		AuditTraceID:           "audit-001",
+		ReleaseID:              "release-001",
 		UserID:                 1,
 		KBIDs:                  "1,2,3",
 		Query:                  "Go语言特点",
 		Expr:                   `metadata["user_id"] == 1`,
 		TopK:                   5,
+		ContextTokens:          256,
+		QueryType:              "entity",
 		Rewrite:                "",
 		Routes:                 "dense",
 		Collection:             "knowledge",
@@ -132,6 +142,9 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	if log.RequestID != "test-req-001" {
 		t.Errorf("RequestID = %q, want %q", log.RequestID, "test-req-001")
 	}
+	if log.ExperimentID != "exp-001" || log.ExperimentGroup != "candidate" || log.StrategyVersion != "p3-baseline-v1" {
+		t.Errorf("unexpected governance trace fields: %+v", log)
+	}
 	if log.RetrieverVersion != "v1" {
 		t.Errorf("RetrieverVersion = %q, want %q", log.RetrieverVersion, "v1")
 	}
@@ -152,6 +165,9 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	}
 	if log.EmbeddingMs != 50 {
 		t.Errorf("EmbeddingMs = %d, want 50", log.EmbeddingMs)
+	}
+	if log.ContextTokens != 256 {
+		t.Errorf("ContextTokens = %d, want 256", log.ContextTokens)
 	}
 	if log.SearchMs != 120 {
 		t.Errorf("SearchMs = %d, want 120", log.SearchMs)
