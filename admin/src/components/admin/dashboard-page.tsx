@@ -14,6 +14,7 @@ import { KB_ADMIN_API } from '@/config/api';
 import type {
   MetricsOverview,
   MetricsOverviewBucketCount,
+  MetricsOverviewCostBreakdown,
   MetricsOverviewBucketP95,
   MetricsOverviewBucketRate,
   MetricsRange,
@@ -255,6 +256,15 @@ export function DashboardPage() {
     [metrics?.retrieve_empty_rate, metricsRange]
   );
 
+  const costSeries = useMemo(
+    () =>
+      (metrics?.cost_overview ?? []).map((item: MetricsOverviewCostBreakdown) => ({
+        label: formatBucketLabel(item.bucket, metricsRange),
+        value: Number(item.cost_per_1k_queries.toFixed(4)),
+      })),
+    [metrics?.cost_overview, metricsRange]
+  );
+
   const latestIngestRate = metrics?.ingest_success_rate.at(-1)?.rate ?? 0;
   const totalRequests = (metrics?.retrieve_request_count ?? []).reduce(
     (sum, item) => sum + item.count,
@@ -262,6 +272,8 @@ export function DashboardPage() {
   );
   const latestP95 = metrics?.retrieve_p95_ms.at(-1)?.p95_ms ?? 0;
   const latestEmptyRate = metrics?.retrieve_empty_rate.at(-1)?.rate ?? 0;
+  const latestCostPer1K = metrics?.cost_overview?.at(-1)?.cost_per_1k_queries ?? 0;
+  const latestAvgContextTokens = metrics?.cost_overview?.at(-1)?.avg_context_tokens ?? 0;
 
   return (
     <div className="space-y-6">
@@ -423,6 +435,15 @@ export function DashboardPage() {
                   helper="result_status = no_result 的占比"
                   data={emptyRateSeries}
                   color="#7c3aed"
+                />
+              </Col>
+              <Col xs={24} md={12} xl={6}>
+                <TrendMetricCard
+                  title="每千次问答成本"
+                  value={`$${latestCostPer1K.toFixed(4)}`}
+                  helper={`平均上下文 ${latestAvgContextTokens.toFixed(0)} tokens`}
+                  data={costSeries}
+                  color="#8b5cf6"
                 />
               </Col>
               <Col xs={24}>

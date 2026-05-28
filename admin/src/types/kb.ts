@@ -175,6 +175,18 @@ export interface MetricsOverviewErrorType {
   count: number;
 }
 
+export interface MetricsOverviewCostBreakdown {
+  bucket: string;
+  total_cost: number;
+  cost_per_1k_queries: number;
+  embedding_cost: number;
+  retrieval_cost: number;
+  rerank_cost: number;
+  llm_cost: number;
+  vector_storage_cost: number;
+  avg_context_tokens: number;
+}
+
 export interface MetricsOverview {
   range: MetricsRange;
   ingest_success_rate: MetricsOverviewBucketRate[];
@@ -182,6 +194,7 @@ export interface MetricsOverview {
   retrieve_p95_ms: MetricsOverviewBucketP95[];
   retrieve_empty_rate: MetricsOverviewBucketRate[];
   error_type_topn: MetricsOverviewErrorType[];
+  cost_overview?: MetricsOverviewCostBreakdown[];
 }
 
 export interface ListResponse<T> {

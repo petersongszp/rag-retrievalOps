@@ -1027,6 +1027,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			searchResult.Debug,
 		))
 		persistRetrieveLog(retrieveLog)
+		persistCostTrace(buildRetrieveCostTrace(retrieveLog))
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
 	}
@@ -1195,6 +1196,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchResult.Debug,
 	))
 	persistRetrieveLog(retrieveLog)
+	persistCostTrace(buildRetrieveCostTrace(retrieveLog))
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
@@ -2051,6 +2053,69 @@ func persistRetrieveLog(entry *model.KBRetrieveLog) {
 	}()
 }
 
+func persistCostTrace(entry *model.KBCostTrace) {
+	if entry == nil {
+		return
+	}
+	go func() {
+		if err := model.KBCostTraceDao.Create(entry); err != nil {
+			log.Printf("[KB Cost] failed to persist cost trace cost_trace_id=%s err=%v", entry.CostTraceID, err)
+			metrics.IncError("cost_trace", "persist_failed")
+		}
+	}()
+}
+
+func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
+	if logEntry == nil {
+		return nil
+	}
+	kbID := firstKBIDFromCSV(logEntry.KBIDs)
+	embeddingTokens := maxInt(logEntry.CandidateTopK*24, 0)
+	completionTokens := maxInt(logEntry.FinalCount*48, 0)
+	retrievalCost := float64(logEntry.DenseHits+logEntry.SparseHits) * 0.00002
+	rerankCost := float64(maxInt(logEntry.CandidateTopK, logEntry.FinalTopK)) * 0.00003
+	embeddingCost := float64(embeddingTokens) * 0.0000008
+	llmCost := float64(logEntry.ContextTokens+completionTokens) * 0.0000015
+	vectorStorageCost := float64(maxInt(logEntry.FinalCount, 1)) * 0.000005
+	totalCost := embeddingCost + retrievalCost + rerankCost + llmCost + vectorStorageCost
+
+	return &model.KBCostTrace{
+		RequestID:               logEntry.RequestID,
+		CostTraceID:             firstNonEmptyString(logEntry.CostTraceID, logEntry.RequestID),
+		KBID:                    kbID,
+		UserID:                  logEntry.UserID,
+		ExperimentID:            logEntry.ExperimentID,
+		StrategyVersion:         logEntry.StrategyVersion,
+		QueryType:               logEntry.QueryType,
+		EmbeddingTokens:         embeddingTokens,
+		ContextTokens:           logEntry.ContextTokens,
+		CompletionTokens:        completionTokens,
+		RetrievalCandidateCount: logEntry.DenseHits + logEntry.SparseHits,
+		RerankCandidateCount:    maxInt(logEntry.CandidateTopK, logEntry.FinalTopK),
+		LLMModel:                firstNonEmptyString(logEntry.RerankModel, "rag-answer-estimator"),
+		EmbeddingCost:           embeddingCost,
+		RetrievalCost:           retrievalCost,
+		RerankCost:              rerankCost,
+		LLMCost:                 llmCost,
+		VectorStorageCost:       vectorStorageCost,
+		TotalCost:               totalCost,
+	}
+}
+
+func firstKBIDFromCSV(raw string) uint64 {
+	for _, part := range strings.Split(strings.TrimSpace(raw), ",") {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			continue
+		}
+		value, err := strconv.ParseUint(part, 10, 64)
+		if err == nil {
+			return value
+		}
+	}
+	return 0
+}
+
 func classifyRetrieveResultStatus(metricsStatus string) model.RetrieveResultStatus {
 	switch metricsStatus {
 	case "timeout":
@@ -2489,6 +2554,61 @@ func buildRetrieveErrorTopN(logs []*model.KBRetrieveLog) []metricsOverviewErrorT
 	return items
 }
 
+func buildCostOverviewSeries(costs []*model.KBCostTrace, start time.Time, bucketSize time.Duration, bucketCount int) []metricsOverviewCostBreakdown {
+	if len(costs) == 0 {
+		return []metricsOverviewCostBreakdown{}
+	}
+
+	type aggregate struct {
+		totalCost         float64
+		embeddingCost     float64
+		retrievalCost     float64
+		rerankCost        float64
+		llmCost           float64
+		vectorStorageCost float64
+		contextTokens     int
+		queries           int
+	}
+
+	aggregates := make([]aggregate, bucketCount)
+	for _, item := range costs {
+		if item == nil {
+			continue
+		}
+		index := bucketIndex(item.CreatedAt.UTC(), start, bucketSize, bucketCount)
+		if index < 0 {
+			continue
+		}
+		aggregates[index].totalCost += item.TotalCost
+		aggregates[index].embeddingCost += item.EmbeddingCost
+		aggregates[index].retrievalCost += item.RetrievalCost
+		aggregates[index].rerankCost += item.RerankCost
+		aggregates[index].llmCost += item.LLMCost
+		aggregates[index].vectorStorageCost += item.VectorStorageCost
+		aggregates[index].contextTokens += item.ContextTokens
+		aggregates[index].queries++
+	}
+
+	series := make([]metricsOverviewCostBreakdown, 0, bucketCount)
+	for i := 0; i < bucketCount; i++ {
+		item := metricsOverviewCostBreakdown{
+			Bucket:            start.Add(time.Duration(i) * bucketSize),
+			TotalCost:         aggregates[i].totalCost,
+			EmbeddingCost:     aggregates[i].embeddingCost,
+			RetrievalCost:     aggregates[i].retrievalCost,
+			RerankCost:        aggregates[i].rerankCost,
+			LLMCost:           aggregates[i].llmCost,
+			VectorStorageCost: aggregates[i].vectorStorageCost,
+		}
+		if aggregates[i].queries > 0 {
+			item.CostPer1KQueries = aggregates[i].totalCost / float64(aggregates[i].queries) * 1000
+			item.AvgContextTokens = float64(aggregates[i].contextTokens) / float64(aggregates[i].queries)
+		}
+		series = append(series, item)
+	}
+	return series
+}
+
 func bucketIndex(ts, start time.Time, bucketSize time.Duration, bucketCount int) int {
 	if ts.Before(start) {
 		return -1
@@ -2651,6 +2771,18 @@ type metricsOverviewErrorType struct {
 	Count     int    `json:"count"`
 }
 
+type metricsOverviewCostBreakdown struct {
+	Bucket            time.Time `json:"bucket"`
+	TotalCost         float64   `json:"total_cost"`
+	CostPer1KQueries  float64   `json:"cost_per_1k_queries"`
+	EmbeddingCost     float64   `json:"embedding_cost"`
+	RetrievalCost     float64   `json:"retrieval_cost"`
+	RerankCost        float64   `json:"rerank_cost"`
+	LLMCost           float64   `json:"llm_cost"`
+	VectorStorageCost float64   `json:"vector_storage_cost"`
+	AvgContextTokens  float64   `json:"avg_context_tokens"`
+}
+
 type metricsOverviewResponse struct {
 	Range                        string                         `json:"range"`
 	IngestSuccessRate            []metricsOverviewBucketRate    `json:"ingest_success_rate"`
@@ -2665,6 +2797,7 @@ type metricsOverviewResponse struct {
 	RouteContributionTotal       map[string]int                 `json:"route_contribution_total"`
 	RewriteGainBucketCounts      map[string]int                 `json:"rewrite_gain_bucket_counts"`
 	ErrorTypeTopN                []metricsOverviewErrorType     `json:"error_type_topn"`
+	CostOverview                 []metricsOverviewCostBreakdown `json:"cost_overview"`
 }
 
 type ingestLogDetailResponse struct {
@@ -2790,6 +2923,11 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load retrieve logs for metrics overview", err))
 		return
 	}
+	costTraces, err := model.KBCostTraceDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to load cost traces for metrics overview", err))
+		return
+	}
 
 	ingestJobs, err := model.KBIngestJobDao.ListByCreatedAt(startInclusive, queryEnd, kbID)
 	if err != nil {
@@ -2811,6 +2949,7 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 		RouteContributionTotal:       buildRouteContributionTotal(retrieveLogs),
 		RewriteGainBucketCounts:      buildRewriteGainBucketCounts(retrieveLogs),
 		ErrorTypeTopN:                buildRetrieveErrorTopN(retrieveLogs),
+		CostOverview:                 buildCostOverviewSeries(costTraces, startInclusive, bucketSize, bucketCount),
 	})
 }
 
