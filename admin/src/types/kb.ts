@@ -762,3 +762,21 @@ export interface IndexHealthReport {
   checked_at?: string;
   message?: string;
 }
+
+export interface AuditEvent {
+  id: number;
+  audit_trace_id: string;
+  request_id?: string;
+  operator_id?: number;
+  user_id?: number;
+  kb_id?: number;
+  document_id?: number;
+  action: string;
+  resource_type: string;
+  resource_id?: string;
+  before?: string;
+  after?: string;
+  result?: string;
+  reason?: string;
+  created_at?: string;
+}

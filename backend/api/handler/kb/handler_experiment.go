@@ -92,6 +92,15 @@ func SaveExperiment(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-experiment-" + record.ExperimentID,
+		Action:       "ExperimentChanged",
+		ResourceType: "experiment",
+		ResourceID:   record.ExperimentID,
+		AfterData:    record.CandidateVersion,
+		Result:       record.Status,
+		Reason:       record.Owner,
+	})
 	response.Success(ctx, c, record)
 }
 
@@ -114,6 +123,15 @@ func RollbackExperiment(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-experiment-rollback-" + record.ExperimentID,
+		Action:       "ExperimentChanged",
+		ResourceType: "experiment",
+		ResourceID:   record.ExperimentID,
+		AfterData:    record.Status,
+		Result:       record.Status,
+		Reason:       strings.TrimSpace(req.Reason),
+	})
 	response.Success(ctx, c, record)
 }
 

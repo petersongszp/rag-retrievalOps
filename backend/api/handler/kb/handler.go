@@ -486,6 +486,18 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		response.InternalServerError(ctx, c, "failed to enqueue ingest task")
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: fmt.Sprintf("audit-upload-%d-%d", job.ID, doc.ID),
+		OperatorID:   userID,
+		UserID:       userID,
+		KBID:         kbID,
+		DocumentID:   doc.ID,
+		Action:       "DocumentUploaded",
+		ResourceType: "document",
+		ResourceID:   strconv.FormatUint(doc.ID, 10),
+		AfterData:    fmt.Sprintf(`{"file_name":"%s","job_id":%d}`, doc.FileName, job.ID),
+		Result:       "accepted",
+	})
 
 	response.Success(ctx, c, uploadDocumentResponse{
 		DocumentID: doc.ID,
@@ -785,6 +797,17 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to delete document", err))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: firstNonEmptyString("audit-delete-"+c.Param("document_id"), c.Param("document_id")),
+		OperatorID:   userID,
+		UserID:       userID,
+		DocumentID:   documentID,
+		Action:       "DocumentDeleted",
+		ResourceType: "document",
+		ResourceID:   strconv.FormatUint(documentID, 10),
+		Result:       "deleted",
+		Reason:       getOperationReason(c),
+	})
 
 	if config.Global.RAG.Enabled {
 		if manager, err := milvus.GetMilvusManager(); err == nil {
@@ -2033,6 +2056,10 @@ func computeSnippetOffset(content, queryLower string) int {
 }
 
 func persistRetrieveLog(entry *model.KBRetrieveLog) {
+	if repository.GetDB() == nil {
+		log.Printf("[KB Retrieve Audit] skip persist because db is not initialized request_id=%s", entry.RequestID)
+		return
+	}
 	go func() {
 		if err := model.KBRetrieveLogDao.Create(entry); err != nil {
 			log.Printf("[KB Retrieve Audit] failed to persist retrieve log request_id=%s err=%v", entry.RequestID, err)
@@ -2057,10 +2084,41 @@ func persistCostTrace(entry *model.KBCostTrace) {
 	if entry == nil {
 		return
 	}
+	if repository.GetDB() == nil {
+		log.Printf("[KB Cost] skip persist because db is not initialized cost_trace_id=%s", entry.CostTraceID)
+		return
+	}
 	go func() {
 		if err := model.KBCostTraceDao.Create(entry); err != nil {
 			log.Printf("[KB Cost] failed to persist cost trace cost_trace_id=%s err=%v", entry.CostTraceID, err)
 			metrics.IncError("cost_trace", "persist_failed")
+		}
+	}()
+}
+
+func persistAuditEvent(entry *model.KBAuditEvent) {
+	if entry == nil {
+		return
+	}
+	if repository.GetDB() == nil {
+		log.Printf("[KB Audit] skip persist because db is not initialized audit_trace_id=%s action=%s", entry.AuditTraceID, entry.Action)
+		return
+	}
+	go func() {
+		if err := model.KBAuditEventDao.Create(entry); err != nil {
+			log.Printf("[KB Audit] failed to persist audit event audit_trace_id=%s action=%s err=%v", entry.AuditTraceID, entry.Action, err)
+			metrics.IncError("audit_event", "persist_failed")
+			governance.EnqueueCompensation(
+				"audit_event",
+				firstNonEmptyString(entry.AuditTraceID, entry.RequestID),
+				entry.RequestID,
+				"persist_audit_event_failed",
+				map[string]interface{}{
+					"action":        entry.Action,
+					"resource_type": entry.ResourceType,
+					"resource_id":   entry.ResourceID,
+				},
+			)
 		}
 	}()
 }

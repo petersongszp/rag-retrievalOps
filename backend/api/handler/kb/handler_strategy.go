@@ -8,6 +8,7 @@ import (
 	"interview-agents/internal/config"
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/middleware"
+	"interview-agents/internal/model"
 	"interview-agents/internal/rag/phase3"
 	"interview-agents/internal/rag/phase3admin"
 
@@ -79,6 +80,17 @@ func UpdateStrategyFlag(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-strategy-" + flagKey,
+		OperatorID:   middleware.GetUserID(c),
+		UserID:       middleware.GetUserID(c),
+		Action:       "StrategyChanged",
+		ResourceType: "strategy_flag",
+		ResourceID:   flagKey,
+		AfterData:    state.StrategyVersion,
+		Result:       state.Status,
+		Reason:       strings.TrimSpace(req.Reason),
+	})
 
 	response.Success(ctx, c, state)
 }
@@ -162,6 +174,17 @@ func RollbackStrategy(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-strategy-rollback-" + targetVersion,
+		OperatorID:   middleware.GetUserID(c),
+		UserID:       middleware.GetUserID(c),
+		Action:       "StrategyChanged",
+		ResourceType: "strategy_flag",
+		ResourceID:   targetVersion,
+		AfterData:    result.Status,
+		Result:       result.Status,
+		Reason:       strings.TrimSpace(req.Reason),
+	})
 
 	response.Success(ctx, c, result)
 }

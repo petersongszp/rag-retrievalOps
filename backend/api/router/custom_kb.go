@@ -75,6 +75,7 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 		group.POST("/index-lifecycle/switch/:index_version", kb.SwitchActiveIndex)
 		group.POST("/index-lifecycle/rollback", kb.RollbackActiveIndex)
 		group.GET("/index-lifecycle/operations", kb.ListIndexOperations)
+		group.GET("/audit/events", kb.ListAuditEvents)
 		group.GET("/release/status", kb.GetReleaseStatus)
 		group.GET("/release/summary", kb.GetReleaseSummary)
 		group.POST("/release/rollback", kb.RollbackRelease)

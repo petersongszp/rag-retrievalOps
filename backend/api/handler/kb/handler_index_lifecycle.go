@@ -51,6 +51,15 @@ func RegisterIndexFromConfig(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-index-register-" + record.IndexVersion,
+		Action:       "CollectionRebuilt",
+		ResourceType: "index_registry",
+		ResourceID:   record.IndexVersion,
+		AfterData:    record.CollectionName,
+		Result:       string(record.BuildStatus),
+		Reason:       "register_from_config",
+	})
 	response.Success(ctx, c, record)
 }
 
@@ -77,6 +86,15 @@ func BuildCandidateIndex(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-index-build-" + record.IndexVersion,
+		Action:       "CollectionRebuilt",
+		ResourceType: "index_registry",
+		ResourceID:   record.IndexVersion,
+		AfterData:    record.CollectionName,
+		Result:       string(record.BuildStatus),
+		Reason:       strings.TrimSpace(req.Reason),
+	})
 	response.Success(ctx, c, record)
 }
 
@@ -111,6 +129,15 @@ func SwitchActiveIndex(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-index-switch-" + result.ActiveIndexVersion,
+		Action:       "CollectionSwitched",
+		ResourceType: "index_registry",
+		ResourceID:   result.ActiveIndexVersion,
+		AfterData:    result.PreviousIndexVersion,
+		Result:       "switched",
+		Reason:       getOperationReason(c),
+	})
 	response.Success(ctx, c, result)
 }
 
@@ -123,6 +150,15 @@ func RollbackActiveIndex(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewValidationError(err.Error()))
 		return
 	}
+	persistAuditEvent(&model.KBAuditEvent{
+		AuditTraceID: "audit-index-rollback-" + result.ActiveIndexVersion,
+		Action:       "CollectionSwitched",
+		ResourceType: "index_registry",
+		ResourceID:   result.ActiveIndexVersion,
+		AfterData:    result.PreviousIndexVersion,
+		Result:       "rolled_back",
+		Reason:       getOperationReason(c),
+	})
 	response.Success(ctx, c, result)
 }
 
