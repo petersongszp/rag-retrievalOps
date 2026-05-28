@@ -58,6 +58,7 @@ type SearchMetrics struct {
 	OriginalQuery          string
 	RewriteQuery           string
 	FinalQuery             string
+	QueryType              string
 	DenseQuery             string
 	SparseQuery            string
 	RouteRewriteDense      string
@@ -84,6 +85,7 @@ type SearchMetrics struct {
 	CitationCheckLatencyMs int64
 	EvidenceGateError      string
 	CitationCheckError     string
+	ExperimentGroup        string
 }
 
 // SearchResult bundles documents with observable metrics.

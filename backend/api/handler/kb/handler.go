@@ -27,6 +27,7 @@ import (
 	"interview-agents/internal/model"
 	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
+	"interview-agents/internal/rag/experiment"
 	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/release"
 	"interview-agents/internal/repository"
@@ -881,6 +882,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.Success(ctx, c, retrieveResponse{RequestID: requestID, Items: []retrieveItem{}})
 		return
 	}
+	experimentDecision := experiment.Decide(&config.Global, userID, middleware.GetUserRole(c), kbIDs, req.Query, requestID, topK)
+	queryType := firstNonEmptyString(experimentDecision.Override.QueryType, "general")
 
 	collection := config.Global.Milvus.GetCollection("knowledge")
 	if collection == "" {
@@ -901,14 +904,25 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchErr    error
 	)
 	if useHybrid {
-		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, &retrieval.RetrieveOptions{
+		searchOpts := &retrieval.RetrieveOptions{
 			TopK:             topK,
 			Collection:       collection,
 			KBScope:          "global",
 			ActiveGlobalKBID: activeGlobalKBID,
 			RequestID:        requestID,
 			OriginalQuery:    req.Query,
-		})
+			QueryType:        queryType,
+			ExperimentID:     experimentDecision.ExperimentID,
+			StrategyVersion:  experimentDecision.CandidateVersion,
+			ReleaseID:        experimentDecision.ExperimentID,
+		}
+		if experimentDecision.Matched {
+			searchOpts.ForceRewriteOff = experimentDecision.Override.ForceRewriteOff
+			if experimentDecision.Override.CandidateTopK > 0 {
+				searchOpts.CandidateTopK = experimentDecision.Override.CandidateTopK
+			}
+		}
+		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, searchOpts)
 	} else {
 		searchResult, searchErr = retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
 	}
@@ -919,6 +933,18 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	searchResult.Metrics.Strategy = releaseDecision.Strategy
 	searchResult.Metrics.ReleaseStage = releaseDecision.Stage
 	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
+	searchResult.Metrics.QueryType = queryType
+	searchResult.Metrics.ExperimentID = experimentDecision.ExperimentID
+	searchResult.Metrics.StrategyVersion = searchResult.Metrics.StrategyVersion
+	switch experimentDecision.Group {
+	case experiment.GroupCandidate, experiment.GroupShadow:
+		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.CandidateVersion, searchResult.Metrics.StrategyVersion)
+	case experiment.GroupBaseline:
+		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.BaselineVersion, searchResult.Metrics.StrategyVersion)
+	}
+	searchResult.Metrics.ReleaseID = firstNonEmptyString(experimentDecision.ExperimentID, searchResult.Metrics.ReleaseID)
+	searchResult.Metrics.ExperimentGroup = experimentDecision.Group
+	searchResult.Metrics.CollectionVersion = firstNonEmptyString(searchResult.Metrics.CollectionVersion, collection)
 	if searchResult.Metrics.RetrieverVersion == "" {
 		if useHybrid {
 			searchResult.Metrics.RetrieverVersion = retrieval.HybridRetrieverVersion
@@ -934,6 +960,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		retrieveLog := &model.KBRetrieveLog{
 			RequestID:              requestID,
 			ExperimentID:           searchResult.Metrics.ExperimentID,
+			ExperimentGroup:        searchResult.Metrics.ExperimentGroup,
 			StrategyVersion:        searchResult.Metrics.StrategyVersion,
 			IndexVersion:           searchResult.Metrics.IndexVersion,
 			CollectionVersion:      searchResult.Metrics.CollectionVersion,
@@ -950,6 +977,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			FinalTopK:              searchResult.Metrics.FinalTopK,
 			TokenBudget:            searchResult.Metrics.TokenBudget,
 			ContextTokens:          searchResult.Metrics.ContextTokens,
+			QueryType:              queryType,
 			TruncateReason:         searchResult.Metrics.TruncateReason,
 			Rewrite:                searchResult.Metrics.RewriteQuery,
 			RewriteStrategy:        searchResult.Metrics.RewriteStrategy,
@@ -1100,6 +1128,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	retrieveLog := &model.KBRetrieveLog{
 		RequestID:              requestID,
 		ExperimentID:           searchMetrics.ExperimentID,
+		ExperimentGroup:        searchMetrics.ExperimentGroup,
 		StrategyVersion:        searchMetrics.StrategyVersion,
 		IndexVersion:           searchMetrics.IndexVersion,
 		CollectionVersion:      searchMetrics.CollectionVersion,
@@ -1116,6 +1145,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		FinalTopK:              searchMetrics.FinalTopK,
 		TokenBudget:            searchMetrics.TokenBudget,
 		ContextTokens:          searchMetrics.ContextTokens,
+		QueryType:              queryType,
 		TruncateReason:         searchMetrics.TruncateReason,
 		Rewrite:                firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
 		RewriteStrategy:        firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),

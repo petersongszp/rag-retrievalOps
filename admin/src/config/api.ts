@@ -60,4 +60,10 @@ export const KB_ADMIN_API = {
   GET_STRATEGY_IMPACT: `${API_BASE_URL}/admin/kb/strategy/impact`,
   GET_STRATEGY_GATES: `${API_BASE_URL}/admin/kb/strategy/gates`,
   LIST_STRATEGY_OPERATIONS: `${API_BASE_URL}/admin/kb/strategy/operations`,
+
+  LIST_EXPERIMENTS: `${API_BASE_URL}/admin/kb/experiments`,
+  SAVE_EXPERIMENT: `${API_BASE_URL}/admin/kb/experiments`,
+  ROLLBACK_EXPERIMENT: (experimentId: string) =>
+    `${API_BASE_URL}/admin/kb/experiments/${experimentId}/rollback`,
+  GET_EXPERIMENT_SUMMARY: `${API_BASE_URL}/admin/kb/experiments/summary`,
 };

@@ -103,6 +103,7 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	log := KBRetrieveLog{
 		RequestID:              "test-req-001",
 		ExperimentID:           "exp-001",
+		ExperimentGroup:        "candidate",
 		StrategyVersion:        "p3-baseline-v1",
 		IndexVersion:           "idx-v1",
 		CollectionVersion:      "col-v1",
@@ -115,6 +116,7 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 		Expr:                   `metadata["user_id"] == 1`,
 		TopK:                   5,
 		ContextTokens:          256,
+		QueryType:              "entity",
 		Rewrite:                "",
 		Routes:                 "dense",
 		Collection:             "knowledge",
@@ -140,7 +142,7 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	if log.RequestID != "test-req-001" {
 		t.Errorf("RequestID = %q, want %q", log.RequestID, "test-req-001")
 	}
-	if log.ExperimentID != "exp-001" || log.StrategyVersion != "p3-baseline-v1" {
+	if log.ExperimentID != "exp-001" || log.ExperimentGroup != "candidate" || log.StrategyVersion != "p3-baseline-v1" {
 		t.Errorf("unexpected governance trace fields: %+v", log)
 	}
 	if log.RetrieverVersion != "v1" {

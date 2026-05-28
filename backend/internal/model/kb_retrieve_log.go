@@ -38,6 +38,7 @@ type (
 		ID                     uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
 		RequestID              string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
 		ExperimentID           string               `json:"experiment_id" gorm:"size:128;index"`
+		ExperimentGroup        string               `json:"experiment_group" gorm:"size:32;index"`
 		StrategyVersion        string               `json:"strategy_version" gorm:"size:128;index"`
 		IndexVersion           string               `json:"index_version" gorm:"size:128"`
 		CollectionVersion      string               `json:"collection_version" gorm:"size:128"`
@@ -53,8 +54,9 @@ type (
 		CandidateTopK          int                  `json:"candidate_topk"`
 		FinalTopK              int                  `json:"final_topk"`
 		TokenBudget            int                  `json:"token_budget"`
-		TruncateReason         string               `json:"truncate_reason" gorm:"size:64"`
 		ContextTokens          int                  `json:"context_tokens"`
+		QueryType              string               `json:"query_type" gorm:"size:64;index"`
+		TruncateReason         string               `json:"truncate_reason" gorm:"size:64"`
 		Rewrite                string               `json:"rewrite" gorm:"size:1000"`
 		RewriteStrategy        string               `json:"rewrite_strategy" gorm:"size:255"`
 		RewriteApplied         bool                 `json:"rewrite_applied"`

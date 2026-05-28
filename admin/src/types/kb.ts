@@ -76,9 +76,12 @@ export interface RetrieveResponse {
 export interface KBRetrieveLog {
   id: number;
   request_id: string;
+  experiment_id?: string;
+  experiment_group?: 'baseline' | 'candidate' | 'shadow';
   user_id: number;
   kb_ids: string;
   query: string;
+  query_type?: string;
   final_query?: string;
   expr?: string;
   top_k: number;
@@ -646,4 +649,49 @@ export interface StrategyRollbackResult {
   started_at?: string;
   finished_at?: string;
   error_msg?: string;
+}
+
+export type ExperimentStrategyType = 'rewrite' | 'candidate_topk';
+export type ExperimentStatus = 'draft' | 'running' | 'paused' | 'stopped' | 'finished';
+export type ExperimentEnvironment = 'all' | 'internal' | 'external';
+export type ExperimentGroup = 'baseline' | 'candidate' | 'shadow';
+
+export interface ExperimentConfig {
+  experiment_id: string;
+  experiment_name: string;
+  strategy_type: ExperimentStrategyType;
+  baseline_version: string;
+  candidate_version: string;
+  traffic_ratio: number;
+  target_kb_ids?: number[];
+  target_query_types?: string[];
+  target_environment?: ExperimentEnvironment;
+  shadow_mode: boolean;
+  start_time?: string;
+  end_time?: string;
+  owner?: string;
+  status?: ExperimentStatus;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface ExperimentSummary {
+  experiment_id: string;
+  experiment_name: string;
+  strategy_type: ExperimentStrategyType;
+  status?: ExperimentStatus;
+  shadow_mode: boolean;
+  traffic_ratio: number;
+  baseline_version: string;
+  candidate_version: string;
+  start_time?: string;
+  end_time?: string;
+  owner?: string;
+  baseline_sample_size?: number;
+  candidate_sample_size?: number;
+  shadow_sample_size?: number;
+  avg_duration_delta_ms?: number;
+  avg_context_tokens_delta?: number;
+  error_rate_delta?: number;
+  updated_at?: string;
 }
