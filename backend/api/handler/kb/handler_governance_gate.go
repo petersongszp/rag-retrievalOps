@@ -2,6 +2,7 @@ package kb
 
 import (
 	"context"
+	"strings"
 	"time"
 
 	"interview-agents/api/response"
@@ -14,19 +15,25 @@ import (
 )
 
 type governanceGateResponse struct {
-	GeneratedAt               time.Time `json:"generated_at"`
-	Passed                    bool      `json:"passed"`
-	CostGuardPassed           bool      `json:"cost_guard_passed"`
-	AuditGuardPassed          bool      `json:"audit_guard_passed"`
-	IndexGuardPassed          bool      `json:"index_guard_passed"`
-	ExperimentGuardPassed     bool      `json:"experiment_guard_passed"`
-	ReleaseGuardPassed        bool      `json:"release_guard_passed"`
-	CollectionHealthScore     float64   `json:"collection_health_score"`
-	AuditCoverageRate         float64   `json:"audit_coverage_rate"`
-	RollbackSuccessRate       float64   `json:"rollback_success_rate"`
-	StrategyRegressionRate    float64   `json:"strategy_regression_rate"`
-	CostPer1KQueries          float64   `json:"cost_per_1k_queries"`
-	Risks                     []string  `json:"risks"`
+	GeneratedAt            time.Time `json:"generated_at"`
+	Passed                 bool      `json:"passed"`
+	CostGuardPassed        bool      `json:"cost_guard_passed"`
+	AuditGuardPassed       bool      `json:"audit_guard_passed"`
+	IndexGuardPassed       bool      `json:"index_guard_passed"`
+	ExperimentGuardPassed  bool      `json:"experiment_guard_passed"`
+	ReleaseGuardPassed     bool      `json:"release_guard_passed"`
+	CollectionHealthScore  float64   `json:"collection_health_score"`
+	AuditCoverageRate      float64   `json:"audit_coverage_rate"`
+	RollbackSuccessRate    float64   `json:"rollback_success_rate"`
+	StrategyRegressionRate float64   `json:"strategy_regression_rate"`
+	CostPer1KQueries       float64   `json:"cost_per_1k_queries"`
+	Risks                  []string  `json:"risks"`
+}
+
+type governanceGateCheckResponse struct {
+	TargetType string                 `json:"target_type"`
+	TargetID   string                 `json:"target_id"`
+	Summary    governanceGateResponse `json:"summary"`
 }
 
 func GetGovernanceGate(ctx context.Context, c *app.RequestContext) {
@@ -142,4 +149,19 @@ func GetGovernanceGate(ctx context.Context, c *app.RequestContext) {
 		Risks:                  risks,
 	}
 	response.Success(ctx, c, resp)
+}
+
+func CheckGovernanceGates(ctx context.Context, c *app.RequestContext) {
+	if !requireAdmin(ctx, c) {
+		return
+	}
+	targetType := strings.TrimSpace(string(c.Query("target_type")))
+	targetID := strings.TrimSpace(string(c.Query("target_id")))
+	recorder := newGateRecorder()
+	summary := recorder.compute(ctx, c)
+	response.Success(ctx, c, governanceGateCheckResponse{
+		TargetType: targetType,
+		TargetID:   targetID,
+		Summary:    summary,
+	})
 }
