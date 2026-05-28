@@ -8,11 +8,16 @@ import (
 )
 
 const (
+	FlagCostGovernance   = "RAG_ENABLE_COST_GOVERNANCE"
+	FlagAuditCenter      = "RAG_ENABLE_AUDIT_CENTER"
+	FlagVectorOps        = "RAG_ENABLE_VECTOR_OPS"
+	FlagGovernanceAlerts = "RAG_ENABLE_GOVERNANCE_ALERTS"
+	FlagWeeklyReport     = "RAG_ENABLE_WEEKLY_REPORT"
+
 	FlagExperimentPlatform    = "RAG_ENABLE_EXPERIMENT_PLATFORM"
 	FlagIndexLifecycle        = "RAG_ENABLE_INDEX_LIFECYCLE"
 	FlagCostDashboard         = "RAG_ENABLE_COST_DASHBOARD"
 	FlagComplianceAudit       = "RAG_ENABLE_COMPLIANCE_AUDIT"
-	FlagWeeklyReport          = "RAG_ENABLE_WEEKLY_REPORT"
 	FlagMilvusOpsTooling      = "RAG_ENABLE_MILVUS_OPS_TOOLING"
 	FlagCollectionSwitchGuard = "RAG_ENABLE_COLLECTION_SWITCH_GUARD"
 )
@@ -27,14 +32,41 @@ const (
 	MetricCollectionHealth   = "collection_health_score"
 )
 
+const (
+	ActionKBCreate           = "kb_create"
+	ActionDocumentUpload     = "document_upload"
+	ActionDocumentDelete     = "document_delete"
+	ActionIngestRetry        = "ingest_retry"
+	ActionIngestCancel       = "ingest_cancel"
+	ActionRetrieveQuery      = "retrieve_query"
+	ActionTraceView          = "trace_view"
+	ActionEvalRunCreate      = "eval_run_create"
+	ActionReportExport       = "report_export"
+	ActionStrategyFlagUpdate = "strategy_flag_update"
+	ActionStrategyRollback   = "strategy_rollback"
+	ActionCollectionRebuild  = "collection_rebuild"
+	ActionCollectionSwitch   = "collection_switch"
+	ActionCollectionRollback = "collection_rollback"
+	ActionAlertAck           = "alert_ack"
+	ActionAlertResolve       = "alert_resolve"
+	ActionPermissionChange   = "permission_change"
+)
+
+const (
+	CostAPIPrefix       = "/api/admin/kb/cost"
+	VectorAPIPrefix     = "/api/admin/kb/vector"
+	AuditAPIPrefix      = "/api/admin/kb/audit"
+	AlertsAPIPrefix     = "/api/admin/kb/alerts"
+	ReportsAPIPrefix    = "/api/admin/kb/reports"
+	GovernanceAPIPrefix = "/api/admin/kb/governance"
+)
+
 var phase4FeatureFlags = []string{
-	FlagExperimentPlatform,
-	FlagIndexLifecycle,
-	FlagCostDashboard,
-	FlagComplianceAudit,
+	FlagCostGovernance,
+	FlagAuditCenter,
+	FlagVectorOps,
+	FlagGovernanceAlerts,
 	FlagWeeklyReport,
-	FlagMilvusOpsTooling,
-	FlagCollectionSwitchGuard,
 }
 
 var phase4MetricKeys = []string{

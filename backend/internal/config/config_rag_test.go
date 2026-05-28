@@ -301,3 +301,50 @@ Embedding:
 		t.Fatalf("expected phase4 governance flags to load from env, got %+v", cfg.RAG.FeatureFlags)
 	}
 }
+
+func TestLoadConfig_Phase4CanonicalFeatureFlagsFromEnv(t *testing.T) {
+	tempDir := t.TempDir()
+	basePath := filepath.Join(tempDir, "config.yaml")
+
+	baseConfig := `
+rag:
+  enabled: true
+  environment: dev
+Milvus:
+  Address: localhost:19530
+  CollectionName: documents
+Embedding:
+  APIKey: test-key
+  Model: bge-m3
+  BaseURL: https://example.com/v1
+  Dimensions: 1024
+`
+	if err := os.WriteFile(basePath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write base config: %v", err)
+	}
+
+	t.Setenv("RAG_ENABLE_COST_GOVERNANCE", "true")
+	t.Setenv("RAG_ENABLE_AUDIT_CENTER", "true")
+	t.Setenv("RAG_ENABLE_VECTOR_OPS", "true")
+	t.Setenv("RAG_ENABLE_GOVERNANCE_ALERTS", "true")
+	t.Setenv("RAG_ENABLE_WEEKLY_REPORT", "true")
+
+	cfg, err := LoadConfig(basePath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !cfg.RAG.FeatureFlags.EnableCostGovernance ||
+		!cfg.RAG.FeatureFlags.EnableAuditCenter ||
+		!cfg.RAG.FeatureFlags.EnableVectorOps ||
+		!cfg.RAG.FeatureFlags.EnableGovernanceAlerts ||
+		!cfg.RAG.FeatureFlags.EnableWeeklyReport {
+		t.Fatalf("expected canonical phase4 flags to load from env, got %+v", cfg.RAG.FeatureFlags)
+	}
+	if !cfg.RAG.FeatureFlags.EnableCostDashboard ||
+		!cfg.RAG.FeatureFlags.EnableComplianceAudit ||
+		!cfg.RAG.FeatureFlags.EnableMilvusOpsTooling ||
+		!cfg.RAG.FeatureFlags.EnableExperimentPlatform {
+		t.Fatalf("expected canonical flags to normalize legacy aliases, got %+v", cfg.RAG.FeatureFlags)
+	}
+}

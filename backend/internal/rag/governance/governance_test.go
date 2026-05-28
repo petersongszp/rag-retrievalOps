@@ -4,11 +4,11 @@ import "testing"
 
 func TestFeatureFlagKeys(t *testing.T) {
 	keys := FeatureFlagKeys()
-	if len(keys) != 7 {
-		t.Fatalf("FeatureFlagKeys len = %d, want 7", len(keys))
+	if len(keys) != 5 {
+		t.Fatalf("FeatureFlagKeys len = %d, want 5", len(keys))
 	}
-	if !IsFeatureFlag(FlagComplianceAudit) {
-		t.Fatal("expected FlagComplianceAudit to be managed")
+	if !IsFeatureFlag(FlagAuditCenter) {
+		t.Fatal("expected FlagAuditCenter to be managed")
 	}
 	if IsFeatureFlag("RAG_UNKNOWN_PHASE4_FLAG") {
 		t.Fatal("unexpected unknown phase4 flag")

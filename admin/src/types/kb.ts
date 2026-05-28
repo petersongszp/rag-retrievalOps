@@ -781,6 +781,115 @@ export interface AuditEvent {
   created_at?: string;
 }
 
+export type GovernanceAlertCategory = 'quality' | 'stability' | 'cost' | 'capacity' | 'audit';
+
+export type GovernanceFeatureFlag =
+  | 'RAG_ENABLE_COST_GOVERNANCE'
+  | 'RAG_ENABLE_AUDIT_CENTER'
+  | 'RAG_ENABLE_VECTOR_OPS'
+  | 'RAG_ENABLE_GOVERNANCE_ALERTS'
+  | 'RAG_ENABLE_WEEKLY_REPORT';
+
+export interface ContractGapAware {
+  contract_gaps?: string[];
+}
+
+export interface CostSummary extends ContractGapAware {
+  range: string;
+  total_estimated_cost?: number;
+  currency?: string;
+  cost_per_1k_queries?: number;
+  embedding_cost?: number;
+  llm_cost?: number;
+  rerank_cost?: number;
+  vector_storage_cost?: number;
+  index_rebuild_cost?: number;
+  avg_context_tokens?: number;
+  avg_candidate_count?: number;
+  high_cost_query_count?: number;
+}
+
+export interface CostTimeseriesPoint extends ContractGapAware {
+  bucket: string;
+  total_estimated_cost?: number;
+  cost_per_1k_queries?: number;
+  embedding_cost?: number;
+  llm_cost?: number;
+  rerank_cost?: number;
+  vector_storage_cost?: number;
+  index_rebuild_cost?: number;
+  avg_context_tokens?: number;
+  avg_candidate_count?: number;
+}
+
+export interface CostDimensionBreakdown extends ContractGapAware {
+  key: string;
+  label?: string;
+  total_estimated_cost?: number;
+  cost_per_1k_queries?: number;
+  request_count?: number;
+  share?: number;
+}
+
+export interface HighCostQuery extends ContractGapAware {
+  request_id: string;
+  kb_id?: number;
+  query_type?: string;
+  strategy_version?: string;
+  experiment_id?: string;
+  model_name?: string;
+  estimated_cost?: number;
+  currency?: string;
+  context_tokens?: number;
+  candidate_count?: number;
+  final_count?: number;
+  created_at?: string;
+}
+
+export interface AuditEventDetail extends AuditEvent, ContractGapAware {
+  actor_name?: string;
+  ip?: string;
+  user_agent?: string;
+  sensitive_fields_masked?: string[];
+  trace_id?: string;
+}
+
+export interface GovernanceAlert extends ContractGapAware {
+  id: string;
+  title: string;
+  category: GovernanceAlertCategory;
+  severity: 'low' | 'medium' | 'high' | 'critical';
+  status: 'open' | 'acknowledged' | 'resolved';
+  kb_id?: number;
+  target_type?: string;
+  target_id?: string;
+  summary?: string;
+  metric_key?: string;
+  metric_value?: number;
+  threshold?: number;
+  request_id?: string;
+  trace_id?: string;
+  created_at?: string;
+  acknowledged_at?: string;
+  resolved_at?: string;
+}
+
+export interface GovernanceGateSummary extends ContractGapAware {
+  generated_at?: string;
+  passed: boolean;
+  cost_guard_passed?: boolean;
+  audit_guard_passed?: boolean;
+  index_guard_passed?: boolean;
+  experiment_guard_passed?: boolean;
+  release_guard_passed?: boolean;
+  collection_health_score?: number;
+  audit_coverage_rate?: number;
+  rollback_success_rate?: number;
+  strategy_regression_rate?: number;
+  cost_per_1k_queries?: number;
+  risks?: string[];
+}
+
 export interface WeeklyReport {
   generated_at?: string;
   window_start?: string;
@@ -793,4 +902,5 @@ export interface WeeklyReport {
   audit_events?: AuditEvent[];
   risks?: string[];
   next_actions?: string[];
+  contract_gaps?: string[];
 }

@@ -78,4 +78,36 @@ export const KB_ADMIN_API = {
   LIST_INDEX_OPERATIONS: `${API_BASE_URL}/admin/kb/index-lifecycle/operations`,
   LIST_AUDIT_EVENTS: `${API_BASE_URL}/admin/kb/audit/events`,
   GET_WEEKLY_REPORT: `${API_BASE_URL}/admin/kb/weekly-report`,
+
+  COST_SUMMARY: `${API_BASE_URL}/admin/kb/cost/summary`,
+  COST_TIMESERIES: `${API_BASE_URL}/admin/kb/cost/timeseries`,
+  COST_BY_KB: `${API_BASE_URL}/admin/kb/cost/by-kb`,
+  COST_BY_STRATEGY: `${API_BASE_URL}/admin/kb/cost/by-strategy`,
+  COST_BY_MODEL: `${API_BASE_URL}/admin/kb/cost/by-model`,
+  HIGH_COST_QUERIES: `${API_BASE_URL}/admin/kb/cost/high-cost-queries`,
+
+  LIST_VECTOR_COLLECTIONS: `${API_BASE_URL}/admin/kb/vector/collections`,
+  GET_VECTOR_COLLECTION_HEALTH: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/health`,
+  REBUILD_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/rebuild`,
+  SWITCH_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/switch`,
+  ROLLBACK_VECTOR_COLLECTION: (name: string) =>
+    `${API_BASE_URL}/admin/kb/vector/collections/${name}/rollback`,
+  LIST_VECTOR_OPERATIONS: `${API_BASE_URL}/admin/kb/vector/operations`,
+
+  LIST_ALERTS: `${API_BASE_URL}/admin/kb/alerts`,
+  ACK_ALERT: (alertId: string | number) => `${API_BASE_URL}/admin/kb/alerts/${alertId}/ack`,
+  RESOLVE_ALERT: (alertId: string | number) =>
+    `${API_BASE_URL}/admin/kb/alerts/${alertId}/resolve`,
+
+  LIST_WEEKLY_REPORTS: `${API_BASE_URL}/admin/kb/reports/weekly`,
+  GET_WEEKLY_REPORT_DETAIL: (reportId: string | number) =>
+    `${API_BASE_URL}/admin/kb/reports/weekly/${reportId}`,
+  EXPORT_WEEKLY_REPORT: (reportId: string | number) =>
+    `${API_BASE_URL}/admin/kb/reports/weekly/${reportId}/export`,
+
+  LIST_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates`,
+  CHECK_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates/check`,
 };
