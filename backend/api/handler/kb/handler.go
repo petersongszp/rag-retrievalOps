@@ -492,7 +492,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		UserID:       userID,
 		KBID:         kbID,
 		DocumentID:   doc.ID,
-		Action:       "DocumentUploaded",
+		Action:       governance.ActionDocumentUpload,
 		ResourceType: "document",
 		ResourceID:   strconv.FormatUint(doc.ID, 10),
 		AfterData:    fmt.Sprintf(`{"file_name":"%s","job_id":%d}`, doc.FileName, job.ID),
@@ -801,8 +801,9 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		AuditTraceID: firstNonEmptyString("audit-delete-"+c.Param("document_id"), c.Param("document_id")),
 		OperatorID:   userID,
 		UserID:       userID,
+		KBID:         mustDocumentKBID(documentID),
 		DocumentID:   documentID,
-		Action:       "DocumentDeleted",
+		Action:       governance.ActionDocumentDelete,
 		ResourceType: "document",
 		ResourceID:   strconv.FormatUint(documentID, 10),
 		Result:       "deleted",
@@ -2172,6 +2173,17 @@ func firstKBIDFromCSV(raw string) uint64 {
 		}
 	}
 	return 0
+}
+
+func mustDocumentKBID(documentID uint64) uint64 {
+	if documentID == 0 {
+		return 0
+	}
+	doc, err := model.KBDocumentDao.GetByID(documentID)
+	if err != nil || doc == nil {
+		return 0
+	}
+	return doc.KbID
 }
 
 func classifyRetrieveResultStatus(metricsStatus string) model.RetrieveResultStatus {

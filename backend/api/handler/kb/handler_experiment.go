@@ -10,6 +10,7 @@ import (
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/model"
 	"interview-agents/internal/rag/experiment"
+	"interview-agents/internal/rag/governance"
 
 	"github.com/cloudwego/hertz/pkg/app"
 )
@@ -94,12 +95,12 @@ func SaveExperiment(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-experiment-" + record.ExperimentID,
-		Action:       "ExperimentChanged",
+		Action:       governance.ActionExperimentUpdate,
 		ResourceType: "experiment",
 		ResourceID:   record.ExperimentID,
 		AfterData:    record.CandidateVersion,
 		Result:       record.Status,
-		Reason:       record.Owner,
+		Reason:       strings.TrimSpace(req.Owner),
 	})
 	response.Success(ctx, c, record)
 }
@@ -125,7 +126,7 @@ func RollbackExperiment(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-experiment-rollback-" + record.ExperimentID,
-		Action:       "ExperimentChanged",
+		Action:       governance.ActionExperimentRollback,
 		ResourceType: "experiment",
 		ResourceID:   record.ExperimentID,
 		AfterData:    record.Status,

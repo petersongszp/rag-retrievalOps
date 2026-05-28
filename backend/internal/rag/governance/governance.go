@@ -44,6 +44,8 @@ const (
 	ActionReportExport       = "report_export"
 	ActionStrategyFlagUpdate = "strategy_flag_update"
 	ActionStrategyRollback   = "strategy_rollback"
+	ActionExperimentUpdate   = "experiment_update"
+	ActionExperimentRollback = "experiment_rollback"
 	ActionCollectionRebuild  = "collection_rebuild"
 	ActionCollectionSwitch   = "collection_switch"
 	ActionCollectionRollback = "collection_rollback"

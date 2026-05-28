@@ -11,6 +11,7 @@ import (
 	"interview-agents/internal/middleware"
 	"interview-agents/internal/milvus/benchmark"
 	"interview-agents/internal/model"
+	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/indexlifecycle"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -53,7 +54,7 @@ func RegisterIndexFromConfig(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-index-register-" + record.IndexVersion,
-		Action:       "CollectionRebuilt",
+		Action:       governance.ActionCollectionRebuild,
 		ResourceType: "index_registry",
 		ResourceID:   record.IndexVersion,
 		AfterData:    record.CollectionName,
@@ -88,7 +89,7 @@ func BuildCandidateIndex(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-index-build-" + record.IndexVersion,
-		Action:       "CollectionRebuilt",
+		Action:       governance.ActionCollectionRebuild,
 		ResourceType: "index_registry",
 		ResourceID:   record.IndexVersion,
 		AfterData:    record.CollectionName,
@@ -131,7 +132,7 @@ func SwitchActiveIndex(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-index-switch-" + result.ActiveIndexVersion,
-		Action:       "CollectionSwitched",
+		Action:       governance.ActionCollectionSwitch,
 		ResourceType: "index_registry",
 		ResourceID:   result.ActiveIndexVersion,
 		AfterData:    result.PreviousIndexVersion,
@@ -152,7 +153,7 @@ func RollbackActiveIndex(ctx context.Context, c *app.RequestContext) {
 	}
 	persistAuditEvent(&model.KBAuditEvent{
 		AuditTraceID: "audit-index-rollback-" + result.ActiveIndexVersion,
-		Action:       "CollectionSwitched",
+		Action:       governance.ActionCollectionRollback,
 		ResourceType: "index_registry",
 		ResourceID:   result.ActiveIndexVersion,
 		AfterData:    result.PreviousIndexVersion,

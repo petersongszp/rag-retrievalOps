@@ -9,6 +9,7 @@ import (
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/middleware"
 	"interview-agents/internal/model"
+	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/phase3"
 	"interview-agents/internal/rag/phase3admin"
 
@@ -84,7 +85,7 @@ func UpdateStrategyFlag(ctx context.Context, c *app.RequestContext) {
 		AuditTraceID: "audit-strategy-" + flagKey,
 		OperatorID:   middleware.GetUserID(c),
 		UserID:       middleware.GetUserID(c),
-		Action:       "StrategyChanged",
+		Action:       governance.ActionStrategyFlagUpdate,
 		ResourceType: "strategy_flag",
 		ResourceID:   flagKey,
 		AfterData:    state.StrategyVersion,
@@ -178,7 +179,7 @@ func RollbackStrategy(ctx context.Context, c *app.RequestContext) {
 		AuditTraceID: "audit-strategy-rollback-" + targetVersion,
 		OperatorID:   middleware.GetUserID(c),
 		UserID:       middleware.GetUserID(c),
-		Action:       "StrategyChanged",
+		Action:       governance.ActionStrategyRollback,
 		ResourceType: "strategy_flag",
 		ResourceID:   targetVersion,
 		AfterData:    result.Status,

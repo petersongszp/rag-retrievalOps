@@ -89,6 +89,8 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 		group.POST("/vector/collections/:name/rollback", kb.RollbackVectorCollection)
 		group.GET("/vector/operations", kb.ListVectorOperations)
 		group.GET("/audit/events", kb.ListAuditEvents)
+		group.GET("/audit/events/:event_id", kb.GetAuditEventDetail)
+		group.POST("/audit/events/export", kb.ExportAuditEvents)
 		group.GET("/reports/weekly", kb.GetWeeklyReport)
 		group.GET("/weekly-report", kb.GetWeeklyReport)
 		group.GET("/governance/gates", kb.GetGovernanceGate)
