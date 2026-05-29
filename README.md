@@ -290,6 +290,8 @@ Browser
 
 ## 快速启动（推荐 Docker）
 
+环境配置说明文档见：[docs/env-config-guide.md](/d:/Bear/mianshiba-eino-overseas/docs/env-config-guide.md)。
+
 ### 1) 准备环境
 
 - Docker Desktop（Windows/macOS）或 Docker Engine（Linux）

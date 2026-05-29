@@ -152,7 +152,7 @@ Embedding:
   # 高级配置
   Timeout: 30s # 请求超时时间
   RetryTimes: 3 # 重试次数
-  Dimensions: 2048 # 智谱 embedding-3 输出维度
+  Dimensions: 2048 # DashScope text-embedding-v4 输出维度（显式指定 2048）
   User: '' # 用户标识（可选）
 
 # Milvus 向量数据库配置

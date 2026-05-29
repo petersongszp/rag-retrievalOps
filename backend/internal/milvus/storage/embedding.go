@@ -92,10 +92,22 @@ func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedd
 		return nil, fmt.Errorf("openai provider requires APIKey")
 	}
 
+	var dimensions *int
+	if cfg.Dimensions > 0 {
+		dimensions = &cfg.Dimensions
+	}
+
+	var user *string
+	if cfg.User != "" {
+		user = &cfg.User
+	}
+
 	openaiCfg := &einoopenai.EmbeddingConfig{
-		Model:   cfg.Model,
-		APIKey:  cfg.APIKey,
-		BaseURL: cfg.BaseURL,
+		Model:      cfg.Model,
+		APIKey:     cfg.APIKey,
+		BaseURL:    cfg.BaseURL,
+		Dimensions: dimensions,
+		User:       user,
 	}
 	return einoopenai.NewEmbedder(ctx, openaiCfg)
 }
