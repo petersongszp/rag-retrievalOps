@@ -79,6 +79,12 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	manager.EmbeddingService = embeddingService
 	log.Printf("Embedding Service initialized: Model=%s", cfg.Embedding.Model)
 
+	knowledgeCollection, resolvedDim, err := resolveKnowledgeCollection(ctx, cfg, milvusClient, embeddingService)
+	if err != nil {
+		return nil, fmt.Errorf("failed to resolve knowledge collection: %w", err)
+	}
+	log.Printf("Milvus knowledge collection resolved: Collection=%s, Dimension=%d", knowledgeCollection, resolvedDim)
+
 	// 3. 初始化文档分割器
 	log.Println("Initializing Document Splitter...")
 	splitterConfig := &recursive.Config{
@@ -99,22 +105,22 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	log.Println("Initializing Indexer Service...")
 	indexerConfig := &milvusIndexer.IndexerConfig{
 		Client:     milvusClient,
-		Collection: cfg.Milvus.CollectionName,
+		Collection: knowledgeCollection,
 		Embedding:  embeddingService.GetEmbedder(),
 	}
-	indexerService, err := storage.NewIndexerServiceWithDimension(ctx, indexerConfig, cfg.Embedding.Dimensions)
+	indexerService, err := storage.NewIndexerServiceWithDimension(ctx, indexerConfig, resolvedDim)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize indexer service: %w", err)
 	}
 	manager.IndexerService = indexerService
 	log.Printf("Indexer Service initialized: Collection=%s, Dimension=%d",
-		cfg.Milvus.CollectionName, cfg.Embedding.Dimensions)
+		knowledgeCollection, resolvedDim)
 
 	// 5. 初始化检索器服务
 	log.Println("Initializing Retriever Service...")
 	retrieverConfig := &milvusRetriever.RetrieverConfig{
 		Client:       milvusClient,
-		Collection:   cfg.Milvus.CollectionName,
+		Collection:   knowledgeCollection,
 		VectorField:  "vector",
 		OutputFields: []string{"id", "content", "metadata"},
 		MetricType:   entity.MetricType(cfg.Milvus.MetricType),
