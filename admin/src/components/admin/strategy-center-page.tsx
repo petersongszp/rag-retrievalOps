@@ -161,10 +161,17 @@ export function StrategyCenterPage() {
         title: '策略',
         dataIndex: 'label',
         key: 'label',
+        width: 220,
         render: (_, record) => (
-          <Space direction="vertical" size={0}>
-            <Text strong>{record.label || record.flag_key}</Text>
-            <Text type="secondary" className="text-xs">
+          <Space direction="vertical" size={2} className="min-w-0">
+            <Text
+              strong
+              ellipsis={{ tooltip: record.label || record.flag_key }}
+              className="block min-w-0 leading-tight"
+            >
+              {record.label || record.flag_key}
+            </Text>
+            <Text type="secondary" className="block text-xs leading-tight" ellipsis>
               {record.flag_key}
             </Text>
           </Space>
@@ -490,7 +497,7 @@ export function StrategyCenterPage() {
         />
       ) : null}
 
-      <div className="grid gap-6 xl:grid-cols-[360px_minmax(0,1fr)]">
+      <div className="grid gap-6 xl:grid-cols-[minmax(440px,520px)_minmax(0,1fr)]">
         <Card title="Feature Flags">
           {flagsLoading ? (
             <div className="flex justify-center py-10">
@@ -501,10 +508,12 @@ export function StrategyCenterPage() {
           ) : (
             <Table<StrategyFlag>
               rowKey="flag_key"
+              className="strategy-flags-table"
               size="small"
               columns={flagColumns}
               dataSource={flags}
               pagination={false}
+              scroll={{ x: 560 }}
               rowSelection={{
                 type: 'radio',
                 selectedRowKeys: selectedFlagKey ? [selectedFlagKey] : [],
