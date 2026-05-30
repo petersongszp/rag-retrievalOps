@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AppstoreOutlined,
@@ -289,6 +289,12 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
   };
 
+  const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(pathname));
+
+  const handleOpenChange = (keys: string[]) => {
+    setOpenKeys(keys);
+  };
+
   return (
     <Layout className="min-h-screen">
       <Sider width={256} theme="light" className="border-r border-slate-200">
@@ -311,7 +317,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
             <Menu
               mode="inline"
               selectedKeys={[getSelectedNavKey(pathname)]}
-              openKeys={getOpenKeys(pathname)}
+              openKeys={openKeys}
+              onOpenChange={handleOpenChange}
               items={menuItems}
             />
           </div>
