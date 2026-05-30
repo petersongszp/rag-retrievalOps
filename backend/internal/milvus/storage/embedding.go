@@ -3,6 +3,7 @@ package storage
 import (
 	"context"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/cloudwego/eino-ext/components/embedding/ark"
@@ -16,6 +17,11 @@ import (
 type EmbeddingService struct {
 	embedder embedding.Embedder
 	model    string
+}
+
+type batchingEmbedder struct {
+	embedder     embedding.Embedder
+	maxBatchSize int
 }
 
 // NewEmbeddingService 根据配置中的 Provider 字段创建对应的 Embedding 服务
@@ -44,6 +50,13 @@ func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*Emb
 	}
 	if err != nil {
 		return nil, err
+	}
+
+	if batchSize := resolveEmbeddingBatchSize(cfg); batchSize > 0 {
+		embedder = &batchingEmbedder{
+			embedder:     embedder,
+			maxBatchSize: batchSize,
+		}
 	}
 
 	return &EmbeddingService{
@@ -137,4 +150,46 @@ func (s *EmbeddingService) GetEmbedder() embedding.Embedder {
 // Close 关闭服务
 func (s *EmbeddingService) Close() error {
 	return nil
+}
+
+func (b *batchingEmbedder) EmbedStrings(ctx context.Context, texts []string, opts ...embedding.Option) ([][]float64, error) {
+	if b == nil || b.embedder == nil {
+		return nil, fmt.Errorf("embedder is nil")
+	}
+	if b.maxBatchSize <= 0 || len(texts) <= b.maxBatchSize {
+		return b.embedder.EmbedStrings(ctx, texts, opts...)
+	}
+
+	result := make([][]float64, 0, len(texts))
+	for start := 0; start < len(texts); start += b.maxBatchSize {
+		end := start + b.maxBatchSize
+		if end > len(texts) {
+			end = len(texts)
+		}
+		vectors, err := b.embedder.EmbedStrings(ctx, texts[start:end], opts...)
+		if err != nil {
+			return nil, fmt.Errorf("failed to embed batch %d-%d: %w", start, end, err)
+		}
+		if len(vectors) != end-start {
+			return nil, fmt.Errorf("embedding batch %d-%d returned %d vectors, expected %d", start, end, len(vectors), end-start)
+		}
+		result = append(result, vectors...)
+	}
+	return result, nil
+}
+
+func resolveEmbeddingBatchSize(cfg *config.EmbeddingConfig) int {
+	if cfg == nil {
+		return 0
+	}
+	if cfg.BatchSize > 0 {
+		return cfg.BatchSize
+	}
+
+	provider := strings.ToLower(strings.TrimSpace(cfg.Provider))
+	baseURL := strings.ToLower(strings.TrimSpace(cfg.BaseURL))
+	if (provider == "" || provider == "openai") && strings.Contains(baseURL, "dashscope.aliyuncs.com") {
+		return 10
+	}
+	return 0
 }
