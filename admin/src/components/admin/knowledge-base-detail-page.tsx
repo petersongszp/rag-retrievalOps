@@ -64,6 +64,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     isLoading: isBasesLoading,
     error,
     isPermissionDenied,
+    deleteBase,
     setSelectedBaseId,
   } = useKnowledgeBaseContext();
   const [documents, setDocuments] = useState<KBDocument[]>([]);
@@ -73,6 +74,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const [fileList, setFileList] = useState<UploadFile[]>([]);
   const [uploadLoading, setUploadLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
+  const [deleteLoading, setDeleteLoading] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const base = useMemo(
@@ -434,6 +436,33 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
             <Button icon={<SearchOutlined />}>打开检索实验室</Button>
           </Link>
           <Button
+            danger
+            icon={<DeleteOutlined />}
+            loading={deleteLoading}
+            disabled={isPermissionDenied}
+            title={isPermissionDenied ? 'Delete knowledge base is unavailable without permission' : undefined}
+            onClick={() => {
+              Modal.confirm({
+                title: 'Delete Knowledge Base',
+                content: `Delete "${base?.name || `#${kbId}`}" and its bound vector collection?`,
+                okText: 'Delete',
+                cancelText: 'Cancel',
+                okButtonProps: { danger: true },
+                onOk: async () => {
+                  try {
+                    setDeleteLoading(true);
+                    await deleteBase(kbId);
+                    router.push('/knowledge-bases');
+                  } finally {
+                    setDeleteLoading(false);
+                  }
+                },
+              });
+            }}
+          >
+            Delete KB
+          </Button>
+          <Button
             type="primary"
             icon={<UploadOutlined />}
             disabled={isPermissionDenied}
@@ -453,6 +482,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               {base?.status ?? '未知'}
             </Tag>
           </Text>
+          <Text>Collection: {base?.vector_collection || 'Contract gap'}</Text>
           <Text>描述：{base?.description || '暂无描述。'}</Text>
           <Text>创建时间：{base?.created_at ?? '未知'}</Text>
         </Space>

@@ -16,13 +16,14 @@ var KBKnowledgeBaseDao _KBKnowledgeBase
 type (
 	_KBKnowledgeBase struct{}
 	KBKnowledgeBase  struct {
-		ID          uint64                `json:"id" gorm:"primaryKey;autoIncrement"`
-		UserID      uint                  `json:"user_id" gorm:"index;not null"`
-		Name        string                `json:"name" gorm:"size:255;not null"`
-		Description string                `json:"description" gorm:"size:1000"`
-		Status      KBKnowledgeBaseStatus `json:"status" gorm:"size:20;not null;default:'active';index"`
-		CreatedAt   time.Time             `json:"created_at" gorm:"autoCreateTime:milli"`
-		UpdatedAt   time.Time             `json:"updated_at" gorm:"autoUpdateTime:milli"`
+		ID               uint64                `json:"id" gorm:"primaryKey;autoIncrement"`
+		UserID           uint                  `json:"user_id" gorm:"index;not null"`
+		Name             string                `json:"name" gorm:"size:255;not null"`
+		Description      string                `json:"description" gorm:"size:1000"`
+		VectorCollection string                `json:"vector_collection" gorm:"size:255;index"`
+		Status           KBKnowledgeBaseStatus `json:"status" gorm:"size:20;not null;default:'active';index"`
+		CreatedAt        time.Time             `json:"created_at" gorm:"autoCreateTime:milli"`
+		UpdatedAt        time.Time             `json:"updated_at" gorm:"autoUpdateTime:milli"`
 	}
 )
 
@@ -73,6 +74,18 @@ func (d *_KBKnowledgeBase) GetByName(name string) (*KBKnowledgeBase, error) {
 	return &kb, nil
 }
 
+func (d *_KBKnowledgeBase) GetByVectorCollection(collection string) (*KBKnowledgeBase, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	var kb KBKnowledgeBase
+	err := getDB().Where("vector_collection = ?", collection).First(&kb).Error
+	if err != nil {
+		return nil, err
+	}
+	return &kb, nil
+}
+
 func (d *_KBKnowledgeBase) List(page, pageSize int) ([]*KBKnowledgeBase, int64, error) {
 	if getDB == nil {
 		panic("getDB function not initialized, please call model.SetDBGetter first")
@@ -115,6 +128,21 @@ func (d *_KBKnowledgeBase) ListByUserID(userID uint, page, pageSize int) ([]*KBK
 		return nil, 0, err
 	}
 	return list, total, nil
+}
+
+func (d *_KBKnowledgeBase) ListByIDs(ids []uint64) ([]*KBKnowledgeBase, error) {
+	if getDB == nil {
+		panic("getDB function not initialized, please call model.SetDBGetter first")
+	}
+	if len(ids) == 0 {
+		return []*KBKnowledgeBase{}, nil
+	}
+
+	var list []*KBKnowledgeBase
+	if err := getDB().Where("id IN ?", ids).Find(&list).Error; err != nil {
+		return nil, err
+	}
+	return list, nil
 }
 
 func (d *_KBKnowledgeBase) ListIDsByStatus(status KBKnowledgeBaseStatus) ([]uint64, error) {

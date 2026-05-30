@@ -284,7 +284,13 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
 
+	collection, err := resolveKnowledgeBaseCollectionForIngest(payload.KBID, payload.Collection)
+	if err != nil {
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to resolve knowledge base collection", err)
+	}
+
 	baseMeta := milvus.NewKBDocumentMetadata(payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
+	baseMeta.Extra["collection"] = collection
 	doc := &schema.Document{
 		Content:  rawText,
 		MetaData: baseMeta.ToMap(),
@@ -308,7 +314,15 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		}
 	}
 
-	if _, err := manager.GetIndexerService().Store(ctx, chunks); err != nil {
+	indexerService := manager.GetIndexerService()
+	if strings.TrimSpace(collection) != "" {
+		indexerService, err = manager.NewIndexerServiceForCollection(ctx, collection)
+		if err != nil {
+			return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to create collection-specific indexer", err)
+		}
+	}
+
+	if _, err := indexerService.Store(ctx, chunks); err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
 		return 0, buildKnowledgeIngestError(errorCode, "failed to store chunks to milvus", err)
 	}
@@ -479,6 +493,7 @@ func runKnowledgeRetryCompensation(ctx context.Context) {
 			JobID:      job.ID,
 			FilePath:   doc.StoragePath,
 			FileType:   doc.FileType,
+			Collection: resolveKnowledgeBaseCollectionNameForRetry(job.KbID),
 		}
 
 		if err := PublishKnowledgeIngest(ctx, payload); err != nil {
@@ -687,6 +702,39 @@ func extractKnowledgeRawText(ctx context.Context, filePath, fileType string) (st
 	default:
 		return "", fmt.Errorf("unsupported file type: %s", normalizedType)
 	}
+}
+
+func resolveKnowledgeBaseCollectionForIngest(kbID uint64, preferred string) (string, error) {
+	collection := strings.TrimSpace(preferred)
+	if collection != "" {
+		return collection, nil
+	}
+
+	kb, err := model.KBKnowledgeBaseDao.GetByID(kbID)
+	if err != nil {
+		return "", err
+	}
+
+	collection = strings.TrimSpace(kb.VectorCollection)
+	if collection != "" {
+		return collection, nil
+	}
+
+	collection = milvus.DefaultKnowledgeBaseCollectionName(kbID)
+	if err := model.KBKnowledgeBaseDao.UpdateByID(kbID, map[string]interface{}{
+		"vector_collection": collection,
+	}); err != nil {
+		return "", err
+	}
+	return collection, nil
+}
+
+func resolveKnowledgeBaseCollectionNameForRetry(kbID uint64) string {
+	collection, err := resolveKnowledgeBaseCollectionForIngest(kbID, "")
+	if err != nil {
+		return ""
+	}
+	return collection
 }
 
 func extractTextFromPDF(filePath string) (string, error) {

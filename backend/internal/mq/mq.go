@@ -50,6 +50,7 @@ type KnowledgeIngestPayload struct {
 	JobID           uint64 `json:"job_id"`
 	FilePath        string `json:"file_path"`
 	FileType        string `json:"file_type"`
+	Collection      string `json:"collection,omitempty"`
 }
 
 // MessageQueue defines queue behavior.

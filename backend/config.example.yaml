@@ -152,6 +152,7 @@ Embedding:
   Timeout: 30s # 请求超时时间
   RetryTimes: 3 # 重试次数
   Dimensions: 2560 # 输出向量维度（修改为实际模型输出维度）
+  BatchSize: 10 # DashScope/OpenAI 兼容 embedding 单次最多输入数（按供应商限制调整）
   User: '' # 用户标识（可选）
 
 # Milvus 向量数据库配置

@@ -84,11 +84,11 @@ rag:
     enable_prod_guard: false
     enable_ingest_retry: false
     enable_retrieve_audit: true
-    enable_hybrid_retrieval: false
-    enable_query_rewrite: false
-    enable_dynamic_topk: false
-    enable_advanced_rerank: false
-    enable_parent_child_retrieval: false
+    enable_hybrid_retrieval: true
+    enable_query_rewrite: true
+    enable_dynamic_topk: true
+    enable_advanced_rerank: true
+    enable_parent_child_retrieval: true
     enable_strategic_topk: false
     enable_evidence_refusal: false
     enable_citation_consistency: false
@@ -153,6 +153,7 @@ Embedding:
   Timeout: 30s # 请求超时时间
   RetryTimes: 3 # 重试次数
   Dimensions: 2048 # DashScope text-embedding-v4 输出维度（显式指定 2048）
+  BatchSize: 10 # DashScope text-embedding-v4 单次最多 10 条输入
   User: '' # 用户标识（可选）
 
 # Milvus 向量数据库配置

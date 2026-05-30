@@ -1566,6 +1566,7 @@ type EmbeddingConfig struct {
 	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
 	RetryTimes int           `yaml:"RetryTimes"` // 重试次数
 	Dimensions int           `yaml:"Dimensions"` // 输出向量维度
+	BatchSize  int           `yaml:"BatchSize"`  // 单次 embedding 请求最大文本数，0=使用默认策略
 	User       string        `yaml:"User"`       // 用户标识
 }
 
