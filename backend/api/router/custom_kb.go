@@ -24,6 +24,7 @@ func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
 	group.GET("/dashboard/stats", kb.GetDashboardStats)
 	group.POST("/bases", kb.CreateKnowledgeBase)
 	group.GET("/bases", kb.ListKnowledgeBases)
+	group.DELETE("/bases/:kb_id", kb.DeleteKnowledgeBase)
 	group.POST("/documents/upload", kb.UploadDocument)
 	group.GET("/documents", kb.ListDocuments)
 	group.GET("/jobs", kb.ListJobs)

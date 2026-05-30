@@ -20,6 +20,7 @@ type KnowledgeBaseContextValue = {
   isPermissionDenied: boolean;
   refreshBases: () => Promise<KnowledgeBase[]>;
   createBase: (payload: CreateKnowledgeBasePayload) => Promise<KnowledgeBase>;
+  deleteBase: (id: number) => Promise<void>;
   setSelectedBaseId: (id?: number | null) => void;
 };
 
@@ -133,6 +134,29 @@ export function KnowledgeBaseProvider({ children }: { children: React.ReactNode 
     [refreshBases]
   );
 
+  const deleteBase = useCallback(
+    async (id: number): Promise<void> => {
+      await apiClient.delete(KB_ADMIN_API.DELETE_BASE(id));
+      message.success('知识库已删除');
+      const items = await refreshBases();
+      setSelectedBaseIdState((previous) => {
+        if (previous !== id) {
+          return previous;
+        }
+        const next = items[0]?.id ?? null;
+        if (typeof window !== 'undefined') {
+          if (next === null) {
+            window.localStorage.removeItem(STORAGE_KEY);
+          } else {
+            window.localStorage.setItem(STORAGE_KEY, String(next));
+          }
+        }
+        return next;
+      });
+    },
+    [refreshBases]
+  );
+
   useEffect(() => {
     void refreshBases();
   }, [refreshBases]);
@@ -151,9 +175,10 @@ export function KnowledgeBaseProvider({ children }: { children: React.ReactNode 
       isPermissionDenied,
       refreshBases,
       createBase,
+      deleteBase,
       setSelectedBaseId,
     }),
-    [bases, selectedBase, isLoading, error, isPermissionDenied, refreshBases, createBase]
+    [bases, selectedBase, isLoading, error, isPermissionDenied, refreshBases, createBase, deleteBase]
   );
 
   return <KnowledgeBaseContext.Provider value={value}>{children}</KnowledgeBaseContext.Provider>;

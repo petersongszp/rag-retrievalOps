@@ -6,6 +6,7 @@ export const KB_ADMIN_API = {
 
   CREATE_BASE: `${API_BASE_URL}/admin/kb/bases`,
   LIST_BASES: `${API_BASE_URL}/admin/kb/bases`,
+  DELETE_BASE: (id: number | string) => `${API_BASE_URL}/admin/kb/bases/${id}`,
 
   UPLOAD_DOCUMENT: `${API_BASE_URL}/admin/kb/documents/upload`,
   LIST_DOCUMENTS: `${API_BASE_URL}/admin/kb/documents`,

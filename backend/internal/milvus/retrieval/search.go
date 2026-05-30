@@ -218,6 +218,9 @@ func SearchWithExprAndMetrics(
 				doc.MetaData["score"] = result.Scores[i]
 			}
 			doc.MetaData["retriever_version"] = DenseRetrieverVersion
+			if collectionName != "" {
+				doc.MetaData["collection"] = collectionName
+			}
 			source := ensureSourceMetadata(doc)
 			source["route"] = routeDense
 			source["retriever_version"] = DenseRetrieverVersion

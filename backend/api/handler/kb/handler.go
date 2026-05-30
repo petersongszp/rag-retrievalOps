@@ -334,6 +334,10 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to create knowledge base", err))
 		return
 	}
+	if _, err := ensureKnowledgeBaseCollectionAssigned(kb); err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to assign knowledge base collection", err))
+		return
+	}
 
 	response.Success(ctx, c, kb)
 }
@@ -349,6 +353,12 @@ func ListKnowledgeBases(ctx context.Context, c *app.RequestContext) {
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list knowledge bases", err))
 		return
+	}
+	for _, item := range items {
+		if _, err := ensureKnowledgeBaseCollectionAssigned(item); err != nil {
+			response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to resolve knowledge base collection", err))
+			return
+		}
 	}
 
 	response.Success(ctx, c, knowledgeBaseListResponse{
@@ -372,8 +382,14 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := mustKnowledgeBaseExist(kbID); err != nil {
+	kb, err := mustKnowledgeBaseExist(kbID)
+	if err != nil {
 		response.ErrorFromErr(ctx, c, err)
+		return
+	}
+	collection, err := ensureKnowledgeBaseCollectionAssigned(kb)
+	if err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to resolve knowledge base collection", err))
 		return
 	}
 
@@ -468,6 +484,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		JobID:           job.ID,
 		FilePath:        storagePath,
 		FileType:        fileType,
+		Collection:      collection,
 	})
 	if publishErr != nil {
 		log.Printf("[KB Upload] failed to publish ingest message: job_id=%d document_id=%d kb_id=%d user_id=%d err=%v",
@@ -675,6 +692,7 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 		JobID:           job.ID,
 		FilePath:        doc.StoragePath,
 		FileType:        doc.FileType,
+		Collection:      firstNonEmptyString(resolveKnowledgeBaseCollectionByID(job.KbID), ""),
 	}); err != nil {
 		errMsg := "failed to enqueue retry task: " + err.Error()
 		_, _ = model.KBIngestJobDao.UpdateStatusFrom(jobID, model.KBIngestJobStatusFailed, errMsg, model.KBIngestJobStatusRetrying)
@@ -785,7 +803,8 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := model.KBDocumentDao.GetByID(documentID); err != nil {
+	doc, err := model.KBDocumentDao.GetByID(documentID)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			response.NotFound(ctx, c, "document not found")
 			return
@@ -812,10 +831,7 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 
 	if config.Global.RAG.Enabled {
 		if manager, err := milvus.GetMilvusManager(); err == nil {
-			collection := config.Global.Milvus.GetCollection("knowledge")
-			if collection == "" {
-				collection = config.Global.Milvus.CollectionName
-			}
+			collection := resolveKnowledgeBaseCollectionByID(doc.KbID)
 			if err := manager.DeleteDocumentVectors(ctx, collection, documentID); err != nil {
 				log.Printf("[KB Delete] failed to delete vectors from Milvus: document_id=%d collection=%s err=%v", documentID, collection, err)
 			}
@@ -909,13 +925,12 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	experimentDecision := experiment.Decide(&config.Global, userID, middleware.GetUserRole(c), kbIDs, req.Query, requestID, topK)
 	queryType := firstNonEmptyString(experimentDecision.Override.QueryType, "general")
 
-	collection := config.Global.Milvus.GetCollection("knowledge")
-	if collection == "" {
-		collection = config.Global.Milvus.CollectionName
-	}
-	activeGlobalKBID := uint64(0)
-	if len(kbIDs) > 0 {
-		activeGlobalKBID = kbIDs[0]
+	targets, collection, err := buildKnowledgeBaseRetrieveTargets(kbIDs)
+	if err != nil {
+		metricsStatus = "error"
+		metricsErrorCode = "db_error"
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to resolve knowledge base collections", err))
+		return
 	}
 	expr := buildKBFilterExpr(kbIDs)
 	retrieveTimeout := resolveRetrieveTimeout()
@@ -927,28 +942,43 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchResult *retrieval.SearchResult
 		searchErr    error
 	)
-	if useHybrid {
-		searchOpts := &retrieval.RetrieveOptions{
-			TopK:             topK,
-			Collection:       collection,
-			KBScope:          "global",
-			ActiveGlobalKBID: activeGlobalKBID,
-			RequestID:        requestID,
-			OriginalQuery:    req.Query,
-			QueryType:        queryType,
-			ExperimentID:     experimentDecision.ExperimentID,
-			StrategyVersion:  experimentDecision.CandidateVersion,
-			ReleaseID:        experimentDecision.ExperimentID,
-		}
-		if experimentDecision.Matched {
-			searchOpts.ForceRewriteOff = experimentDecision.Override.ForceRewriteOff
-			if experimentDecision.Override.CandidateTopK > 0 {
-				searchOpts.CandidateTopK = experimentDecision.Override.CandidateTopK
-			}
-		}
-		searchResult, searchErr = manager.GetHybridRetriever().SearchWithMetrics(retrieveCtx, req.Query, searchOpts)
+	if len(targets) == 1 {
+		searchResult, searchErr = searchKnowledgeBaseTarget(
+			retrieveCtx,
+			manager,
+			retriever,
+			useHybrid,
+			req.Query,
+			topK,
+			targets[0],
+			requestID,
+			queryType,
+			experimentDecision,
+		)
 	} else {
-		searchResult, searchErr = retriever.RetrieveKnowledgeWithMetrics(retrieveCtx, req.Query, activeGlobalKBID, topK, collection)
+		targetResults := make([]*retrieval.SearchResult, 0, len(targets))
+		for _, target := range targets {
+			result, err := searchKnowledgeBaseTarget(
+				retrieveCtx,
+				manager,
+				retriever,
+				useHybrid,
+				req.Query,
+				topK,
+				target,
+				requestID,
+				queryType,
+				experimentDecision,
+			)
+			if err != nil {
+				searchErr = err
+				break
+			}
+			targetResults = append(targetResults, result)
+		}
+		if searchErr == nil {
+			searchResult = mergeKnowledgeBaseSearchResults(targetResults, collection, topK, useHybrid)
+		}
 	}
 	durationMs := time.Since(start).Milliseconds()
 	if searchResult == nil {

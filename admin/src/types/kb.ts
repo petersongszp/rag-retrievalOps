@@ -2,6 +2,7 @@ export interface KnowledgeBase {
   id: number;
   name: string;
   description?: string;
+  vector_collection?: string;
   status: string;
   created_at: string;
   updated_at: string;

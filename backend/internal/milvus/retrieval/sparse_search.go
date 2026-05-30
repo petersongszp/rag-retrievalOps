@@ -145,6 +145,9 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 			}
 			doc.MetaData["route"] = "sparse"
 			doc.MetaData["retriever_version"] = hybridRetrieverVersion
+			if collection != "" {
+				doc.MetaData["collection"] = collection
+			}
 			source := ensureSourceMetadata(doc)
 			source["route"] = routeSparse
 			source["retriever_version"] = hybridRetrieverVersion
@@ -184,6 +187,9 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		doc.MetaData["sparse_score"] = hit.Score
 		doc.MetaData["score"] = hit.Score
 		doc.MetaData["retriever_version"] = hybridRetrieverVersion
+		if collection != "" {
+			doc.MetaData["collection"] = collection
+		}
 		source := ensureSourceMetadata(doc)
 		source["route"] = routeSparse
 		source["retriever_version"] = hybridRetrieverVersion

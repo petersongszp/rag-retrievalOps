@@ -3,8 +3,13 @@
 import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ArrowRightOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
-import { Alert, Button, Card, Empty, Space, Spin, Tag, Typography } from 'antd';
+import {
+  ArrowRightOutlined,
+  DeleteOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+} from '@ant-design/icons';
+import { Alert, Button, Card, Empty, Modal, Space, Spin, Tag, Typography } from 'antd';
 import { CreateKnowledgeBaseModal } from './create-knowledge-base-modal';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
@@ -12,10 +17,20 @@ const { Paragraph, Text, Title } = Typography;
 
 export function KnowledgeBasesPage() {
   const router = useRouter();
-  const { bases, selectedBase, isLoading, error, isPermissionDenied, refreshBases, createBase, setSelectedBaseId } =
-    useKnowledgeBaseContext();
+  const {
+    bases,
+    selectedBase,
+    isLoading,
+    error,
+    isPermissionDenied,
+    refreshBases,
+    createBase,
+    deleteBase,
+    setSelectedBaseId,
+  } = useKnowledgeBaseContext();
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [deletingBaseId, setDeletingBaseId] = useState<number | null>(null);
 
   return (
     <div className="space-y-6">
@@ -25,7 +40,7 @@ export function KnowledgeBasesPage() {
             知识库
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            此路由是知识库列表与创建流程的新入口，已在 L0 阶段冻结。
+            这里展示知识库列表，并提供创建、删除和进入详情页的操作入口。
           </Paragraph>
         </div>
         <Space>
@@ -83,6 +98,34 @@ export function KnowledgeBasesPage() {
                       >
                         打开
                       </Button>,
+                      <Button
+                        key="delete"
+                        danger
+                        type="link"
+                        icon={<DeleteOutlined />}
+                        loading={deletingBaseId === base.id}
+                        disabled={isPermissionDenied}
+                        title={isPermissionDenied ? '权限不足，无法删除知识库' : undefined}
+                        onClick={() => {
+                          Modal.confirm({
+                            title: '删除知识库',
+                            content: `确认删除 "${base.name}"？这会同时清理它绑定的向量 collection 和已上传文档。`,
+                            okText: '确认删除',
+                            cancelText: '取消',
+                            okButtonProps: { danger: true },
+                            onOk: async () => {
+                              try {
+                                setDeletingBaseId(base.id);
+                                await deleteBase(base.id);
+                              } finally {
+                                setDeletingBaseId(null);
+                              }
+                            },
+                          });
+                        }}
+                      >
+                        删除
+                      </Button>,
                     ]}
                   >
                     <Space direction="vertical" size={10} className="w-full">
@@ -95,6 +138,9 @@ export function KnowledgeBasesPage() {
                         </Tag>
                       </div>
                       <Text type="secondary">{base.description || '暂无描述。'}</Text>
+                      <Text type="secondary">
+                        Collection: {base.vector_collection || 'Contract gap'}
+                      </Text>
                       <Text type="secondary">创建时间：{base.created_at}</Text>
                       <Link href={`/knowledge-bases/${base.id}`}>查看详情</Link>
                     </Space>
