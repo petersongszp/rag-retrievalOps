@@ -15,7 +15,10 @@ import (
 	"interview-agents/api/router"
 	"interview-agents/internal/config"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/mq"
 	"interview-agents/internal/repository"
+
+	ragmq "interview-agents/internal/ragplatform/mq"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -64,7 +67,29 @@ func main() {
 	}
 	log.Println("[RAG-Server] Redis initialized")
 
-	// 5. 初始化 Milvus Manager（如果 RAG 启用）
+	// 5. 初始化 MQ（只启动 RAG 消费者）
+	var messageQueue mq.MessageQueue
+	var consumerCtx context.Context
+	var cancelConsumer context.CancelFunc
+	redisClient := repository.GetRedis()
+	if redisClient != nil {
+		log.Println("[RAG-Server] Initializing MQ...")
+		messageQueue = mq.NewRedisStreamQueue(redisClient, "rag-consumer-group", fmt.Sprintf("rag-consumer-%s", cfg.Host))
+		mq.InitMessageQueue(messageQueue)
+
+		ragConsumer := ragmq.NewRAGConsumer(messageQueue)
+		consumerCtx, cancelConsumer = context.WithCancel(context.Background())
+		go func() {
+			if err := ragConsumer.Start(consumerCtx); err != nil {
+				log.Printf("[RAG-Server] RAG consumer stopped: %v", err)
+			}
+		}()
+		log.Println("[RAG-Server] RAG MQ consumer started")
+	} else {
+		log.Println("[RAG-Server] Warning: Redis client not available, skipping MQ initialization")
+	}
+
+	// 6. 初始化 Milvus Manager（如果 RAG 启用）
 	var milvusManager *milvus.MilvusManager
 	if cfg.RAG.Enabled {
 		log.Println("[RAG-Server] Initializing Milvus Manager...")
@@ -81,7 +106,7 @@ func main() {
 		log.Println("[RAG-Server] RAG disabled, skipping Milvus initialization")
 	}
 
-	// 6. 创建 Hertz 服务
+	// 7. 创建 Hertz 服务
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	h := server.Default(
 		server.WithHostPorts(addr),
@@ -89,10 +114,10 @@ func main() {
 		server.WithWriteTimeout(3*time.Second),
 	)
 
-	// 7. 只注册 RAG 路由（不注册面试、支付等业务路由）
+	// 8. 只注册 RAG 路由（不注册面试、支付等业务路由）
 	router.RegisterRAGRoutes(h)
 
-	// 8. 健康检查
+	// 9. 健康检查
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "ok"})
 	})
@@ -108,7 +133,7 @@ func main() {
 		c.JSON(http.StatusOK, map[string]string{"status": status})
 	})
 
-	// 9. 优雅关闭
+	// 10. 优雅关闭
 	quit := make(chan os.Signal, 1)
 	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
 
@@ -121,6 +146,17 @@ func main() {
 
 	<-quit
 	log.Println("[RAG-Server] Shutting down...")
+
+	// 关闭 MQ 消费者
+	if cancelConsumer != nil {
+		cancelConsumer()
+		log.Println("[RAG-Server] MQ consumer stopped")
+	}
+	if messageQueue != nil {
+		if err := messageQueue.Close(); err != nil {
+			log.Printf("[RAG-Server] Warning: Failed to close MQ: %v", err)
+		}
+	}
 
 	// 关闭 Milvus
 	if milvusManager != nil {
