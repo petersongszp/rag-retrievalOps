@@ -91,6 +91,78 @@ func migrateDatabase() error {
 	)
 }
 
+// InitDatabaseOnly 初始化数据库连接（不执行迁移）
+// 供独立服务（如 rag-server）使用，迁移由调用方自行控制
+func InitDatabaseOnly(dbConfig config.DatabaseConfig) error {
+	logLevel := logger.Info
+
+	db, err := gorm.Open(mysql.Open(dbConfig.DSN), &gorm.Config{
+		Logger: logger.Default.LogMode(logLevel),
+	})
+	if err != nil {
+		return err
+	}
+
+	sqlDB, err := db.DB()
+	if err != nil {
+		return err
+	}
+
+	sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)
+	sqlDB.SetMaxOpenConns(dbConfig.MaxOpenConns)
+	if dbConfig.ConnMaxLifetime != "" {
+		connMaxLifetime, err := time.ParseDuration(dbConfig.ConnMaxLifetime)
+		if err == nil {
+			sqlDB.SetConnMaxLifetime(connMaxLifetime)
+		}
+	}
+
+	DB = db
+	model.SetDBGetter(GetDB)
+
+	log.Println("数据库连接成功（未执行迁移）")
+	return nil
+}
+
+// MigrateRAGDatabase 只迁移 RAG 相关表
+func MigrateRAGDatabase(db *gorm.DB) error {
+	return db.AutoMigrate(
+		// RAG 核心表
+		&model.KBKnowledgeBase{},
+		&model.KBDocument{},
+		&model.KBIngestJob{},
+		&model.KBJobOperationLog{},
+		&model.KBIndexRegistry{},
+		&model.KBIndexOperationLog{},
+		&model.KBRetrieveLog{},
+		&model.KBCostTrace{},
+		&model.KBAuditEvent{},
+		&model.KBEvalDataset{},
+		&model.KBEvalCase{},
+		&model.KBEvalRun{},
+	)
+}
+
+// MigrateBusinessDatabase 只迁移业务表（面试、简历、支付等）
+func MigrateBusinessDatabase(db *gorm.DB) error {
+	return db.AutoMigrate(
+		&model.User{},
+		&model.UserModel{},
+		&model.InterviewRecord{},
+		&model.InterviewDialogue{},
+		&model.InterviewEvaluation{},
+		&model.AnswerReport{},
+		&model.Resume{},
+		&model.PredictionRecord{},
+		&model.PredictionQuestion{},
+		&model.PaymentOrder{},
+		&model.PaymentAttempt{},
+		&model.Subscription{},
+		&model.PaymentEvent{},
+		&model.PaymentCallback{},
+	)
+}
+
 // GetDB 获取数据库实例
 func GetDB() *gorm.DB {
 	return DB

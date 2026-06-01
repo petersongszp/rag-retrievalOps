@@ -100,6 +100,11 @@ type (
 		DurationMs             int64                `json:"duration_ms"`
 		TimeoutMs              int64                `json:"timeout_ms"`
 		DebugTrace             string               `json:"-" gorm:"type:longtext"`
+		// 平台化字段（L5 新增）
+		TenantID               uint64               `json:"tenant_id" gorm:"index"`
+		AppID                  string               `json:"app_id" gorm:"index;size:64"`
+		APIKeyID               uint64               `json:"api_key_id" gorm:"index"`
+		SourceAPI              string               `json:"source_api" gorm:"size:32"` // "v1" 或 "legacy_kb"
 		CreatedAt              time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
 	}
 )

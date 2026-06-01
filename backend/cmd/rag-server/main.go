@@ -46,12 +46,16 @@ func main() {
 	}
 	log.Printf("[RAG-Server] Config loaded: env=%s rag.enabled=%t", cfg.RAG.Environment, cfg.RAG.Enabled)
 
-	// 3. 初始化数据库
+	// 3. 初始化数据库（不执行全量迁移）
 	log.Println("[RAG-Server] Initializing database...")
-	if err := repository.InitDatabase(cfg.Database); err != nil {
+	if err := repository.InitDatabaseOnly(cfg.Database); err != nil {
 		log.Fatalf("[RAG-Server] Failed to init database: %v", err)
 	}
-	log.Println("[RAG-Server] Database initialized")
+	// 只迁移 RAG 相关表
+	if err := repository.MigrateRAGDatabase(repository.GetDB()); err != nil {
+		log.Fatalf("[RAG-Server] Failed to migrate RAG database: %v", err)
+	}
+	log.Println("[RAG-Server] Database initialized (RAG tables only)")
 
 	// 4. 初始化 Redis
 	log.Println("[RAG-Server] Initializing Redis...")
