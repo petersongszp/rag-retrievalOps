@@ -252,10 +252,7 @@ func cloneDocumentWithMetadata(doc *schema.Document) *schema.Document {
 		Content: doc.Content,
 	}
 	if doc.MetaData != nil {
-		cloned.MetaData = make(map[string]interface{}, len(doc.MetaData))
-		for key, value := range doc.MetaData {
-			cloned.MetaData[key] = value
-		}
+		cloned.MetaData = cloneMetadataMap(doc.MetaData)
 	}
 	return cloned
 }

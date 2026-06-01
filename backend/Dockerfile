@@ -29,7 +29,8 @@ FROM alpine:3.18
 
 # 安装运行时依赖
 # 安装运行时依赖 (包含 OCR 工具链: poppler-utils 用于 PDF 转图片, tesseract-ocr 用于文字识别)
-RUN apk add --no-cache ca-certificates tzdata curl poppler-utils tesseract-ocr tesseract-ocr-data-chi_sim
+#RUN apk add --no-cache ca-certificates tzdata curl poppler-utils tesseract-ocr tesseract-ocr-data-chi_sim
+RUN apk add --no-cache 
 
 # 设置时区
 ENV TZ=Asia/Shanghai

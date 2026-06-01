@@ -67,3 +67,56 @@ func TestAnnotateParentChildSourceMarksLegacyChunksUnavailable(t *testing.T) {
 		t.Fatalf("expected doc metadata to record parent_child_available=false, got %v", doc.MetaData["parent_child_available"])
 	}
 }
+
+func TestParseMilvusMetadataSupportsCommonEncodings(t *testing.T) {
+	inputs := []interface{}{
+		`{"hierarchy_path":"Guide > Storage","chunk_index":16,"source":{"route":"dense"}}`,
+		[]byte(`{"hierarchy_path":"Guide > Storage","chunk_index":16,"source":{"route":"dense"}}`),
+		map[string]interface{}{
+			"hierarchy_path": "Guide > Storage",
+			"chunk_index":    16,
+			"source": map[string]interface{}{
+				"route": "dense",
+			},
+		},
+	}
+
+	for _, input := range inputs {
+		metadata := parseMilvusMetadata(input)
+		if metadata["hierarchy_path"] != "Guide > Storage" {
+			t.Fatalf("expected hierarchy_path to be preserved, got %v", metadata["hierarchy_path"])
+		}
+		source, ok := metadata["source"].(map[string]interface{})
+		if !ok || source["route"] != "dense" {
+			t.Fatalf("expected nested source metadata, got %T %v", metadata["source"], metadata["source"])
+		}
+	}
+}
+
+func TestCloneDocumentWithMetadataDeepCopiesNestedMaps(t *testing.T) {
+	original := &schema.Document{
+		ID:      "doc-1-child-001",
+		Content: "storage layer",
+		MetaData: map[string]interface{}{
+			"hierarchy_path": "Guide > Storage",
+			"source": map[string]interface{}{
+				"route": "dense",
+			},
+		},
+	}
+
+	cloned := cloneDocumentWithMetadata(original)
+	source, ok := cloned.MetaData["source"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected cloned nested source map, got %T", cloned.MetaData["source"])
+	}
+	source["route"] = "sparse"
+
+	originalSource, ok := original.MetaData["source"].(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected original nested source map, got %T", original.MetaData["source"])
+	}
+	if originalSource["route"] != "dense" {
+		t.Fatalf("expected original metadata to remain unchanged, got %v", originalSource["route"])
+	}
+}
