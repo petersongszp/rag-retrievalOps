@@ -254,4 +254,10 @@ email:
   smtp_pass: '${SMTP_PASS}'
   from_email: '${SMTP_FROM}'
 
-
+# RAG Platform client config (L2: agent decouples from internal Milvus)
+rag_platform:
+  enabled: true
+  base_url: 'http://localhost:8899'
+  api_key: ''
+  app_id: 'interview-agent'
+  default_kb_ids: [1, 2, 3, 4]

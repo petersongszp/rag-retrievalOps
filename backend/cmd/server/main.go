@@ -1,4 +1,4 @@
-package main
+﻿package main
 
 import (
 	"context"
@@ -8,6 +8,7 @@ import (
 	interviewRouter "interview-agents/api/router/interview"
 	routerMiddleware "interview-agents/api/router/middleware"
 	"interview-agents/internal/agents/llm"
+	"interview-agents/internal/agents/tools"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
 	"interview-agents/internal/milvus"
@@ -152,6 +153,19 @@ func main() {
 		log.Println("[RAG:L0] RAG is disabled, skip Milvus initialization")
 	}
 
+	// 7.1 Initialize RAG Retrieve Tool (L2: agent uses remote /v1/retrieve instead of internal Milvus)
+	if cfg.RAGPlatform.Enabled {
+		ragCfg := tools.RAGRetrieveConfig{
+			BaseURL:      cfg.RAGPlatform.BaseURL,
+			APIKey:       cfg.RAGPlatform.APIKey,
+			AppID:        cfg.RAGPlatform.AppID,
+			DefaultKBIDs: cfg.RAGPlatform.DefaultKBIDs,
+		}
+		tools.InitRAGRetrieveTool(ragCfg)
+		log.Println("[RAG:L2] RAG Retrieve Tool initialized")
+	} else {
+		log.Println("[RAG:L2] RAG Platform is disabled, skip RAG Retrieve Tool initialization")
+	}
 	// 8. 初始化消息队列（使用 Redis Stream）
 	log.Println("Initializing Redis Stream message queue...")
 	redisClient := repository.GetRedis()

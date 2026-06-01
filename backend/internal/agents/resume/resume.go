@@ -1,4 +1,4 @@
-package resume
+﻿package resume
 
 import (
 	"context"
@@ -20,11 +20,8 @@ func NewResumeParserAgent(userId uint) (adk.Agent, error) {
 		return nil, fmt.Errorf("failed to create OpenAI chat model: %w", err)
 	}
 
-	// 初始化 Milvus 检索工具 (用于 RAG 联动)
-	milvusTool, err := tool2.GetMilvusRetrieverTool()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Milvus retriever tool: %w", err)
-	}
+	// 初始化 RAG 检索工具 (用于 RAG 联动)
+	ragTool := tool2.GetRAGRetrieveTool()
 
 	baseAgent, err := adk.NewChatModelAgent(ctx, &adk.ChatModelAgentConfig{
 		Name:        "ResumeParserAgent",
@@ -33,14 +30,14 @@ func NewResumeParserAgent(userId uint) (adk.Agent, error) {
 
 重要提示：
 - 你必须使用 resume_extraction 工具来解析简历文件（支持PDF/DOCX格式）。
-- 对于简历中提到的关键技术栈、证书或行业术语，必须使用 get_milvus_retriever 工具在知识库中检索相关的行业标准描述、考察重点或等级要求。
+- 对于简历中提到的关键技术栈、证书或行业术语，必须使用 rag_retrieve 工具在知识库中检索相关的行业标准描述、考察重点或等级要求。
 - 严禁空回复，必须基于工具返回的内容进行深层画像。
 - 只返回 JSON 格式结果。
 
 任务步骤（必须按顺序执行）：
 1. 【获取原文】调用 resume_extraction 获取简历完整文本及结构化字段。
 2. 【基础提取】初步提取基本信息、工作经历、项目和技术栈。
-3. 【RAG 增强】针对提取出的“核心技术栈”和“工作经验”，调用 get_milvus_retriever 检索内部专业面试库。
+3. 【RAG 增强】针对提取出的“核心技术栈”和“工作经验”，调用 rag_retrieve 检索内部专业面试库。
    - 识别是否有不熟悉或模糊的行业术语。
    - 检索该技术在本项目（如大厂面试）中的考察权重和常见评级标准。
 4. 【对齐分析】结合检索到的行业知识，重新修正候选人的“简历画像”：
@@ -71,7 +68,7 @@ func NewResumeParserAgent(userId uint) (adk.Agent, error) {
 			ToolsNodeConfig: compose.ToolsNodeConfig{
 				Tools: []componenttool.BaseTool{
 					tool2.CreateResumeExtractionTool(),
-					milvusTool,
+					ragTool,
 				},
 			},
 		},

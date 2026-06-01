@@ -1,4 +1,4 @@
-package specialized
+﻿package specialized
 
 import (
 	"context"
@@ -16,13 +16,10 @@ import (
 func NewRedisSpecializedAgent(userId uint, needResumeTool bool) (adk.Agent, error) {
 	ctx := context.Background()
 
-	milvusTool, err := tool2.GetMilvusRetrieverTool()
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Milvus retriever tool: %w", err)
-	}
+	ragTool := tool2.GetRAGRetrieveTool()
 
 	var tools []componenttool.BaseTool
-	tools = append(tools, milvusTool)
+	tools = append(tools, ragTool)
 
 	if needResumeTool {
 		tools = append(tools, tool2.GetResumeInfoTool())

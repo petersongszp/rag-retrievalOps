@@ -1,4 +1,4 @@
-package config
+﻿package config
 
 import (
 	"bytes"
@@ -43,8 +43,18 @@ type Config struct {
 	Feishu           FeishuConfig       `yaml:"feishu"`       // 椋炰功閰嶇疆
 	Email            EmailConfig        `yaml:"email"`        // 閭欢閰嶇疆
 	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 闄愭祦閰嶇疆
-	Payment          PaymentConfig      `yaml:"payment"`      // 鏀粯閰嶇疆
+	Payment          PaymentConfig      `yaml:"payment"`      
+	RAGPlatform      RAGPlatformConfig  `yaml:"rag_platform"` // RAG Platform client config
 	ConfigVersion    string             `yaml:"-"`
+}
+
+// RAGPlatformConfig RAG Platform client config
+type RAGPlatformConfig struct {
+	Enabled      bool     `yaml:"enabled"`       // enable RAG Platform calls
+	BaseURL      string   `yaml:"base_url"`      // RAG Platform address
+	APIKey       string   `yaml:"api_key"`       // API Key
+	AppID        string   `yaml:"app_id"`        // client app ID
+	DefaultKBIDs []uint64 `yaml:"default_kb_ids"` // default knowledge base IDs
 }
 
 // PaymentConfig 鏀粯閰嶇疆
