@@ -3,6 +3,7 @@ package retrieval
 import (
 	"context"
 	"fmt"
+	"log"
 	"sort"
 	"strings"
 
@@ -182,14 +183,20 @@ func (p *parentChildPostProcessor) fetchCandidates(ctx context.Context, doc *sch
 	}
 
 	seen := make(map[string]*schema.Document, 8)
+	var firstErr error
+	successfulQueries := 0
 	for _, expr := range exprs {
 		if strings.TrimSpace(expr) == "" {
 			continue
 		}
 		docs, err := p.query(ctx, collection, expr, p.resolveQueryLimit())
 		if err != nil {
-			return nil, err
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
 		}
+		successfulQueries++
 		for _, candidate := range docs {
 			if candidate == nil {
 				continue
@@ -203,9 +210,11 @@ func (p *parentChildPostProcessor) fetchCandidates(ctx context.Context, doc *sch
 			}
 			seen[key] = candidate
 		}
-		if len(seen) > 0 {
-			break
-		}
+	}
+
+	if successfulQueries == 0 && firstErr != nil {
+		log.Printf("[PARENT-CHILD] candidate fetch failed: collection=%s, expr_count=%d, err=%v", collection, len(exprs), firstErr)
+		return nil, firstErr
 	}
 
 	childKey := buildDedupeKey(doc)

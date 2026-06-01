@@ -22,8 +22,8 @@ func TestParentChildPostProcessorFillSectionWindow(t *testing.T) {
 			if collection != "kb_chunks" {
 				t.Fatalf("unexpected collection %q", collection)
 			}
-			if !strings.Contains(expr, `metadata["hierarchy_path"]`) {
-				t.Fatalf("expected hierarchy path expr, got %q", expr)
+			if !strings.Contains(expr, `metadata["hierarchy_path"]`) && !strings.Contains(expr, `metadata["parent_id"]`) {
+				t.Fatalf("expected hierarchy or parent expr, got %q", expr)
 			}
 			return []*schema.Document{
 				makeParentChildDoc("doc-1-child-000", 0, "Overview of the API gateway and auth flow."),
@@ -120,6 +120,50 @@ func TestParentChildPostProcessorFallsBackToChildOnly(t *testing.T) {
 	}
 	if filled[0].MetaData["parent_fill_reason"] != ParentFillReasonQueryFailed {
 		t.Fatalf("expected parent_fill_reason=%q, got %v", ParentFillReasonQueryFailed, filled[0].MetaData["parent_fill_reason"])
+	}
+}
+
+func TestParentChildFetchCandidatesMergesFallbackExprs(t *testing.T) {
+	processor := &parentChildPostProcessor{
+		defaultCollection: "kb_chunks",
+		config: ParentChildConfig{
+			Enabled:      true,
+			FillStrategy: parentFillStrategySectionWindow,
+			WindowSize:   1,
+			MaxTokens:    200,
+		},
+	}
+
+	child := makeParentChildDoc("doc-1-child-001", 1, "The storage layer persists vectors and metadata for retrieval.")
+	queryCalls := 0
+	processor.query = func(ctx context.Context, collection string, expr string, limit int) ([]*schema.Document, error) {
+		queryCalls++
+		switch queryCalls {
+		case 1:
+			return []*schema.Document{
+				makeParentChildDoc("doc-1-child-001", 1, "The storage layer persists vectors and metadata for retrieval."),
+			}, nil
+		case 2:
+			return []*schema.Document{
+				makeParentChildDoc("doc-1-child-000", 0, "Overview of the API gateway and auth flow."),
+			}, nil
+		default:
+			return nil, nil
+		}
+	}
+
+	candidates, err := processor.fetchCandidates(context.Background(), child, "kb_chunks")
+	if err != nil {
+		t.Fatalf("fetchCandidates failed: %v", err)
+	}
+	if queryCalls != 2 {
+		t.Fatalf("expected both exprs to be queried, got %d calls", queryCalls)
+	}
+	if len(candidates) != 2 {
+		t.Fatalf("expected 2 merged candidates, got %d", len(candidates))
+	}
+	if readMetadataString(candidates[0], "hierarchy_path") != "Guide > Storage" {
+		t.Fatalf("expected merged candidates to preserve metadata, got %v", candidates[0].MetaData)
 	}
 }
 

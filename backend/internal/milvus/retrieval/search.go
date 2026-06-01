@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/bytedance/sonic"
 	milvusRetriever "github.com/cloudwego/eino-ext/components/retriever/milvus"
 	"github.com/cloudwego/eino/schema"
 	milvusClient "github.com/milvus-io/milvus-sdk-go/v2/client"
@@ -207,11 +206,8 @@ func SearchWithExprAndMetrics(
 				}
 			}
 			if metadataField != nil {
-				if jsonStr, metadataErr := metadataField.GetAsString(i); metadataErr == nil && jsonStr != "" {
-					var metadata map[string]interface{}
-					if unmarshalErr := sonic.Unmarshal([]byte(jsonStr), &metadata); unmarshalErr == nil {
-						doc.MetaData = metadata
-					}
+				if metadataRaw, metadataErr := metadataField.Get(i); metadataErr == nil {
+					doc.MetaData = parseMilvusMetadata(metadataRaw)
 				}
 			}
 			if i < len(result.Scores) {

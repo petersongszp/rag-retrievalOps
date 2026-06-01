@@ -6,7 +6,6 @@ import (
 	"strings"
 	"unicode"
 
-	"github.com/bytedance/sonic"
 	"github.com/cloudwego/eino/schema"
 	milvusClient "github.com/milvus-io/milvus-sdk-go/v2/client"
 )
@@ -237,17 +236,7 @@ func parseQueryResultSet(rs milvusClient.ResultSet) []*schema.Document {
 
 		if metaCol != nil {
 			if metaRaw, err := metaCol.Get(i); err == nil {
-				switch v := metaRaw.(type) {
-				case string:
-					if strings.TrimSpace(v) != "" {
-						var metaMap map[string]interface{}
-						if err := sonic.Unmarshal([]byte(v), &metaMap); err == nil {
-							doc.MetaData = metaMap
-						}
-					}
-				case map[string]interface{}:
-					doc.MetaData = v
-				}
+				doc.MetaData = parseMilvusMetadata(metaRaw)
 			}
 		}
 
