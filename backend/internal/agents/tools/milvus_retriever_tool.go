@@ -1,3 +1,6 @@
+// DEPRECATED: 此工具将在 RAG Platform 独立后移除。
+// 请使用 rag_retrieve_tool.go 替代。
+// 迁移计划参见: docs/rag-platform-code-extraction-execution-plan.md (L2 阶段)
 package tools
 
 import (
