@@ -12,87 +12,11 @@ import (
 	"gorm.io/gorm/logger"
 )
 
-// DB 全局数据库实例
+// DB is the shared database handle for the RAG platform services.
 var DB *gorm.DB
 
-// InitDatabase 初始化数据库连接
-func InitDatabase(dbConfig config.DatabaseConfig) error {
-	// 配置GORM日志
-	logLevel := logger.Info
-
-	// 连接数据库
-	db, err := gorm.Open(mysql.Open(dbConfig.DSN), &gorm.Config{
-		Logger: logger.Default.LogMode(logLevel),
-	})
-	if err != nil {
-		return err
-	}
-
-	// 配置连接池
-	sqlDB, err := db.DB()
-	if err != nil {
-		return err
-	}
-
-	sqlDB.SetMaxIdleConns(dbConfig.MaxIdleConns)
-	sqlDB.SetMaxOpenConns(dbConfig.MaxOpenConns)
-	if dbConfig.ConnMaxLifetime != "" {
-		connMaxLifetime, err := time.ParseDuration(dbConfig.ConnMaxLifetime)
-		if err == nil {
-			sqlDB.SetConnMaxLifetime(connMaxLifetime)
-		}
-	}
-
-	// 设置全局DB实例
-	DB = db
-
-	// 设置 model 包的 DB 获取函数
-	model.SetDBGetter(GetDB)
-
-	// 自动迁移数据库表结构
-	err = migrateDatabase()
-	if err != nil {
-		return err
-	}
-
-	log.Println("数据库连接成功并完成迁移")
-	return nil
-}
-
-// migrateDatabase 执行数据库迁移
-func migrateDatabase() error {
-	return DB.AutoMigrate(
-		&model.User{},
-		&model.UserModel{},
-		&model.InterviewRecord{},
-		&model.InterviewDialogue{},
-		&model.InterviewEvaluation{},
-		&model.AnswerReport{},
-		&model.Resume{},
-		&model.PredictionRecord{},
-		&model.PredictionQuestion{},
-		&model.PaymentOrder{},
-		&model.PaymentAttempt{},
-		&model.Subscription{},
-		&model.PaymentEvent{},
-		&model.PaymentCallback{},
-		&model.KBKnowledgeBase{},
-		&model.KBDocument{},
-		&model.KBIngestJob{},
-		&model.KBJobOperationLog{},
-		&model.KBIndexRegistry{},
-		&model.KBIndexOperationLog{},
-		&model.KBRetrieveLog{},
-		&model.KBCostTrace{},
-		&model.KBAuditEvent{},
-		&model.KBEvalDataset{},
-		&model.KBEvalCase{},
-		&model.KBEvalRun{},
-	)
-}
-
-// InitDatabaseOnly 初始化数据库连接（不执行迁移）
-// 供独立服务（如 rag-server）使用，迁移由调用方自行控制
+// InitDatabaseOnly initializes the database connection without auto-migrating.
+// RAG services can decide explicitly when to run the narrowed RAG migration set.
 func InitDatabaseOnly(dbConfig config.DatabaseConfig) error {
 	logLevel := logger.Info
 
@@ -120,14 +44,13 @@ func InitDatabaseOnly(dbConfig config.DatabaseConfig) error {
 	DB = db
 	model.SetDBGetter(GetDB)
 
-	log.Println("数据库连接成功（未执行迁移）")
+	log.Println("database initialized without auto-migration")
 	return nil
 }
 
-// MigrateRAGDatabase 只迁移 RAG 相关表
+// MigrateRAGDatabase migrates only the tables required by the RAG admin platform.
 func MigrateRAGDatabase(db *gorm.DB) error {
 	return db.AutoMigrate(
-		// RAG 核心表
 		&model.KBKnowledgeBase{},
 		&model.KBDocument{},
 		&model.KBIngestJob{},
@@ -143,27 +66,7 @@ func MigrateRAGDatabase(db *gorm.DB) error {
 	)
 }
 
-// MigrateBusinessDatabase 只迁移业务表（面试、简历、支付等）
-func MigrateBusinessDatabase(db *gorm.DB) error {
-	return db.AutoMigrate(
-		&model.User{},
-		&model.UserModel{},
-		&model.InterviewRecord{},
-		&model.InterviewDialogue{},
-		&model.InterviewEvaluation{},
-		&model.AnswerReport{},
-		&model.Resume{},
-		&model.PredictionRecord{},
-		&model.PredictionQuestion{},
-		&model.PaymentOrder{},
-		&model.PaymentAttempt{},
-		&model.Subscription{},
-		&model.PaymentEvent{},
-		&model.PaymentCallback{},
-	)
-}
-
-// GetDB 获取数据库实例
+// GetDB returns the shared database instance.
 func GetDB() *gorm.DB {
 	return DB
 }

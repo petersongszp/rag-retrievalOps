@@ -13,12 +13,12 @@ import (
 	"syscall"
 	"time"
 
-	"interview-agents/api/router"
+	"interview-agents/api/ragrouter"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
 	"interview-agents/internal/milvus"
-	"interview-agents/internal/mq"
 	ragmq "interview-agents/internal/ragplatform/mq"
+	"interview-agents/internal/ragqueue"
 	"interview-agents/internal/repository"
 
 	"github.com/cloudwego/hertz/pkg/app"
@@ -64,14 +64,14 @@ func main() {
 	}
 	log.Println("[RAG-Server] Redis initialized")
 
-	var messageQueue mq.MessageQueue
+	var messageQueue ragqueue.MessageQueue
 	var consumerCtx context.Context
 	var cancelConsumer context.CancelFunc
 	redisClient := repository.GetRedis()
 	if redisClient != nil {
 		log.Println("[RAG-Server] Initializing MQ...")
-		messageQueue = mq.NewRedisStreamQueue(redisClient, "rag-consumer-group", fmt.Sprintf("rag-consumer-%s", cfg.Host))
-		mq.InitMessageQueue(messageQueue)
+		messageQueue = ragqueue.NewRedisStreamQueue(redisClient, "rag-consumer-group", fmt.Sprintf("rag-consumer-%s", cfg.Host))
+		ragqueue.InitMessageQueue(messageQueue)
 
 		ragConsumer := ragmq.NewRAGConsumer(messageQueue)
 		consumerCtx, cancelConsumer = context.WithCancel(context.Background())
@@ -133,7 +133,7 @@ func main() {
 		c.Next(ctx)
 	})
 
-	router.RegisterRAGRoutes(h)
+	ragrouter.Register(h)
 
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "ok"})

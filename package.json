@@ -2,12 +2,9 @@
   "name": "mianshiba-eino-overseas",
   "private": true,
   "scripts": {
-    "dev": "npm run dev --prefix frontend",
-    "dev:frontend": "npm run dev --prefix frontend",
-    "build:frontend": "npm run build --prefix frontend",
-    "start:frontend": "npm run start --prefix frontend"
-  },
-  "dependencies": {
-    "next-intl": "^4.8.3"
+    "dev": "npm run dev --prefix admin",
+    "build": "npm run build --prefix admin",
+    "start": "npm run start --prefix admin",
+    "test": "npm run test --prefix admin"
   }
 }

@@ -25,11 +25,11 @@ import (
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/milvus/retrieval"
 	"interview-agents/internal/model"
-	"interview-agents/internal/mq"
 	"interview-agents/internal/observability/metrics"
 	"interview-agents/internal/rag/experiment"
 	"interview-agents/internal/rag/governance"
 	"interview-agents/internal/rag/release"
+	"interview-agents/internal/ragqueue"
 	"interview-agents/internal/repository"
 	"interview-agents/internal/storage"
 
@@ -476,7 +476,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	publishErr := mq.PublishKnowledgeIngest(ctx, mq.KnowledgeIngestPayload{
+	publishErr := ragqueue.PublishKnowledgeIngest(ctx, ragqueue.KnowledgeIngestPayload{
 		UserID:          userID,
 		OperatorAdminID: userID,
 		KBID:            kbID,
@@ -684,7 +684,7 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if err := mq.PublishKnowledgeIngest(ctx, mq.KnowledgeIngestPayload{
+	if err := ragqueue.PublishKnowledgeIngest(ctx, ragqueue.KnowledgeIngestPayload{
 		UserID:          userID,
 		OperatorAdminID: userID,
 		KBID:            job.KbID,
@@ -3365,7 +3365,7 @@ func PauseIngest(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	mq.PauseKnowledgeIngest()
+	ragqueue.PauseKnowledgeIngest()
 	response.Success(ctx, c, map[string]interface{}{"paused": true})
 }
 
@@ -3375,7 +3375,7 @@ func ResumeIngest(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	mq.ResumeKnowledgeIngest()
+	ragqueue.ResumeKnowledgeIngest()
 	response.Success(ctx, c, map[string]interface{}{"paused": false})
 }
 
@@ -3385,7 +3385,7 @@ func GetIngestStatus(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	paused := mq.IsKnowledgeIngestPaused()
+	paused := ragqueue.IsKnowledgeIngestPaused()
 	response.Success(ctx, c, map[string]interface{}{"paused": paused})
 }
 

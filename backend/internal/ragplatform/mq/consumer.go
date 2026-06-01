@@ -4,17 +4,17 @@ import (
 	"context"
 	"log"
 
-	"interview-agents/internal/mq"
+	"interview-agents/internal/ragqueue"
 )
 
 // RAGConsumer 只处理知识入库任务，不承载简历解析、评估报告等业务消息。
 // 它包装了底层 mq.MessageQueue，使用独立的 handler 过滤消息类型。
 type RAGConsumer struct {
-	queue mq.MessageQueue
+	queue ragqueue.MessageQueue
 }
 
 // NewRAGConsumer 创建 RAG 专用消费者
-func NewRAGConsumer(queue mq.MessageQueue) *RAGConsumer {
+func NewRAGConsumer(queue ragqueue.MessageQueue) *RAGConsumer {
 	return &RAGConsumer{queue: queue}
 }
 
@@ -25,12 +25,12 @@ func (c *RAGConsumer) Start(ctx context.Context) error {
 }
 
 // handleMessage 只处理知识入库任务，忽略其他消息类型
-func (c *RAGConsumer) handleMessage(ctx context.Context, message *mq.Message) error {
-	if message.Type != mq.MessageTypeKnowledgeIngest {
+func (c *RAGConsumer) handleMessage(ctx context.Context, message *ragqueue.Message) error {
+	if message.Type != ragqueue.MessageTypeKnowledgeIngest {
 		log.Printf("[RAG-Consumer] Ignoring non-RAG message type: %s", message.Type)
 		return nil
 	}
 
 	log.Printf("[RAG-Consumer] Processing knowledge_ingest message")
-	return mq.HandleKnowledgeIngestForRAG(ctx, message)
+	return ragqueue.HandleKnowledgeIngest(ctx, message)
 }
