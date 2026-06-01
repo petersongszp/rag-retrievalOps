@@ -1,36 +1,154 @@
-# RAG Platform 独立配置示例
-# 复制为 config.rag.yaml 并根据环境修改
+# RAG Platform standalone config example
+# Copy to config.yaml or mount directly in Docker Compose.
 
-server:
-  host: 0.0.0.0
-  port: 8081
+host: "0.0.0.0"
+port: 8899
 
 database:
-  driver: 'mysql'
-  dsn: '${RAG_DB_USER}:${RAG_DB_PASSWORD}@tcp(${RAG_DB_HOST}:${RAG_DB_PORT})/${RAG_DB_NAME}?charset=utf8mb4&parseTime=True&loc=Local'
+  driver: "mysql"
+  dsn: "${RAG_DB_USER}:${RAG_DB_PASSWORD}@tcp(${RAG_DB_HOST}:${RAG_DB_PORT})/${RAG_DB_NAME}?charset=utf8mb4&parseTime=True&loc=Local"
+  max_open_conns: 50
+  max_idle_conns: 10
+  conn_max_lifetime: "1h"
 
 redis:
-  addr: '${RAG_REDIS_ADDR}'
-  password: '${RAG_REDIS_PASSWORD}'
+  addr: "${RAG_REDIS_ADDR}"
+  password: "${RAG_REDIS_PASSWORD}"
   db: 0
+  dial_timeout: "5s"
+  read_timeout: "3s"
+  write_timeout: "3s"
+  pool_size: 10
+  min_idle_conns: 5
 
-milvus:
-  address: '${MILVUS_ADDRESS}'
-  username: '${MILVUS_USERNAME}'
-  password: '${MILVUS_PASSWORD}'
+hertz:
+  log_level: "info"
+  log_path: "./logs"
+  read_timeout: "10s"
+  write_timeout: "10s"
+  idle_timeout: "60s"
+  keep_alive: true
+  gomaxprocs: 0
+  rate_limit:
+    rps: 20
+    burst: 50
+    use_redis: false
+    redis_key_prefix: "rl:"
+
+eino:
+  token_quota_per_user_per_day: 0
+
+openai:
+  api_key: "${LLM_API_KEY}"
+  model_name: "${LLM_MODEL_NAME}"
+  base_url: "${LLM_BASE_URL}"
+
+llm:
+  api_key: "${LLM_API_KEY}"
+  base_url: "${LLM_BASE_URL}"
+  model_name: "${LLM_MODEL_NAME}"
+  provider_name: "${LLM_PROVIDER_NAME}"
 
 rag:
   enabled: true
   environment: dev
   feature_flags:
+    enable_prod_guard: false
+    enable_ingest_retry: false
     enable_retrieve_audit: true
     enable_hybrid_retrieval: true
     enable_query_rewrite: true
     enable_dynamic_topk: true
     enable_advanced_rerank: true
     enable_parent_child_retrieval: true
+    enable_strategic_topk: false
+    enable_evidence_refusal: false
+    enable_citation_consistency: false
+    enable_domain_terms: false
+    enable_route_specific_rewrite: false
+    enable_model_assisted_rewrite: false
+  thresholds:
+    max_retry_count: 3
+    retry_backoff_ms: 500
+    retrieve_timeout_ms: 3000
+    user_qps_limit: 20
+  phase2:
+    hybrid_dense_weight: 0.7
+    hybrid_sparse_weight: 0.3
+    candidate_topk: 10
+    min_topk: 3
+    max_topk: 8
+    token_budget: 0
+    min_answer_chunks: 2
+    rewrite_timeout_ms: 120
+    rewrite_max_expansions: 3
+    rerank_timeout_ms: 250
+    rerank_model: "jaccard-v1"
+  phase3:
+    parent_child_fill_strategy: section_window
+    parent_child_window_size: 1
+    parent_child_max_tokens: 1200
+    strategic_topk_min_k: 2
+    strategic_topk_max_k: 8
+    strategic_topk_budget_ratio: 0.6
+    evidence_min_rerank_score: 0.55
+    evidence_min_density: 0.2
+    evidence_min_citation_coverage: 0.5
+    citation_check_threshold: 0.7
+    citation_check_version: "phase3-citation-v1"
+    domain_term_timeout_ms: 80
+    model_rewrite_timeout_ms: 150
+    model_rewrite_shadow_ratio: 0.1
+  release:
+    enabled: false
+    stage: full
+    internal_roles: ["admin"]
+    canary_percent: 5
+    batch_percent: 25
+    user_allowlist: []
+
+Embedding:
+  APIKey: "${EMBEDDING_API_KEY}"
+  Provider: "${EMBEDDING_PROVIDER}"
+  Model: "${EMBEDDING_MODEL}"
+  BaseURL: "${EMBEDDING_BASE_URL}"
+  Region: "${EMBEDDING_REGION}"
+  Timeout: 30s
+  RetryTimes: 3
+  Dimensions: 2048
+  BatchSize: 10
+  User: ""
+
+Milvus:
+  Address: "${MILVUS_ADDRESS}"
+  Username: "${MILVUS_USERNAME}"
+  Password: "${MILVUS_PASSWORD}"
+  DatabaseName: "default"
+  CollectionName: "documents"
+  Collections:
+    knowledge: "documents"
+  TopK: 5
+  MetricType: "COSINE"
+  ConnectTimeout: 10s
+  SearchTimeout: 30s
+
+DocumentSplitter:
+  ChunkSize: 1000
+  OverlapSize: 200
+  Separators:
+    - "\n\n"
+    - "\n"
+    - "\u3002"
+    - "\uFF01"
+    - "\uFF1F"
+    - ". "
+    - "! "
+    - "? "
+  KeepType: 0
 
 rag_platform:
   enabled: true
-  base_url: 'http://localhost:8081'
-  app_id: 'rag-platform'
+  base_url: "http://localhost:8899"
+  api_key: ""
+  app_id: "rag-platform"
+  default_kb_ids: []

@@ -21,14 +21,13 @@ RUN addgroup -g 1001 appuser && adduser -D -u 1001 -G appuser appuser
 WORKDIR /app
 COPY --from=builder /app/rag-server .
 COPY config.yaml .
-COPY config.rag.example.yaml .
 COPY go.mod .
 
 RUN mkdir -p logs && chown -R appuser:appuser /app
 USER appuser
 
-EXPOSE 8081
+EXPOSE 8899
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD curl -f http://localhost:8081/healthz || exit 1
+    CMD curl -f http://localhost:8899/healthz || exit 1
 
 CMD ["./rag-server"]
