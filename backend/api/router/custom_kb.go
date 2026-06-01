@@ -18,6 +18,10 @@ func registerKnowledgeBaseRoutes(r *server.Hertz) {
 	log.Println("[RAG] Registering knowledge base routes")
 	registerKBGroup(r.Group("/api/kb"), false)
 	registerKBGroup(r.Group("/api/admin/kb"), true)
+
+	// Register v1 public RAG API routes.
+	log.Println("[RAG] Registering v1 public RAG routes")
+	registerRAGPublicRoutes(r.Group(""))
 }
 
 func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
