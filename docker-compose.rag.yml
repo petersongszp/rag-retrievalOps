@@ -1,0 +1,113 @@
+# RAG Platform 独立部署配置
+version: '3.8'
+
+services:
+  rag-server:
+    build:
+      context: backend
+      dockerfile: Dockerfile.rag
+    container_name: rag-server
+    restart: always
+    ports:
+      - '8081:8081'
+    environment:
+      DB_HOST: rag-mysql
+      DB_PORT: 3306
+      DB_USER: ${RAG_DB_USER:-rag}
+      DB_PASSWORD: ${RAG_DB_PASSWORD:-rag}
+      DB_NAME: ${RAG_DB_NAME:-rag_platform}
+      REDIS_HOST: rag-redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${RAG_REDIS_PASSWORD:-rag}
+      MILVUS_ADDRESS: rag-milvus:19530
+      MILVUS_USERNAME: ${MILVUS_USERNAME:-}
+      MILVUS_PASSWORD: ${MILVUS_PASSWORD:-}
+    depends_on:
+      rag-mysql:
+        condition: service_healthy
+      rag-redis:
+        condition: service_healthy
+      rag-milvus:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+  rag-mysql:
+    image: mysql:8.0
+    container_name: rag-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-rag}
+      MYSQL_DATABASE: ${RAG_DB_NAME:-rag_platform}
+      MYSQL_USER: ${RAG_DB_USER:-rag}
+      MYSQL_PASSWORD: ${RAG_DB_PASSWORD:-rag}
+    ports:
+      - '3308:3306'
+    volumes:
+      - rag-mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag-network
+
+  rag-redis:
+    image: redis:7-alpine
+    container_name: rag-redis
+    restart: always
+    command: redis-server --requirepass ${RAG_REDIS_PASSWORD:-rag}
+    ports:
+      - '6380:6379'
+    volumes:
+      - rag-redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${RAG_REDIS_PASSWORD:-rag}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - rag-network
+
+  rag-milvus:
+    image: milvusdb/milvus:v2.4-latest
+    container_name: rag-milvus
+    restart: always
+    environment:
+      ETCD_USE_EMBED: 'true'
+      COMMON_STORAGETYPE: local
+    ports:
+      - '19531:19530'
+      - '9092:9091'
+    volumes:
+      - rag-milvus-data:/var/lib/milvus
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    networks:
+      - rag-network
+
+  rag-attu:
+    image: zilliz/attu:latest
+    container_name: rag-attu
+    restart: always
+    ports:
+      - '8001:3000'
+    environment:
+      MILVUS_URL: rag-milvus:19530
+    depends_on:
+      - rag-milvus
+    networks:
+      - rag-network
+
+volumes:
+  rag-mysql-data:
+  rag-redis-data:
+  rag-milvus-data:
+
+networks:
+  rag-network:
+    driver: bridge

@@ -1,0 +1,36 @@
+# RAG Platform 独立配置示例
+# 复制为 config.rag.yaml 并根据环境修改
+
+server:
+  host: 0.0.0.0
+  port: 8081
+
+database:
+  driver: 'mysql'
+  dsn: '${RAG_DB_USER}:${RAG_DB_PASSWORD}@tcp(${RAG_DB_HOST}:${RAG_DB_PORT})/${RAG_DB_NAME}?charset=utf8mb4&parseTime=True&loc=Local'
+
+redis:
+  addr: '${RAG_REDIS_ADDR}'
+  password: '${RAG_REDIS_PASSWORD}'
+  db: 0
+
+milvus:
+  address: '${MILVUS_ADDRESS}'
+  username: '${MILVUS_USERNAME}'
+  password: '${MILVUS_PASSWORD}'
+
+rag:
+  enabled: true
+  environment: dev
+  feature_flags:
+    enable_retrieve_audit: true
+    enable_hybrid_retrieval: true
+    enable_query_rewrite: true
+    enable_dynamic_topk: true
+    enable_advanced_rerank: true
+    enable_parent_child_retrieval: true
+
+rag_platform:
+  enabled: true
+  base_url: 'http://localhost:8081'
+  app_id: 'rag-platform'

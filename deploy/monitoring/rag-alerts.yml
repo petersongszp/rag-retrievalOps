@@ -1,0 +1,26 @@
+groups:
+  - name: rag-platform
+    rules:
+      - alert: RAGHighErrorRate
+        expr: rate(rag_retrieve_errors_total[5m]) / rate(rag_retrieve_requests_total[5m]) > 0.05
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG 检索错误率超过 5%"
+
+      - alert: RAGHighLatencyP95
+        expr: histogram_quantile(0.95, rate(rag_retrieve_duration_seconds_bucket[5m])) > 2
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG 检索 P95 延迟超过 2 秒"
+
+      - alert: RAGEmptyRecallRate
+        expr: rate(rag_retrieve_empty_results_total[5m]) / rate(rag_retrieve_requests_total[5m]) > 0.3
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "RAG 空召回率超过 30%"
