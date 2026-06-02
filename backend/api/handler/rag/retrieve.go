@@ -7,6 +7,7 @@ import (
 
 	kb "interview-agents/api/handler/kb"
 	"interview-agents/api/response"
+	auth "interview-agents/internal/auth"
 
 	"github.com/cloudwego/hertz/pkg/app"
 )
@@ -59,13 +60,12 @@ type RAGRequestCost struct {
 	EstimatedCost float64 `json:"estimated_cost"`
 }
 
-// allowedAppIDs is a static whitelist for the first version.
-// TODO: move to config or database in later versions.
-// NOTE: This is a legacy auth path. Will be replaced by API Key in Phase 2+.
+// allowedAppIDs is a static whitelist for legacy compatibility.
+// NOTE: This is a legacy auth path. Will be fully removed after Phase 2 migration.
 var allowedAppIDs = map[string]string{
-	"interview-agent":   "interview-agent",
-	"mianshiba-web":     "mianshiba-web",
-	"mianshiba-admin":   "mianshiba-admin",
+	"interview-agent": "interview-agent",
+	"mianshiba-web":   "mianshiba-web",
+	"mianshiba-admin": "mianshiba-admin",
 }
 
 // isLegacyAppID 检查是否是旧白名单 app_id
@@ -75,10 +75,9 @@ func isLegacyAppID(appID string) bool {
 }
 
 // Retrieve is the v1 public API handler for RAG retrieval.
-// It validates app_id, then delegates to the existing kb.Retrieve handler
-// to reuse the entire retrieval chain without duplicating logic.
+// Auth priority: API Key (middleware injected) > JWT > Legacy app_id whitelist.
 func Retrieve(ctx context.Context, c *app.RequestContext) {
-	// Parse v1 request to extract app_id for validation.
+	// 解析请求
 	var req RAGRetrieveRequest
 	if err := c.BindAndValidate(&req); err != nil {
 		response.BadRequest(ctx, c, "Invalid request: "+err.Error())
@@ -91,28 +90,52 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// Validate app_id against whitelist.
-	appID := strings.TrimSpace(req.AppID)
-	if appID == "" {
-		response.BadRequest(ctx, c, "app_id is required")
-		return
-	}
-	if !isLegacyAppID(appID) {
-		response.Forbidden(ctx, c, "invalid app_id")
-		return
-	}
+	// 获取身份（优先从 API Key 中间件注入）
+	identity := auth.GetIdentity(ctx)
 
-	// 标记为 legacy 认证路径，便于 Phase 2 迁移时区分来源
-	if isLegacyAppID(appID) {
+	switch identity.AuthType {
+	case auth.AuthTypeAPIKey:
+		// API Key 认证：app_id 从 Key 推导，不需要请求体
+		// 如果请求体带了 app_id，以 Key 绑定的为准
+		req.AppID = identity.AppID
+
+	case auth.AuthTypeJWT:
+		// JWT 认证：管理端调用
+		if req.AppID == "" {
+			req.AppID = identity.AppID
+		}
+
+	case auth.AuthTypeLegacyAppID, "":
+		// Legacy 兼容：旧 app_id 白名单
+		if req.AppID == "" {
+			response.BadRequest(ctx, c, "app_id is required for legacy access")
+			return
+		}
+
+		if !isLegacyAppID(req.AppID) {
+			response.Error(ctx, c, 403, "Invalid app_id")
+			return
+		}
+
+		// 标记为 legacy
+		identity = &auth.Identity{
+			AuthType: auth.AuthTypeLegacyAppID,
+			AppID:    req.AppID,
+			IsLegacy: true,
+		}
+		ctx = auth.WithIdentity(ctx, identity)
 		c.Set("auth_type", "legacy_app_id")
-		c.Set("app_id", appID)
+		c.Set("app_id", req.AppID)
 		c.Set("is_legacy", true)
-		log.Printf("[Auth] Legacy app_id=%s, will be replaced by API Key in Phase 2", appID)
+		log.Printf("[Auth] Legacy app_id=%s, deprecated after Phase 2", req.AppID)
+
+	default:
+		response.Error(ctx, c, 401, "Authentication required")
+		return
 	}
 
-	log.Printf("[RAG Public API] source_api=v1 app_id=%s query=%q top_k=%d", appID, req.Query, req.TopK)
+	log.Printf("[RAG Public API] source_api=v1 auth_type=%s app_id=%s query=%q top_k=%d", identity.AuthType, req.AppID, req.Query, req.TopK)
 
 	// Delegate to the existing kb.Retrieve handler to reuse the full retrieval chain.
-	// The response format from kb.Retrieve already contains request_id, items, citation, source.
 	kb.Retrieve(ctx, c)
 }

@@ -14,15 +14,13 @@ import (
 type Client struct {
 	BaseURL    string
 	APIKey     string
-	AppID      string
 	HTTPClient *http.Client
 }
 
 // ClientConfig SDK 配置
 type ClientConfig struct {
-	BaseURL string // e.g. "http://localhost:8081"
-	APIKey  string
-	AppID   string
+	BaseURL string        // e.g. "https://your-rag-platform.com"
+	APIKey  string        // API Key (rag_xxx)
 	Timeout time.Duration // default 10s
 }
 
@@ -35,7 +33,6 @@ func NewClient(cfg ClientConfig) *Client {
 	return &Client{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
-		AppID:   cfg.AppID,
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
@@ -78,6 +75,8 @@ func (c *Client) Retrieve(ctx context.Context, req RetrieveRequest) (*RetrieveRe
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+
+	// API Key 认证
 	if c.APIKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
