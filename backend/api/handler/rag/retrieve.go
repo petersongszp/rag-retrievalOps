@@ -8,6 +8,7 @@ import (
 	kb "interview-agents/api/handler/kb"
 	"interview-agents/api/response"
 	auth "interview-agents/internal/auth"
+	"interview-agents/internal/repository"
 
 	"github.com/cloudwego/hertz/pkg/app"
 )
@@ -60,6 +61,15 @@ type RAGRequestCost struct {
 	EstimatedCost float64 `json:"estimated_cost"`
 }
 
+// getAPIKeyRepo 获取 API Key 仓储层实例
+func getAPIKeyRepo() *repository.RAGAPIKeyRepository {
+	// 从全局 DB 获取
+	if repository.GetDB() != nil {
+		return repository.NewRAGAPIKeyRepository(repository.GetDB())
+	}
+	return nil
+}
+
 // allowedAppIDs is a static whitelist for legacy compatibility.
 // NOTE: This is a legacy auth path. Will be fully removed after Phase 2 migration.
 var allowedAppIDs = map[string]string{
@@ -75,7 +85,7 @@ func isLegacyAppID(appID string) bool {
 }
 
 // Retrieve is the v1 public API handler for RAG retrieval.
-// Auth priority: API Key (middleware injected) > JWT > Legacy app_id whitelist.
+// Auth priority: API Key (header) > JWT (header) > Legacy app_id (body).
 func Retrieve(ctx context.Context, c *app.RequestContext) {
 	// 解析请求
 	var req RAGRetrieveRequest
@@ -90,8 +100,52 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 获取身份（优先从 API Key 中间件注入）
+	// 获取身份（从中间件注入，或自行解析 Authorization header）
 	identity := auth.GetIdentity(ctx)
+
+	// 如果中间件没有注入身份，尝试自行解析 Authorization header
+	if identity.AuthType == "" {
+		authHeader := string(c.GetHeader("Authorization"))
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			token := strings.TrimPrefix(authHeader, "Bearer ")
+			if auth.ValidateAPIKeyFormat(token) {
+				// API Key 认证
+				apiKeyRepo := getAPIKeyRepo()
+				if apiKeyRepo != nil {
+					keyHash := auth.HashAPIKey(token)
+					apiKey, err := apiKeyRepo.GetByKeyHash(keyHash)
+					if err == nil {
+						// Key 存在，检查状态
+						if apiKey.Status == "revoked" {
+							response.Error(ctx, c, 401, "API key is revoked")
+							return
+						}
+						if auth.IsAPIKeyExpired(apiKey.ExpiresAt) {
+							response.Error(ctx, c, 401, "API key is expired")
+							return
+						}
+						// Key 有效，注入身份
+						identity = &auth.Identity{
+							AuthType: auth.AuthTypeAPIKey,
+							TenantID: apiKey.TenantID,
+							UserID:   uint(apiKey.UserID),
+							Role:     "member",
+							AppID:    apiKey.AppID,
+							APIKeyID: apiKey.ID,
+						}
+						ctx = auth.WithIdentity(ctx, identity)
+						// 设置 Hertz context，兼容 kb.Retrieve 等旧 handler
+						c.Set("user_id", identity.UserID)
+						c.Set("role", identity.Role)
+						c.Set("tenant_id", identity.TenantID)
+						c.Set("app_id", identity.AppID)
+						c.Set("auth_type", string(auth.AuthTypeAPIKey))
+						apiKeyRepo.UpdateLastUsed(apiKey.ID)
+					}
+				}
+			}
+		}
+	}
 
 	switch identity.AuthType {
 	case auth.AuthTypeAPIKey:
