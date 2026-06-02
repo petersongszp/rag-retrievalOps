@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Alert, Button, Form, Input, Space, Typography } from 'antd';
 import { AuthShell } from '@/components/auth/auth-shell';
+import { getErrorMessage } from '@/services/api/errors';
 import { useAuth } from '@/services/auth/store';
 import type { LoginPayload } from '@/types/auth';
 
@@ -35,11 +36,7 @@ export default function LoginPage() {
       const next = searchParams.get('next');
       router.replace(next || '/dashboard');
     } catch (submitError) {
-      setError(
-        submitError && typeof submitError === 'object' && 'message' in submitError
-          ? String(submitError.message)
-          : '登录失败，请检查邮箱和密码后重试。'
-      );
+      setError(getErrorMessage(submitError, '登录失败，请检查邮箱和密码后重试。'));
     } finally {
       setSubmitting(false);
     }

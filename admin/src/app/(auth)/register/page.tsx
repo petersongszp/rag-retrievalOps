@@ -5,6 +5,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Alert, Button, Form, Input, Space, Typography } from 'antd';
 import { AuthShell } from '@/components/auth/auth-shell';
+import { getErrorMessage } from '@/services/api/errors';
 import { useAuth } from '@/services/auth/store';
 import type { RegisterPayload } from '@/types/auth';
 
@@ -23,11 +24,7 @@ export default function RegisterPage() {
       await register(values);
       router.replace('/login?registered=1');
     } catch (submitError) {
-      setError(
-        submitError && typeof submitError === 'object' && 'message' in submitError
-          ? String(submitError.message)
-          : '注册失败，请检查输入信息后重试。'
-      );
+      setError(getErrorMessage(submitError, '注册失败，请检查输入信息后重试。'));
     } finally {
       setSubmitting(false);
     }

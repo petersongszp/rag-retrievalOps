@@ -14,6 +14,7 @@ import type {
   RegisterResponse,
   SessionResponse,
 } from '@/types/auth';
+import { getErrorMessage } from '@/services/api/errors';
 import {
   clearStoredSession,
   getStoredSession,
@@ -33,35 +34,6 @@ type AuthContextValue = {
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
-
-function normalizeError(error: unknown, fallback: string): string {
-  if (
-    error &&
-    typeof error === 'object' &&
-    'message' in error &&
-    typeof error.message === 'string' &&
-    error.message.trim()
-  ) {
-    return error.message;
-  }
-
-  if (
-    error &&
-    typeof error === 'object' &&
-    'response' in error &&
-    error.response &&
-    typeof error.response === 'object' &&
-    'data' in error.response &&
-    error.response.data &&
-    typeof error.response.data === 'object' &&
-    'error' in error.response.data &&
-    typeof error.response.data.error === 'string'
-  ) {
-    return error.response.data.error;
-  }
-
-  return fallback;
-}
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
@@ -119,7 +91,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
 
     void loadMe().catch((error) => {
-      message.warning(normalizeError(error, '登录状态已失效，请重新登录'));
+      message.warning(getErrorMessage(error, '登录状态已失效，请重新登录'));
       logout({ silent: true });
     });
 
