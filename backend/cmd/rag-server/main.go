@@ -47,6 +47,9 @@ func main() {
 	if err := cfg.ValidateRAGPrerequisites(); err != nil {
 		log.Fatalf("[RAG-Server] Invalid RAG configuration: %v", err)
 	}
+	if err := cfg.ValidateAuthProductionSafety(); err != nil {
+		log.Fatalf("[RAG-Server] %v", err)
+	}
 	log.Printf("[RAG-Server] Config loaded: env=%s rag.enabled=%t", cfg.RAG.Environment, cfg.RAG.Enabled)
 
 	log.Println("[RAG-Server] Initializing database...")
@@ -122,9 +125,25 @@ func main() {
 		}
 
 		if strings.HasPrefix(path, "/api/admin/") {
+			// 检查环境门禁
+			if cfg.RAG.Environment == "prod" {
+				// 生产环境不允许 Admin 注入
+				log.Printf("[Auth] Admin bypass disabled in production environment")
+				c.AbortWithStatus(401)
+				return
+			}
+			if !cfg.RAG.Auth.DevAdminBypassEnabled {
+				// 未开启 Admin 注入
+				log.Printf("[Auth] Admin bypass disabled by configuration")
+				c.AbortWithStatus(401)
+				return
+			}
+			// 开发环境且开启注入
 			c.Set("user_id", uint(1))
 			c.Set("role", "admin")
 			c.Set("username", "admin")
+			c.Set("auth_type", "dev_admin_bypass")
+			log.Printf("[Auth] Dev admin bypass: user_id=1, path=%s", path)
 			c.Next(ctx)
 			return
 		}

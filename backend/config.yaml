@@ -29,6 +29,14 @@ security:
 rag:
   enabled: true
   environment: dev
+  auth:
+    dev_admin_bypass_enabled: true  # 仅 dev 环境可用
+    jwt_secret: "your-jwt-secret-key-here"
+    bootstrap_enabled: true
+    bootstrap_admin_email: "admin@example.com"
+    bootstrap_admin_password: "Admin@123456"
+    bootstrap_admin_name: "Admin"
+    bootstrap_tenant_name: "Default"
   feature_flags:
     enable_prod_guard: false
     enable_ingest_retry: false
