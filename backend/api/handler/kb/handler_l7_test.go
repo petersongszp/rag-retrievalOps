@@ -1,11 +1,14 @@
 package kb
 
 import (
+	"context"
 	"testing"
 
+	authpkg "interview-agents/internal/auth"
 	"interview-agents/internal/milvus/retrieval"
 	"interview-agents/internal/model"
 
+	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -227,5 +230,60 @@ func TestBuildRetrievalDebugTraceResponseFallbackMarksContractGaps(t *testing.T)
 	}
 	if len(trace.RouteHits) != 2 {
 		t.Fatalf("fallback RouteHits len = %d, want 2", len(trace.RouteHits))
+	}
+}
+
+func TestEnrichRetrieveLogWithPlatformContextForAPIKey(t *testing.T) {
+	ctx := authpkg.WithIdentity(context.Background(), &authpkg.Identity{
+		AuthType: authpkg.AuthTypeAPIKey,
+		TenantID: 12,
+		UserID:   7,
+		AppID:    "support-bot",
+		APIKeyID: 34,
+	})
+	c := &app.RequestContext{}
+	c.Request.SetRequestURI("/v1/retrieve")
+	c.Set("auth_type", "api_key")
+	c.Set("tenant_id", uint64(12))
+	c.Set("app_id", "support-bot")
+	c.Set("api_key_id", uint64(34))
+
+	entry := &model.KBRetrieveLog{RequestID: "req-platform"}
+	enrichRetrieveLogWithPlatformContext(ctx, c, entry, "allowed")
+
+	if entry.TenantID != 12 || entry.AppID != "support-bot" || entry.APIKeyID != 34 {
+		t.Fatalf("unexpected platform identifiers: %+v", entry)
+	}
+	if entry.AuthType != "api_key" || entry.SourceAPI != "v1" || entry.PermissionResult != "allowed" {
+		t.Fatalf("unexpected auth trace fields: %+v", entry)
+	}
+	if entry.IsLegacy {
+		t.Fatalf("IsLegacy = true, want false")
+	}
+}
+
+func TestEnrichRetrieveLogWithPlatformContextForLegacy(t *testing.T) {
+	ctx := authpkg.WithIdentity(context.Background(), &authpkg.Identity{
+		AuthType: authpkg.AuthTypeLegacyAppID,
+		TenantID: 1,
+		UserID:   1,
+		AppID:    "interview-agent",
+		IsLegacy: true,
+	})
+	c := &app.RequestContext{}
+	c.Request.SetRequestURI("/v1/retrieve")
+	c.Set("auth_type", "legacy_app_id")
+	c.Set("tenant_id", uint64(1))
+	c.Set("app_id", "interview-agent")
+	c.Set("is_legacy", true)
+
+	entry := &model.KBRetrieveLog{RequestID: "req-legacy"}
+	enrichRetrieveLogWithPlatformContext(ctx, c, entry, "allowed")
+
+	if entry.AuthType != "legacy_app_id" || entry.SourceAPI != "v1" {
+		t.Fatalf("unexpected auth/source for legacy request: %+v", entry)
+	}
+	if !entry.IsLegacy {
+		t.Fatalf("IsLegacy = false, want true")
 	}
 }
