@@ -2,6 +2,7 @@ package rag
 
 import (
 	"context"
+	"errors"
 	"log"
 	"strings"
 
@@ -9,8 +10,10 @@ import (
 	"interview-agents/api/response"
 	auth "interview-agents/internal/auth"
 	"interview-agents/internal/repository"
+	"interview-agents/internal/service"
 
 	"github.com/cloudwego/hertz/pkg/app"
+	"gorm.io/gorm"
 )
 
 // RAGRetrieveRequest is the v1 public API request contract.
@@ -61,13 +64,114 @@ type RAGRequestCost struct {
 	EstimatedCost float64 `json:"estimated_cost"`
 }
 
-// getAPIKeyRepo 获取 API Key 仓储层实例
+const (
+	systemTenantID uint64 = 1
+	systemUserID   uint   = 1
+)
+
+var (
+	kbTenantRepo  *repository.KBTenantRepository
+	kbPermService *service.KBPermissionService
+)
+
 func getAPIKeyRepo() *repository.RAGAPIKeyRepository {
-	// 从全局 DB 获取
-	if repository.GetDB() != nil {
-		return repository.NewRAGAPIKeyRepository(repository.GetDB())
+	db := repository.GetDB()
+	if db == nil {
+		return nil
 	}
-	return nil
+	return repository.NewRAGAPIKeyRepository(db)
+}
+
+func initRetrieveDependencies() bool {
+	db := repository.GetDB()
+	if db == nil {
+		return false
+	}
+	if kbTenantRepo == nil {
+		kbTenantRepo = repository.NewKBTenantRepository(db)
+	}
+	if kbPermService == nil {
+		kbPermService = service.NewKBPermissionService(
+			repository.NewRAGTenantKBPermissionRepository(db),
+		)
+	}
+	return true
+}
+
+func setIdentityContext(ctx context.Context, c *app.RequestContext, identity *auth.Identity) context.Context {
+	ctx = auth.WithIdentity(ctx, identity)
+	c.Set("auth_type", string(identity.AuthType))
+	c.Set("user_id", identity.UserID)
+	c.Set("role", identity.Role)
+	c.Set("tenant_id", identity.TenantID)
+	c.Set("app_id", identity.AppID)
+	c.Set("api_key_id", identity.APIKeyID)
+	c.Set("is_legacy", identity.IsLegacy)
+	return ctx
+}
+
+func resolveRequestedKBIDs(req RAGRetrieveRequest) []uint64 {
+	ids := make([]uint64, 0, len(req.KBIDs)+1)
+	seen := make(map[uint64]struct{}, len(req.KBIDs)+1)
+
+	for _, kbID := range req.KBIDs {
+		if kbID == 0 {
+			continue
+		}
+		if _, ok := seen[kbID]; ok {
+			continue
+		}
+		seen[kbID] = struct{}{}
+		ids = append(ids, kbID)
+	}
+
+	if req.KBID > 0 {
+		if _, ok := seen[req.KBID]; !ok {
+			ids = append(ids, req.KBID)
+		}
+	}
+
+	return ids
+}
+
+func authorizeRetrieveKBIDs(ctx context.Context, c *app.RequestContext, tenantID uint64, req RAGRetrieveRequest) bool {
+	if tenantID == 0 {
+		response.Error(ctx, c, 401, "Authentication required")
+		return false
+	}
+	if !initRetrieveDependencies() {
+		response.Error(ctx, c, 500, "Database is not initialized")
+		return false
+	}
+
+	requestedKBIDs := resolveRequestedKBIDs(req)
+	if len(requestedKBIDs) == 0 {
+		response.BadRequest(ctx, c, "kb_id or kb_ids is required")
+		return false
+	}
+
+	for _, kbID := range requestedKBIDs {
+		if _, err := kbTenantRepo.GetByIDForTenant(tenantID, kbID); err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				response.Error(ctx, c, 404, "Knowledge base not found")
+				return false
+			}
+			response.Error(ctx, c, 500, "Failed to validate knowledge base access")
+			return false
+		}
+
+		allowed, err := kbPermService.CheckPermission(tenantID, kbID, "read")
+		if err != nil {
+			response.Error(ctx, c, 500, "Failed to validate knowledge base permission")
+			return false
+		}
+		if !allowed {
+			response.Error(ctx, c, 403, "Permission denied")
+			return false
+		}
+	}
+
+	return true
 }
 
 // allowedAppIDs is a static whitelist for legacy compatibility.
@@ -78,7 +182,6 @@ var allowedAppIDs = map[string]string{
 	"mianshiba-admin": "mianshiba-admin",
 }
 
-// isLegacyAppID 检查是否是旧白名单 app_id
 func isLegacyAppID(appID string) bool {
 	_, ok := allowedAppIDs[appID]
 	return ok
@@ -87,7 +190,6 @@ func isLegacyAppID(appID string) bool {
 // Retrieve is the v1 public API handler for RAG retrieval.
 // Auth priority: API Key (header) > JWT (header) > Legacy app_id (body).
 func Retrieve(ctx context.Context, c *app.RequestContext) {
-	// 解析请求
 	var req RAGRetrieveRequest
 	if err := c.BindAndValidate(&req); err != nil {
 		response.BadRequest(ctx, c, "Invalid request: "+err.Error())
@@ -100,22 +202,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	// 获取身份（从中间件注入，或自行解析 Authorization header）
 	identity := auth.GetIdentity(ctx)
-
-	// 如果中间件没有注入身份，尝试自行解析 Authorization header
 	if identity.AuthType == "" {
 		authHeader := string(c.GetHeader("Authorization"))
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
 			if auth.ValidateAPIKeyFormat(token) {
-				// API Key 认证
 				apiKeyRepo := getAPIKeyRepo()
 				if apiKeyRepo != nil {
 					keyHash := auth.HashAPIKey(token)
 					apiKey, err := apiKeyRepo.GetByKeyHash(keyHash)
 					if err == nil {
-						// Key 存在，检查状态
 						if apiKey.Status == "revoked" {
 							response.Error(ctx, c, 401, "API key is revoked")
 							return
@@ -124,22 +221,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 							response.Error(ctx, c, 401, "API key is expired")
 							return
 						}
-						// Key 有效，注入身份
+
 						identity = &auth.Identity{
-							AuthType: auth.AuthTypeAPIKey,
-							TenantID: apiKey.TenantID,
-							UserID:   uint(apiKey.UserID),
-							Role:     "member",
-							AppID:    apiKey.AppID,
-							APIKeyID: apiKey.ID,
+							AuthType:    auth.AuthTypeAPIKey,
+							TenantID:    apiKey.TenantID,
+							UserID:      uint(apiKey.UserID),
+							Role:        "member",
+							AppID:       apiKey.AppID,
+							APIKeyID:    apiKey.ID,
+							Permissions: auth.ParsePermissions(apiKey.Permissions),
 						}
-						ctx = auth.WithIdentity(ctx, identity)
-						// 设置 Hertz context，兼容 kb.Retrieve 等旧 handler
-						c.Set("user_id", identity.UserID)
-						c.Set("role", identity.Role)
-						c.Set("tenant_id", identity.TenantID)
-						c.Set("app_id", identity.AppID)
-						c.Set("auth_type", string(auth.AuthTypeAPIKey))
+						ctx = setIdentityContext(ctx, c, identity)
 						apiKeyRepo.UpdateLastUsed(apiKey.ID)
 					}
 				}
@@ -149,73 +241,58 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 
 	switch identity.AuthType {
 	case auth.AuthTypeAPIKey:
-		// API Key 认证：app_id 从 Key 推导，不需要请求体
-		// 如果请求体带了 app_id，以 Key 绑定的为准
 		req.AppID = identity.AppID
+		ctx = setIdentityContext(ctx, c, identity)
+		if !authorizeRetrieveKBIDs(ctx, c, identity.TenantID, req) {
+			return
+		}
 
 	case auth.AuthTypeJWT:
-		// JWT 认证：管理端调用
 		if req.AppID == "" {
 			req.AppID = identity.AppID
 		}
+		ctx = setIdentityContext(ctx, c, identity)
+		if !authorizeRetrieveKBIDs(ctx, c, identity.TenantID, req) {
+			return
+		}
 
 	case auth.AuthTypeLegacyAppID, "":
-		// Legacy 兼容：旧 app_id 白名单
 		if req.AppID == "" {
 			response.BadRequest(ctx, c, "app_id is required for legacy access")
 			return
 		}
-
 		if !isLegacyAppID(req.AppID) {
 			response.Error(ctx, c, 403, "Invalid app_id")
 			return
 		}
 
-		// 标记为 legacy
 		identity = &auth.Identity{
 			AuthType: auth.AuthTypeLegacyAppID,
+			TenantID: systemTenantID,
+			UserID:   systemUserID,
+			Role:     "member",
 			AppID:    req.AppID,
 			IsLegacy: true,
 		}
-		ctx = auth.WithIdentity(ctx, identity)
-		c.Set("auth_type", "legacy_app_id")
-		c.Set("app_id", req.AppID)
-		c.Set("is_legacy", true)
+		ctx = setIdentityContext(ctx, c, identity)
 		log.Printf("[Auth] Legacy app_id=%s, deprecated after Phase 2", req.AppID)
+		if !authorizeRetrieveKBIDs(ctx, c, identity.TenantID, req) {
+			return
+		}
 
 	default:
 		response.Error(ctx, c, 401, "Authentication required")
 		return
 	}
 
-	// Phase 3: 租户权限门禁
-	if identity.TenantID == 0 && !identity.IsLegacy {
-		response.Error(ctx, c, 401, "Tenant context required")
-		return
-	}
+	log.Printf(
+		"[RAG Public API] source_api=v1 auth_type=%s tenant_id=%d app_id=%s query=%q top_k=%d",
+		identity.AuthType,
+		identity.TenantID,
+		req.AppID,
+		req.Query,
+		req.TopK,
+	)
 
-	// Legacy 路径映射到系统租户
-	if identity.IsLegacy {
-		identity.TenantID = 1 // SYSTEM_TENANT_ID
-		ctx = auth.WithIdentity(ctx, identity)
-		c.Set("tenant_id", uint64(1))
-	}
-
-	// 检查请求的 kb_ids 是否属于当前租户
-	if len(req.KBIDs) > 0 {
-		kbTenantRepo := repository.NewKBTenantRepository(repository.GetDB())
-		for _, kbID := range req.KBIDs {
-			_, err := kbTenantRepo.GetByIDForTenant(identity.TenantID, kbID)
-			if err != nil {
-				// 跨租户访问：返回 404 不泄露存在性
-				response.Error(ctx, c, 404, "Knowledge base not found")
-				return
-			}
-		}
-	}
-
-	log.Printf("[RAG Public API] source_api=v1 auth_type=%s tenant_id=%d app_id=%s query=%q top_k=%d", identity.AuthType, identity.TenantID, req.AppID, req.Query, req.TopK)
-
-	// Delegate to the existing kb.Retrieve handler to reuse the full retrieval chain.
 	kb.Retrieve(ctx, c)
 }

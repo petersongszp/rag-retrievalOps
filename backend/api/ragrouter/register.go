@@ -80,6 +80,8 @@ func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 func registerRAGPublicRoutes(r *route.RouterGroup) {
 	v1 := r.Group("/v1")
 	{
+		// /v1/retrieve 支持多种认证：API Key > JWT > Legacy app_id
+		// 使用 OptionalAuth 中间件，不强制认证，让 handler 内部判断
 		v1.POST("/retrieve", rag.Retrieve)
 	}
 }
