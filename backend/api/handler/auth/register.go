@@ -27,6 +27,7 @@ var (
 func InitAuthHandler(db *gorm.DB, cfg *config.Config) {
 	tenantRepo = repository.NewRAGTenantRepository(db)
 	userRepo = repository.NewRAGUserRepository(db)
+	InitTenantHandler(db)
 
 	jwtManager = authpkg.NewJWTManager(authpkg.JWTConfig{
 		Secret:     cfg.RAG.Auth.JWTSecret,

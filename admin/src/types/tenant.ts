@@ -6,6 +6,15 @@ export interface TenantSummary {
   status?: string;
 }
 
+export interface TenantDetail extends TenantSummary {
+  created_at?: string;
+  updated_at?: string;
+  max_kb_count: number;
+  max_doc_count: number;
+  max_storage_mb: number;
+  max_api_calls_per_day: number;
+}
+
 export interface TenantUsageLimits {
   max_kb_count: number;
   max_doc_count: number;

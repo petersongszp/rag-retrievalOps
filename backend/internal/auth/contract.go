@@ -1,6 +1,7 @@
 package auth
 
-// 注册请求
+import "time"
+
 type RegisterRequest struct {
 	Email      string `json:"email" binding:"required,email"`
 	Password   string `json:"password" binding:"required,min=12"`
@@ -8,20 +9,17 @@ type RegisterRequest struct {
 	TenantName string `json:"tenant_name"`
 }
 
-// 注册响应
 type RegisterResponse struct {
 	UserID   uint   `json:"user_id"`
 	Email    string `json:"email"`
 	TenantID uint64 `json:"tenant_id"`
 }
 
-// 登录请求
 type LoginRequest struct {
 	Email    string `json:"email" binding:"required,email"`
 	Password string `json:"password" binding:"required"`
 }
 
-// 登录响应
 type LoginResponse struct {
 	AccessToken  string `json:"access_token"`
 	RefreshToken string `json:"refresh_token"`
@@ -31,26 +29,23 @@ type LoginResponse struct {
 	TenantID     uint64 `json:"tenant_id"`
 }
 
-// API Key 创建请求
 type CreateAPIKeyRequest struct {
 	Name        string   `json:"name" binding:"required"`
 	AppID       string   `json:"app_id" binding:"required"`
 	Permissions []string `json:"permissions"`
-	ExpiresIn   int      `json:"expires_in"` // 秒，0 表示永不过期
+	ExpiresIn   int      `json:"expires_in"`
 }
 
-// API Key 创建响应（只在创建时返回完整 key）
 type CreateAPIKeyResponse struct {
 	ID          uint64   `json:"id"`
 	Name        string   `json:"name"`
 	AppID       string   `json:"app_id"`
-	Key         string   `json:"key"`       // 只在创建时返回
+	Key         string   `json:"key"`
 	KeyPrefix   string   `json:"key_prefix"`
 	Permissions []string `json:"permissions"`
 	CreatedAt   string   `json:"created_at"`
 }
 
-// API Key 列表项（不包含完整 key）
 type APIKeyItem struct {
 	ID          uint64   `json:"id"`
 	Name        string   `json:"name"`
@@ -63,21 +58,47 @@ type APIKeyItem struct {
 	CreatedAt   string   `json:"created_at"`
 }
 
-// API Key 更新请求
 type UpdateAPIKeyRequest struct {
 	Name        string   `json:"name"`
 	Permissions []string `json:"permissions"`
 }
 
-// API Key 轮换响应
 type RotateAPIKeyResponse struct {
 	ID        uint64 `json:"id"`
-	Key       string `json:"key"`       // 只在轮换时返回
+	Key       string `json:"key"`
 	KeyPrefix string `json:"key_prefix"`
 	CreatedAt string `json:"created_at"`
 }
 
-// 错误码定义
+type TenantResponse struct {
+	TenantID          uint64    `json:"tenant_id"`
+	Name              string    `json:"name"`
+	Slug              string    `json:"slug"`
+	Plan              string    `json:"plan"`
+	Status            string    `json:"status"`
+	CreatedAt         time.Time `json:"created_at"`
+	UpdatedAt         time.Time `json:"updated_at"`
+	MaxKBCount        int       `json:"max_kb_count"`
+	MaxDocCount       int       `json:"max_doc_count"`
+	MaxStorageMB      int       `json:"max_storage_mb"`
+	MaxAPICallsPerDay int       `json:"max_api_calls_per_day"`
+}
+
+type TenantUsageLimits struct {
+	MaxKBCount        int `json:"max_kb_count"`
+	MaxDocCount       int `json:"max_doc_count"`
+	MaxStorageMB      int `json:"max_storage_mb"`
+	MaxAPICallsPerDay int `json:"max_api_calls_per_day"`
+}
+
+type TenantUsageResponse struct {
+	APICallsToday int               `json:"api_calls_today"`
+	KBCount       int               `json:"kb_count"`
+	DocCount      int               `json:"doc_count"`
+	StorageMB     int64             `json:"storage_mb"`
+	Limits        TenantUsageLimits `json:"limits"`
+}
+
 const (
 	ErrCodeInvalidCredentials = "INVALID_CREDENTIALS"
 	ErrCodeEmailExists        = "EMAIL_ALREADY_EXISTS"

@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   AlertOutlined,
@@ -36,7 +36,10 @@ import {
   message,
 } from 'antd';
 import type { MenuProps } from 'antd';
+import { TENANT_API } from '@/config/api';
+import apiClient from '@/services/api/client';
 import { useAuth } from '@/services/auth/store';
+import type { TenantDetail } from '@/types/tenant';
 import { KnowledgeBaseProvider, useKnowledgeBaseContext } from './knowledge-base-provider';
 
 const { Header, Sider, Content } = Layout;
@@ -104,6 +107,15 @@ const navItems: NavItem[] = [
     icon: <SettingOutlined />,
   },
   {
+    key: '/tenant',
+    label: '租户',
+    icon: <SettingOutlined />,
+    children: [
+      { key: '/tenant/settings', label: '租户设置', href: '/tenant/settings' },
+      { key: '/tenant/usage', label: '租户用量', href: '/tenant/usage' },
+    ],
+  },
+  {
     key: '/cost-ops',
     label: '成本运营',
     icon: <WalletOutlined />,
@@ -150,6 +162,12 @@ function getSelectedNavKey(pathname: string): string {
   if (pathname.startsWith('/cost-ops/vector-db')) {
     return '/cost-ops/vector-db';
   }
+  if (pathname.startsWith('/tenant/settings')) {
+    return '/tenant/settings';
+  }
+  if (pathname.startsWith('/tenant/usage')) {
+    return '/tenant/usage';
+  }
   if (pathname.startsWith('/audit')) {
     return '/audit';
   }
@@ -184,6 +202,9 @@ function getOpenKeys(pathname: string): string[] {
   if (pathname.startsWith('/evaluation')) {
     return ['/evaluation'];
   }
+  if (pathname.startsWith('/tenant')) {
+    return ['/tenant'];
+  }
   if (pathname.startsWith('/cost-ops')) {
     return ['/cost-ops'];
   }
@@ -198,6 +219,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const { user, changePassword, logout } = useAuth();
   const { bases, selectedBase, setSelectedBaseId } = useKnowledgeBaseContext();
+  const [tenantDetail, setTenantDetail] = useState<TenantDetail | null>(null);
   const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(pathname));
   const [passwordModalOpen, setPasswordModalOpen] = useState(false);
   const [updatingPassword, setUpdatingPassword] = useState(false);
@@ -206,6 +228,29 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     new_password: string;
     confirm_password: string;
   }>();
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadTenantSummary = async () => {
+      try {
+        const detail = (await apiClient.get(TENANT_API.DETAIL)) as TenantDetail;
+        if (!cancelled) {
+          setTenantDetail(detail);
+        }
+      } catch {
+        if (!cancelled) {
+          setTenantDetail(null);
+        }
+      }
+    };
+
+    void loadTenantSummary();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const menuItems = useMemo<MenuProps['items']>(() => {
     const toMenuItem = (item: NavItem): NonNullable<MenuProps['items']>[number] => ({
@@ -259,6 +304,20 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith('/trace-logs')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '链路日志' }];
+    }
+    if (pathname.startsWith('/tenant/settings')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '租户' },
+        { title: '租户设置' },
+      ];
+    }
+    if (pathname.startsWith('/tenant/usage')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '租户' },
+        { title: '租户用量' },
+      ];
     }
     if (pathname.startsWith('/evaluation/reports/')) {
       return [
@@ -416,6 +475,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
               {user ? (
                 <Space size={6}>
                   <Tag color="geekblue">{user.tenant_name || `Tenant ${user.tenant_id}`}</Tag>
+                  {tenantDetail?.plan ? <Tag color="purple">{tenantDetail.plan}</Tag> : null}
                   <Tag color="cyan">{user.role}</Tag>
                 </Space>
               ) : null}

@@ -75,6 +75,14 @@ func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 			apiKeyGroup.POST("/:id/rotate", authhandler.RotateAPIKey)
 			apiKeyGroup.DELETE("/:id", authhandler.DeleteAPIKey)
 		}
+
+		log.Println("[RAG] Registering tenant routes")
+		tenantGroup := h.Group("/v1/tenant")
+		tenantGroup.Use(middleware.JWTAuth(jwtManager))
+		{
+			tenantGroup.GET("", authhandler.GetTenant)
+			tenantGroup.GET("/usage", authhandler.GetTenantUsage)
+		}
 	}
 }
 
