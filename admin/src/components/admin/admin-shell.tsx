@@ -4,8 +4,8 @@ import Link from 'next/link';
 import { useMemo, useState } from 'react';
 import { usePathname, useRouter } from 'next/navigation';
 import {
-  AppstoreOutlined,
   AlertOutlined,
+  AppstoreOutlined,
   BarChartOutlined,
   BookOutlined,
   DatabaseOutlined,
@@ -13,11 +13,29 @@ import {
   FileSearchOutlined,
   FolderOpenOutlined,
   InboxOutlined,
+  LockOutlined,
+  LogoutOutlined,
   SettingOutlined,
+  UserOutlined,
   WalletOutlined,
 } from '@ant-design/icons';
-import { Breadcrumb, Button, Layout, Menu, Select, Space, Tag, Typography } from 'antd';
+import {
+  Breadcrumb,
+  Button,
+  Dropdown,
+  Form,
+  Input,
+  Layout,
+  Menu,
+  Modal,
+  Select,
+  Space,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
 import type { MenuProps } from 'antd';
+import { useAuth } from '@/services/auth/store';
 import { KnowledgeBaseProvider, useKnowledgeBaseContext } from './knowledge-base-provider';
 
 const { Header, Sider, Content } = Layout;
@@ -168,7 +186,16 @@ function getOpenKeys(pathname: string): string[] {
 function AdminShellInner({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const router = useRouter();
+  const { user, changePassword, logout } = useAuth();
   const { bases, selectedBase, setSelectedBaseId } = useKnowledgeBaseContext();
+  const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(pathname));
+  const [passwordModalOpen, setPasswordModalOpen] = useState(false);
+  const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [passwordForm] = Form.useForm<{
+    old_password: string;
+    new_password: string;
+    confirm_password: string;
+  }>();
 
   const menuItems = useMemo<MenuProps['items']>(() => {
     const toMenuItem = (item: NavItem): NonNullable<MenuProps['items']>[number] => ({
@@ -272,15 +299,26 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '告警中心' }];
     }
     if (pathname.startsWith('/reports/weekly')) {
-      return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: '报告' },
-        { title: '周报' },
-      ];
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '报告' }, { title: '周报' }];
     }
 
     return [{ title: '概览' }];
   }, [pathname, selectedBase?.name]);
+
+  const userMenuItems: MenuProps['items'] = [
+    {
+      key: 'change-password',
+      icon: <LockOutlined />,
+      label: '修改密码',
+      onClick: () => setPasswordModalOpen(true),
+    },
+    {
+      key: 'logout',
+      icon: <LogoutOutlined />,
+      label: '退出登录',
+      onClick: () => logout(),
+    },
+  ];
 
   const handleBaseChange = (value?: number) => {
     setSelectedBaseId(value ?? null);
@@ -289,10 +327,22 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
   };
 
-  const [openKeys, setOpenKeys] = useState<string[]>(() => getOpenKeys(pathname));
+  const handleChangePassword = async () => {
+    const values = await passwordForm.validateFields();
 
-  const handleOpenChange = (keys: string[]) => {
-    setOpenKeys(keys);
+    try {
+      setUpdatingPassword(true);
+      await changePassword({
+        old_password: values.old_password,
+        new_password: values.new_password,
+      });
+      message.success('密码修改成功，请重新登录');
+      setPasswordModalOpen(false);
+      passwordForm.resetFields();
+      logout({ redirectTo: '/login?passwordChanged=1', silent: false });
+    } finally {
+      setUpdatingPassword(false);
+    }
   };
 
   return (
@@ -318,14 +368,14 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
               mode="inline"
               selectedKeys={[getSelectedNavKey(pathname)]}
               openKeys={openKeys}
-              onOpenChange={handleOpenChange}
+              onOpenChange={setOpenKeys}
               items={menuItems}
             />
           </div>
 
           <div className="border-t border-slate-200 px-5 py-4">
             <Text type="secondary">
-              当前版本已接入 P4 治理能力骨架，支持成本、向量运维、审计、告警与周报逐步联调。
+              当前控制台已接入 Phase 4 认证闭环，后续会继续补齐 API Key、租户用量与接入文档能力。
             </Text>
           </div>
         </div>
@@ -350,6 +400,15 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
               <Tag color={selectedBase ? 'blue' : 'default'}>
                 {selectedBase ? `当前知识库：${selectedBase.name}` : '未选择知识库'}
               </Tag>
+              {user ? (
+                <Space size={6}>
+                  <Tag color="geekblue">{user.tenant_name || `Tenant ${user.tenant_id}`}</Tag>
+                  <Tag color="cyan">{user.role}</Tag>
+                </Space>
+              ) : null}
+              <Dropdown menu={{ items: userMenuItems }} trigger={['click']}>
+                <Button icon={<UserOutlined />}>{user ? user.name || user.email : '账户'}</Button>
+              </Dropdown>
               <Button onClick={() => router.refresh()}>刷新</Button>
             </Space>
           </div>
@@ -357,6 +416,59 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
         <Content className="bg-slate-50 p-6">{children}</Content>
       </Layout>
+
+      <Modal
+        title="修改密码"
+        open={passwordModalOpen}
+        okText="保存并重新登录"
+        cancelText="取消"
+        okButtonProps={{ loading: updatingPassword }}
+        onCancel={() => {
+          setPasswordModalOpen(false);
+          passwordForm.resetFields();
+        }}
+        onOk={() => void handleChangePassword()}
+      >
+        <Form form={passwordForm} layout="vertical">
+          <Form.Item
+            label="当前密码"
+            name="old_password"
+            rules={[{ required: true, message: '请输入当前密码' }]}
+          >
+            <Input.Password autoComplete="current-password" />
+          </Form.Item>
+
+          <Form.Item
+            label="新密码"
+            name="new_password"
+            rules={[
+              { required: true, message: '请输入新密码' },
+              { min: 12, message: '新密码至少需要 12 个字符' },
+            ]}
+          >
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+
+          <Form.Item
+            label="确认新密码"
+            name="confirm_password"
+            dependencies={['new_password']}
+            rules={[
+              { required: true, message: '请再次输入新密码' },
+              ({ getFieldValue }) => ({
+                validator(_, value) {
+                  if (!value || getFieldValue('new_password') === value) {
+                    return Promise.resolve();
+                  }
+                  return Promise.reject(new Error('两次输入的新密码不一致'));
+                },
+              }),
+            ]}
+          >
+            <Input.Password autoComplete="new-password" />
+          </Form.Item>
+        </Form>
+      </Modal>
     </Layout>
   );
 }
