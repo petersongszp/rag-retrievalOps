@@ -32,6 +32,10 @@ func Register(h *server.Hertz) {
 	authGroup := h.Group("/v1/auth")
 	{
 		authGroup.POST("/register", authhandler.Register)
+		authGroup.POST("/login", authhandler.Login)
+		authGroup.POST("/refresh", authhandler.Refresh)
+		authGroup.GET("/me", authhandler.Me)
+		authGroup.PUT("/password", authhandler.ChangePassword)
 	}
 }
 
