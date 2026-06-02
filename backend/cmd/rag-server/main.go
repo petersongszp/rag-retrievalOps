@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"interview-agents/api/ragrouter"
+	"interview-agents/internal/auth"
 	"interview-agents/internal/config"
 	appMiddleware "interview-agents/internal/middleware"
 	"interview-agents/internal/milvus"
@@ -51,6 +52,11 @@ func main() {
 		log.Fatalf("[RAG-Server] %v", err)
 	}
 	log.Printf("[RAG-Server] Config loaded: env=%s rag.enabled=%t", cfg.RAG.Environment, cfg.RAG.Enabled)
+
+	// Bootstrap 测试管理员
+	if err := auth.BootstrapAdmin(cfg); err != nil {
+		log.Printf("[RAG-Server] Bootstrap admin failed: %v", err)
+	}
 
 	log.Println("[RAG-Server] Initializing database...")
 	if err := repository.InitDatabaseOnly(cfg.Database); err != nil {
