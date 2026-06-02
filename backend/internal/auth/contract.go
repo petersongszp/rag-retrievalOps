@@ -41,12 +41,13 @@ type CreateAPIKeyRequest struct {
 
 // API Key 创建响应（只在创建时返回完整 key）
 type CreateAPIKeyResponse struct {
-	ID        uint64 `json:"id"`
-	Name      string `json:"name"`
-	AppID     string `json:"app_id"`
-	Key       string `json:"key"`       // 只在创建时返回
-	KeyPrefix string `json:"key_prefix"`
-	CreatedAt string `json:"created_at"`
+	ID          uint64   `json:"id"`
+	Name        string   `json:"name"`
+	AppID       string   `json:"app_id"`
+	Key         string   `json:"key"`       // 只在创建时返回
+	KeyPrefix   string   `json:"key_prefix"`
+	Permissions []string `json:"permissions"`
+	CreatedAt   string   `json:"created_at"`
 }
 
 // API Key 列表项（不包含完整 key）
@@ -58,7 +59,22 @@ type APIKeyItem struct {
 	Permissions []string `json:"permissions"`
 	Status      string   `json:"status"`
 	LastUsedAt  string   `json:"last_used_at"`
+	ExpiresAt   string   `json:"expires_at"`
 	CreatedAt   string   `json:"created_at"`
+}
+
+// API Key 更新请求
+type UpdateAPIKeyRequest struct {
+	Name        string   `json:"name"`
+	Permissions []string `json:"permissions"`
+}
+
+// API Key 轮换响应
+type RotateAPIKeyResponse struct {
+	ID        uint64 `json:"id"`
+	Key       string `json:"key"`       // 只在轮换时返回
+	KeyPrefix string `json:"key_prefix"`
+	CreatedAt string `json:"created_at"`
 }
 
 // 错误码定义
@@ -69,6 +85,7 @@ const (
 	ErrCodeInvalidAPIKey      = "INVALID_API_KEY"
 	ErrCodeAPIKeyRevoked      = "API_KEY_REVOKED"
 	ErrCodeAPIKeyExpired      = "API_KEY_EXPIRED"
+	ErrCodeAPIKeyInactive     = "API_KEY_INACTIVE"
 	ErrCodePermissionDenied   = "PERMISSION_DENIED"
 	ErrCodeTenantNotFound     = "TENANT_NOT_FOUND"
 	ErrCodeTenantDisabled     = "TENANT_DISABLED"
