@@ -219,6 +219,8 @@ type LLMConfig struct {
 type AuthConfig struct {
 	DevAdminBypassEnabled  bool   `yaml:"dev_admin_bypass_enabled" env:"RAG_DEV_ADMIN_BYPASS_ENABLED"`
 	JWTSecret              string `yaml:"jwt_secret" env:"JWT_SECRET"`
+	AccessTokenTTL         string `yaml:"access_token_ttl" env:"ACCESS_TOKEN_TTL"`   // e.g. "2h"
+	RefreshTokenTTL        string `yaml:"refresh_token_ttl" env:"REFRESH_TOKEN_TTL"` // e.g. "168h"
 	BootstrapEnabled       bool   `yaml:"bootstrap_enabled" env:"BOOTSTRAP_ENABLED"`
 	BootstrapAdminEmail    string `yaml:"bootstrap_admin_email" env:"BOOTSTRAP_ADMIN_EMAIL"`
 	BootstrapAdminPassword string `yaml:"bootstrap_admin_password" env:"BOOTSTRAP_ADMIN_PASSWORD"`
@@ -766,6 +768,13 @@ func (c *Config) applyRAGDefaults() {
 	if strings.TrimSpace(c.RAG.Phase3.CitationCheckVersion) == "" {
 		c.RAG.Phase3.CitationCheckVersion = "phase3-citation-v1"
 	}
+	// Auth TTL defaults
+	if strings.TrimSpace(c.RAG.Auth.AccessTokenTTL) == "" {
+		c.RAG.Auth.AccessTokenTTL = "2h"
+	}
+	if strings.TrimSpace(c.RAG.Auth.RefreshTokenTTL) == "" {
+		c.RAG.Auth.RefreshTokenTTL = "168h"
+	}
 	if c.RAG.Phase3.DomainTermTimeoutMS <= 0 {
 		c.RAG.Phase3.DomainTermTimeoutMS = 80
 	}
@@ -1070,6 +1079,12 @@ func (c *Config) applyRAGEnvOverrides() error {
 	}
 	if value, ok := os.LookupEnv("JWT_SECRET"); ok {
 		c.RAG.Auth.JWTSecret = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("ACCESS_TOKEN_TTL"); ok {
+		c.RAG.Auth.AccessTokenTTL = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("REFRESH_TOKEN_TTL"); ok {
+		c.RAG.Auth.RefreshTokenTTL = strings.TrimSpace(value)
 	}
 	if value, ok, err := readEnvBool("BOOTSTRAP_ENABLED"); err != nil {
 		return err

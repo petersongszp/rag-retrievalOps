@@ -32,6 +32,8 @@ rag:
   auth:
     dev_admin_bypass_enabled: true  # 仅 dev 环境可用
     jwt_secret: "your-jwt-secret-key-here"
+    access_token_ttl: "2h"
+    refresh_token_ttl: "168h"
     bootstrap_enabled: true
     bootstrap_admin_email: "admin@example.com"
     bootstrap_admin_password: "Admin@123456"
