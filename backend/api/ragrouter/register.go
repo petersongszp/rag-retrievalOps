@@ -72,6 +72,7 @@ func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 			apiKeyGroup.GET("", authhandler.ListAPIKeys)
 			apiKeyGroup.POST("", authhandler.CreateAPIKey)
 			apiKeyGroup.PUT("/:id", authhandler.UpdateAPIKey)
+			apiKeyGroup.POST("/:id/rotate", authhandler.RotateAPIKey)
 			apiKeyGroup.DELETE("/:id", authhandler.DeleteAPIKey)
 		}
 	}

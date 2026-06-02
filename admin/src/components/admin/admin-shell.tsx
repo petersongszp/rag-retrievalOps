@@ -8,6 +8,7 @@ import {
   AppstoreOutlined,
   BarChartOutlined,
   BookOutlined,
+  ControlOutlined,
   DatabaseOutlined,
   ExperimentOutlined,
   FileSearchOutlined,
@@ -57,6 +58,12 @@ const navItems: NavItem[] = [
     label: '知识库',
     href: '/knowledge-bases',
     icon: <DatabaseOutlined />,
+  },
+  {
+    key: '/api-keys',
+    label: 'API Keys',
+    href: '/api-keys',
+    icon: <ControlOutlined />,
   },
   {
     key: '/retrieval-lab',
@@ -158,6 +165,9 @@ function getSelectedNavKey(pathname: string): string {
   if (pathname.startsWith('/knowledge-bases')) {
     return '/knowledge-bases';
   }
+  if (pathname.startsWith('/api-keys')) {
+    return '/api-keys';
+  }
   if (pathname.startsWith('/retrieval-lab')) {
     return '/retrieval-lab';
   }
@@ -219,6 +229,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith('/knowledge-bases')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '知识库' }];
+    }
+    if (pathname.startsWith('/api-keys')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: 'API Keys' }];
     }
     if (pathname.startsWith('/retrieval-lab/debug')) {
       return [

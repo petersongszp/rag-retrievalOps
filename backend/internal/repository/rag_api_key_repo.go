@@ -24,6 +24,12 @@ func (r *RAGAPIKeyRepository) GetByID(id uint64) (*model.RAGAPIKey, error) {
 	return &key, err
 }
 
+func (r *RAGAPIKeyRepository) GetByIDForTenant(tenantID, id uint64) (*model.RAGAPIKey, error) {
+	var key model.RAGAPIKey
+	err := r.db.Where("tenant_id = ? AND id = ?", tenantID, id).First(&key).Error
+	return &key, err
+}
+
 func (r *RAGAPIKeyRepository) GetByKeyHash(keyHash string) (*model.RAGAPIKey, error) {
 	var key model.RAGAPIKey
 	err := r.db.Where("key_hash = ?", keyHash).First(&key).Error

@@ -20,3 +20,10 @@ export interface CreateAPIKeyPayload {
 export interface CreateAPIKeyResponse extends APIKeyRecord {
   key: string;
 }
+
+export interface RotateAPIKeyResponse {
+  id: number;
+  key: string;
+  key_prefix: string;
+  created_at: string;
+}

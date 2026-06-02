@@ -204,6 +204,57 @@ func DeleteAPIKey(ctx context.Context, c *app.RequestContext) {
 
 // 辅助函数
 
+// RotateAPIKey rotates the key material for an existing API key.
+func RotateAPIKey(ctx context.Context, c *app.RequestContext) {
+	identity := authpkg.GetIdentity(ctx)
+	if identity.UserID == 0 {
+		response.Error(ctx, c, 401, "Not authenticated")
+		return
+	}
+
+	id, err := parseUintParam(c, "id")
+	if err != nil {
+		response.BadRequest(ctx, c, "Invalid API key ID")
+		return
+	}
+
+	apiKey, err := apiKeyRepo.GetByIDForTenant(identity.TenantID, id)
+	if err != nil {
+		response.Error(ctx, c, 404, "API key not found")
+		return
+	}
+
+	if apiKey.Status != "active" {
+		response.Error(ctx, c, 400, "API key is not active")
+		return
+	}
+
+	key, keyHash, keyPrefix, err := authpkg.GenerateAPIKey()
+	if err != nil {
+		log.Printf("[Auth] Generate rotated API key failed: %v", err)
+		response.InternalServerError(ctx, c, "Failed to generate API key")
+		return
+	}
+
+	apiKey.KeyHash = keyHash
+	apiKey.KeyPrefix = keyPrefix
+
+	if err := apiKeyRepo.Update(apiKey); err != nil {
+		log.Printf("[Auth] Rotate API key failed: id=%d tenant_id=%d err=%v", id, identity.TenantID, err)
+		response.InternalServerError(ctx, c, "Failed to rotate API key")
+		return
+	}
+
+	log.Printf("[Auth] API key rotated: id=%d, tenant_id=%d", id, identity.TenantID)
+
+	response.Success(ctx, c, authpkg.RotateAPIKeyResponse{
+		ID:        apiKey.ID,
+		Key:       key,
+		KeyPrefix: keyPrefix,
+		CreatedAt: apiKey.CreatedAt.Format(time.RFC3339),
+	})
+}
+
 func parseUintParam(c *app.RequestContext, name string) (uint64, error) {
 	val := c.Param(name)
 	return strconv.ParseUint(val, 10, 64)
