@@ -42,6 +42,7 @@ type DocumentMetadata struct {
 
 	OperatorAdminID uint   `json:"operator_admin_id"`
 	KBScope         string `json:"kb_scope"`
+	TenantID        uint64 `json:"tenant_id"`
 
 	KBID uint64 `json:"kb_id"`
 
@@ -101,10 +102,11 @@ func NewDocumentMetadata(filePath string, language DocumentLanguage, category Do
 	}
 }
 
-func NewKBDocumentMetadata(operatorAdminID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
+func NewKBDocumentMetadata(tenantID uint64, operatorAdminID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
 	return &DocumentMetadata{
 		OperatorAdminID: operatorAdminID,
 		KBScope:         "global",
+		TenantID:        tenantID,
 		KBID:            kbID,
 		DocumentID:      documentID,
 		FileName:        fileName,
@@ -135,6 +137,9 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 	}
 	if m.KBScope != "" {
 		result["kb_scope"] = m.KBScope
+	}
+	if m.TenantID > 0 {
+		result["tenant_id"] = m.TenantID
 	}
 
 	if m.KBID > 0 {
