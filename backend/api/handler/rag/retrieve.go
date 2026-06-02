@@ -188,7 +188,33 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	log.Printf("[RAG Public API] source_api=v1 auth_type=%s app_id=%s query=%q top_k=%d", identity.AuthType, req.AppID, req.Query, req.TopK)
+	// Phase 3: 租户权限门禁
+	if identity.TenantID == 0 && !identity.IsLegacy {
+		response.Error(ctx, c, 401, "Tenant context required")
+		return
+	}
+
+	// Legacy 路径映射到系统租户
+	if identity.IsLegacy {
+		identity.TenantID = 1 // SYSTEM_TENANT_ID
+		ctx = auth.WithIdentity(ctx, identity)
+		c.Set("tenant_id", uint64(1))
+	}
+
+	// 检查请求的 kb_ids 是否属于当前租户
+	if len(req.KBIDs) > 0 {
+		kbTenantRepo := repository.NewKBTenantRepository(repository.GetDB())
+		for _, kbID := range req.KBIDs {
+			_, err := kbTenantRepo.GetByIDForTenant(identity.TenantID, kbID)
+			if err != nil {
+				// 跨租户访问：返回 404 不泄露存在性
+				response.Error(ctx, c, 404, "Knowledge base not found")
+				return
+			}
+		}
+	}
+
+	log.Printf("[RAG Public API] source_api=v1 auth_type=%s tenant_id=%d app_id=%s query=%q top_k=%d", identity.AuthType, identity.TenantID, req.AppID, req.Query, req.TopK)
 
 	// Delegate to the existing kb.Retrieve handler to reuse the full retrieval chain.
 	kb.Retrieve(ctx, c)
