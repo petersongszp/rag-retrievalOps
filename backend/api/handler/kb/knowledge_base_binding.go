@@ -259,7 +259,7 @@ func DeleteKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	kb, err := mustKnowledgeBaseExist(kbID)
+	kb, err := mustKnowledgeBaseExistForActor(c, kbID)
 	if err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
