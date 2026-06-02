@@ -90,6 +90,12 @@ const navItems: NavItem[] = [
     ],
   },
   {
+    key: '/docs',
+    label: '接入文档',
+    icon: <BookOutlined />,
+    children: [{ key: '/docs/integration', label: '集成指南', href: '/docs/integration' }],
+  },
+  {
     key: '/evaluation',
     label: '评测',
     href: '/evaluation',
@@ -149,6 +155,9 @@ function getSelectedNavKey(pathname: string): string {
   if (pathname.startsWith('/evaluation/reports/')) {
     return '/evaluation/runs';
   }
+  if (pathname.startsWith('/docs/integration')) {
+    return '/docs/integration';
+  }
   if (pathname.startsWith('/evaluation/datasets')) {
     return '/evaluation/datasets';
   }
@@ -206,6 +215,9 @@ function getOpenKeys(pathname: string): string[] {
   }
   if (pathname.startsWith('/evaluation')) {
     return ['/evaluation'];
+  }
+  if (pathname.startsWith('/docs')) {
+    return ['/docs'];
   }
   if (pathname.startsWith('/tenant')) {
     return ['/tenant'];
@@ -312,6 +324,13 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith('/api-keys')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: 'API Keys' }];
+    }
+    if (pathname.startsWith('/docs/integration')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '接入文档' },
+        { title: '集成指南' },
+      ];
     }
     if (pathname.startsWith('/retrieval-lab/debug')) {
       return [
