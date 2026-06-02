@@ -1106,6 +1106,32 @@ func (c *Config) applyRAGEnvOverrides() error {
 	return nil
 }
 
+// GetAccessTokenTTL 解析 access token TTL 配置，返回 time.Duration
+func (c *AuthConfig) GetAccessTokenTTL() time.Duration {
+	ttl := strings.TrimSpace(c.AccessTokenTTL)
+	if ttl == "" {
+		ttl = "2h"
+	}
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return 2 * time.Hour
+	}
+	return d
+}
+
+// GetRefreshTokenTTL 解析 refresh token TTL 配置，返回 time.Duration
+func (c *AuthConfig) GetRefreshTokenTTL() time.Duration {
+	ttl := strings.TrimSpace(c.RefreshTokenTTL)
+	if ttl == "" {
+		ttl = "168h"
+	}
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return 168 * time.Hour
+	}
+	return d
+}
+
 // ValidateAuthProductionSafety 生产环境认证安全检查
 func (c *Config) ValidateAuthProductionSafety() error {
 	if c == nil {

@@ -3,6 +3,7 @@ package ragrouter
 import (
 	"log"
 
+	authhandler "interview-agents/api/handler/auth"
 	kb "interview-agents/api/handler/kb"
 	rag "interview-agents/api/handler/rag"
 	"interview-agents/internal/config"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/route"
+	"gorm.io/gorm"
 )
 
 // Register wires the RAG admin and public retrieval routes.
@@ -25,6 +27,12 @@ func Register(h *server.Hertz) {
 
 	log.Println("[RAG] Registering v1 public RAG routes")
 	registerRAGPublicRoutes(h.Group(""))
+
+	log.Println("[RAG] Registering auth routes")
+	authGroup := h.Group("/v1/auth")
+	{
+		authGroup.POST("/register", authhandler.Register)
+	}
 }
 
 func registerRAGPublicRoutes(r *route.RouterGroup) {
@@ -32,6 +40,11 @@ func registerRAGPublicRoutes(r *route.RouterGroup) {
 	{
 		v1.POST("/retrieve", rag.Retrieve)
 	}
+}
+
+// InitAuthHandler initializes auth handler dependencies (call after DB is ready)
+func InitAuthHandler(db *gorm.DB, cfg *config.Config) {
+	authhandler.InitAuthHandler(db, cfg)
 }
 
 func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
