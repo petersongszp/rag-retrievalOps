@@ -36,6 +36,10 @@ func (r *RAGTenantKBPermissionRepository) ListByKBID(kbID uint64) ([]*model.RAGT
 	return permissions, err
 }
 
+func (r *RAGTenantKBPermissionRepository) Update(permission *model.RAGTenantKBPermission) error {
+	return r.db.Save(permission).Error
+}
+
 func (r *RAGTenantKBPermissionRepository) Delete(tenantID, kbID uint64) error {
 	return r.db.Where("tenant_id = ? AND kb_id = ?", tenantID, kbID).Delete(&model.RAGTenantKBPermission{}).Error
 }
