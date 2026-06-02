@@ -1,48 +1,74 @@
 # RAG Platform Go SDK
 
-## 安装
+## 接入方式
 
-```go
-import "interview-agents/pkg/ragsdk"
-```
-
-## 使用
+### 方式一：API Key（推荐，程序化接入）
 
 ```go
 client := ragsdk.NewClient(ragsdk.ClientConfig{
-    BaseURL: "http://localhost:8081",
-    APIKey:  "your-api-key",
-    AppID:   "your-app-id",
+    BaseURL: "https://your-rag-platform.com",
+    APIKey:  "rag_xxxxxxxxxxxx",  // 从 Admin UI 获取
 })
 
 resp, err := client.Retrieve(ctx, ragsdk.RetrieveRequest{
     Query: "什么是 JVM 调优？",
     KBIDs: []uint64{1, 2, 3},
-    TopK:  5,
 })
+```
 
-for _, item := range resp.Items {
-    fmt.Printf("Score: %.2f, Content: %s\n", item.Score, item.Content)
+### 方式二：JWT Token（管理端场景）
+
+```go
+client := ragsdk.NewClient(ragsdk.ClientConfig{
+    BaseURL: "https://your-rag-platform.com",
+    APIKey:  "eyJhbGciOiJIUzI1NiIs...",  // JWT Token
+})
+```
+
+### 方式三：Legacy app_id（向后兼容，Phase 2 后弃用）
+
+```go
+resp, err := client.Retrieve(ctx, ragsdk.RetrieveRequest{
+    Query:   "什么是 JVM 调优？",
+    KBIDs:   []uint64{1, 2, 3},
+    // AppID 通过请求体传递，平台内部使用白名单校验
+})
+```
+
+## API 参考
+
+### POST /v1/retrieve
+
+**认证方式**：
+- `Authorization: Bearer rag_xxx` — API Key（推荐）
+- `Authorization: Bearer eyJhb...` — JWT Token
+- 请求体 `app_id` 字段 — Legacy 兼容（Phase 2 后弃用）
+
+**请求**：
+```json
+{
+  "query": "什么是 JVM 调优？",
+  "kb_ids": [1, 2, 3],
+  "top_k": 5
 }
 ```
 
-## API
+**响应**：
+```json
+{
+  "request_id": "uuid",
+  "items": [...],
+  "strategy_version": "baseline"
+}
+```
 
-### Retrieve
+## 错误码
 
-执行知识库检索。
-
-**参数：**
-- `Query` (required): 检索查询内容
-- `KBIDs`: 知识库 ID 列表
-- `TopK`: 返回结果数量
-- `StrategyProfile`: 策略配置
-- `MetadataFilter`: 元数据过滤
-
-**返回：**
-- `RequestID`: 请求 ID（用于审计和调试）
-- `Items`: 检索结果列表
-  - `Content`: 文本内容
-  - `Score`: 相关性分数
-  - `Citation`: 引用信息
-  - `Source`: 来源信息
+| 错误码 | 说明 |
+|--------|------|
+| `INVALID_CREDENTIALS` | 认证失败 |
+| `INVALID_API_KEY` | API Key 无效 |
+| `API_KEY_REVOKED` | API Key 已吊销 |
+| `API_KEY_EXPIRED` | API Key 已过期 |
+| `PERMISSION_DENIED` | 权限不足 |
+| `QUOTA_EXCEEDED` | 配额超限 |
