@@ -50,6 +50,11 @@ func InitDatabaseOnly(dbConfig config.DatabaseConfig) error {
 
 // MigrateRAGDatabase migrates only the tables required by the RAG admin platform.
 func MigrateRAGDatabase(db *gorm.DB) error {
+	// RAG 账号与租户表
+	if err := db.AutoMigrate(&model.RAGTenant{}, &model.RAGUser{}); err != nil {
+		log.Printf("[RAG-Server] Warning: RAG tenant/user auto migrate failed: %v", err)
+	}
+
 	return db.AutoMigrate(
 		&model.KBKnowledgeBase{},
 		&model.KBDocument{},
