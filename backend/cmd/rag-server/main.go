@@ -60,11 +60,6 @@ func main() {
 		RefreshTTL: cfg.RAG.Auth.GetRefreshTokenTTL(),
 	})
 
-	// Bootstrap 测试管理员
-	if err := auth.BootstrapAdmin(cfg); err != nil {
-		log.Printf("[RAG-Server] Bootstrap admin failed: %v", err)
-	}
-
 	log.Println("[RAG-Server] Initializing database...")
 	if err := repository.InitDatabaseOnly(cfg.Database); err != nil {
 		log.Fatalf("[RAG-Server] Failed to init database: %v", err)
@@ -73,6 +68,11 @@ func main() {
 		log.Fatalf("[RAG-Server] Failed to migrate RAG database: %v", err)
 	}
 	log.Println("[RAG-Server] Database initialized (RAG tables only)")
+
+	// Bootstrap 测试管理员（在数据库初始化之后）
+	if err := auth.BootstrapAdmin(cfg, repository.GetDB()); err != nil {
+		log.Printf("[RAG-Server] Bootstrap admin failed: %v", err)
+	}
 
 	log.Println("[RAG-Server] Initializing Redis...")
 	if err := repository.InitRedis(cfg.Redis); err != nil {

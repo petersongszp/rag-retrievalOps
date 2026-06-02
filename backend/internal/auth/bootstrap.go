@@ -5,11 +5,14 @@ import (
 	"strings"
 
 	"interview-agents/internal/config"
+	"interview-agents/internal/model"
+	"interview-agents/internal/repository"
+
+	"gorm.io/gorm"
 )
 
 // BootstrapAdmin 创建或验证首个管理员用户
-// L2 阶段仅做配置校验和日志输出，不实际创建用户（Phase 1 实现）
-func BootstrapAdmin(cfg *config.Config) error {
+func BootstrapAdmin(cfg *config.Config, db *gorm.DB) error {
 	if !cfg.RAG.Auth.BootstrapEnabled {
 		log.Println("[Bootstrap] Bootstrap disabled, skip")
 		return nil
@@ -33,27 +36,79 @@ func BootstrapAdmin(cfg *config.Config) error {
 	}
 
 	// 校验密码强度
-	if len(password) < 12 {
-		log.Println("[Bootstrap] Password too short (minimum 12 characters)")
+	if err := ValidatePasswordStrength(password); err != nil {
+		log.Printf("[Bootstrap] Password validation failed: %v", err)
 		return nil
 	}
 
-	weakPasswords := []string{"admin", "admin123", "password", "123456", "Admin@123"}
-	for _, weak := range weakPasswords {
-		if strings.EqualFold(password, weak) {
-			log.Println("[Bootstrap] Weak password rejected")
-			return nil
-		}
+	// 初始化 repo
+	tenantRepo := repository.NewRAGTenantRepository(db)
+	userRepo := repository.NewRAGUserRepository(db)
+
+	// 检查是否已有同邮箱用户
+	existingUser, _ := userRepo.GetByEmail(email)
+	if existingUser != nil {
+		log.Printf("[Bootstrap] User already exists: email=%s, user_id=%d, tenant_id=%d",
+			email, existingUser.ID, existingUser.TenantID)
+		return nil
 	}
 
-	// TODO: Phase 1 实现时，这里会：
-	// 1. 检查 rag_tenant 表是否存在
-	// 2. 检查是否已有同邮箱用户
-	// 3. 创建租户和用户
-	// 4. 设置角色为 owner
+	// 生成 slug
+	slug := generateSlug(tenantName)
+	if slug == "" {
+		slug = "default"
+	}
 
-	log.Printf("[Bootstrap] Config validated: email=%s, tenant=%s", email, tenantName)
-	log.Println("[Bootstrap] Bootstrap user creation will be implemented in Phase 1")
+	// 创建租户
+	tenant := &model.RAGTenant{
+		Name:   tenantName,
+		Slug:   slug,
+		Plan:   "free",
+		Status: "active",
+	}
+	if err := tenantRepo.Create(tenant); err != nil {
+		log.Printf("[Bootstrap] Create tenant failed: %v", err)
+		return err
+	}
+
+	// 哈希密码
+	passwordHash, err := HashPassword(password)
+	if err != nil {
+		log.Printf("[Bootstrap] Hash password failed: %v", err)
+		return err
+	}
+
+	// 创建用户（owner）
+	user := &model.RAGUser{
+		TenantID:     tenant.ID,
+		Email:        email,
+		PasswordHash: passwordHash,
+		Name:         name,
+		Role:         RoleOwner,
+		Status:       "active",
+	}
+	if err := userRepo.Create(user); err != nil {
+		log.Printf("[Bootstrap] Create user failed: %v", err)
+		return err
+	}
+
+	log.Printf("[Bootstrap] Admin created: email=%s, user_id=%d, tenant_id=%d, tenant=%s",
+		email, user.ID, tenant.ID, tenantName)
 
 	return nil
+}
+
+// generateSlug 生成租户标识
+func generateSlug(name string) string {
+	slug := strings.ToLower(strings.ReplaceAll(name, " ", "-"))
+	slug = strings.Map(func(r rune) rune {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '-' {
+			return r
+		}
+		return -1
+	}, slug)
+	if len(slug) > 64 {
+		slug = slug[:64]
+	}
+	return slug
 }
