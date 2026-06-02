@@ -1725,6 +1725,7 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.APIKey = expandEnvVar(c.Embedding.APIKey)
 	c.Embedding.AccessKey = expandEnvVar(c.Embedding.AccessKey)
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
+	c.Embedding.Provider = expandEnvVar(c.Embedding.Provider)
 	c.Embedding.Model = expandEnvVar(c.Embedding.Model)
 	c.Embedding.BaseURL = expandEnvVar(c.Embedding.BaseURL)
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)

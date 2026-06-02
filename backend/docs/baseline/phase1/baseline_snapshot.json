@@ -1,0 +1,80 @@
+{
+  "config_version": "3fa17f45a51a295d",
+  "evaluation_report": {
+    "dataset_version": "",
+    "report_path": "",
+    "summary": "请在完成离线评测后补齐该节"
+  },
+  "generated_at": "2026-06-02T15:57:31Z",
+  "metrics_snapshot": {
+    "citation_accuracy": null,
+    "context_avg_tokens": null,
+    "mrr": null,
+    "ndcg": null,
+    "notes": "请在完成 Phase 1 基线评测后补齐该节",
+    "recall_at_10": null,
+    "retrieval_p95_ms": null
+  },
+  "rag": {
+    "enabled": true,
+    "environment": "dev",
+    "feature_flags": {
+      "EnableProdGuard": false,
+      "EnableIngestRetry": false,
+      "EnableRetrieveAudit": true,
+      "EnableHybridRetrieval": true,
+      "EnableQueryRewrite": true,
+      "EnableDynamicTopK": true,
+      "EnableAdvancedRerank": true,
+      "EnableParentChildRetrieval": true,
+      "EnableStrategicTopK": false,
+      "EnableEvidenceRefusal": false,
+      "EnableCitationConsistency": false,
+      "EnableDomainTerms": false,
+      "EnableRouteSpecificRewrite": false,
+      "EnableModelAssistedRewrite": false,
+      "EnableExperimentPlatform": false,
+      "EnableIndexLifecycle": false,
+      "EnableCostDashboard": false,
+      "EnableComplianceAudit": false,
+      "EnableWeeklyReport": false,
+      "EnableMilvusOpsTooling": false,
+      "EnableCollectionSwitchGuard": false,
+      "EnableCostGovernance": false,
+      "EnableAuditCenter": false,
+      "EnableVectorOps": false,
+      "EnableGovernanceAlerts": false
+    },
+    "phase2": {
+      "HybridDenseWeight": 0.7,
+      "HybridSparseWeight": 0.3,
+      "CandidateTopK": 10,
+      "MinTopK": 3,
+      "MaxTopK": 8,
+      "TokenBudget": 0,
+      "MinAnswerChunks": 2,
+      "RewriteTimeoutMS": 120,
+      "RewriteMaxExpansions": 3,
+      "RerankTimeoutMS": 250,
+      "RerankModel": "jaccard-v1"
+    },
+    "release": {
+      "Enabled": false,
+      "Stage": "full",
+      "InternalRoles": [
+        "admin"
+      ],
+      "CanaryPercent": 5,
+      "BatchPercent": 25,
+      "UserAllowlist": []
+    },
+    "thresholds": {
+      "MaxRetryCount": 3,
+      "RetryBackoffMS": 500,
+      "RetrieveTimeoutMS": 3000,
+      "UserQPSLimit": 20
+    }
+  },
+  "snapshot_type": "phase1_baseline",
+  "strategy_digest": "e2a8fbe92ba34a3b"
+}
