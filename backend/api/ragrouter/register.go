@@ -6,7 +6,9 @@ import (
 	authhandler "interview-agents/api/handler/auth"
 	kb "interview-agents/api/handler/kb"
 	rag "interview-agents/api/handler/rag"
+	authpkg "interview-agents/internal/auth"
 	"interview-agents/internal/config"
+	"interview-agents/internal/middleware"
 	"interview-agents/internal/rag/phase3"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -14,8 +16,16 @@ import (
 	"gorm.io/gorm"
 )
 
+var jwtManager *authpkg.JWTManager
+
+// SetJWTManager 设置路由层使用的 JWT 管理器（在 Register 之前调用）
+func SetJWTManager(m *authpkg.JWTManager) {
+	jwtManager = m
+}
+
 // Register wires the RAG admin and public retrieval routes.
-func Register(h *server.Hertz) {
+// adminGroup is the /api/admin group with auth middleware already applied.
+func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 	if !config.Global.RAG.Enabled {
 		log.Println("[RAG] rag.enabled=false, skip route registration")
 		return
@@ -23,19 +33,34 @@ func Register(h *server.Hertz) {
 
 	log.Println("[RAG] Registering knowledge base routes")
 	registerKBGroup(h.Group("/api/kb"), false)
-	registerKBGroup(h.Group("/api/admin/kb"), true)
+	registerKBGroup(adminGroup.Group("/kb"), true)
 
 	log.Println("[RAG] Registering v1 public RAG routes")
 	registerRAGPublicRoutes(h.Group(""))
 
 	log.Println("[RAG] Registering auth routes")
-	authGroup := h.Group("/v1/auth")
+	// 公开路由（不需要认证）
+	publicAuth := h.Group("/v1/auth")
 	{
-		authGroup.POST("/register", authhandler.Register)
-		authGroup.POST("/login", authhandler.Login)
-		authGroup.POST("/refresh", authhandler.Refresh)
-		authGroup.GET("/me", authhandler.Me)
-		authGroup.PUT("/password", authhandler.ChangePassword)
+		publicAuth.POST("/register", authhandler.Register)
+		publicAuth.POST("/login", authhandler.Login)
+		publicAuth.POST("/refresh", authhandler.Refresh)
+	}
+	// 需要认证的路由
+	if jwtManager != nil {
+		protectedAuth := h.Group("/v1/auth")
+		protectedAuth.Use(middleware.JWTAuth(jwtManager))
+		{
+			protectedAuth.GET("/me", authhandler.Me)
+			protectedAuth.PUT("/password", authhandler.ChangePassword)
+		}
+	} else {
+		log.Println("[RAG] Warning: jwtManager not set, protected auth routes registered without JWT middleware")
+		authGroup := h.Group("/v1/auth")
+		{
+			authGroup.GET("/me", authhandler.Me)
+			authGroup.PUT("/password", authhandler.ChangePassword)
+		}
 	}
 }
 

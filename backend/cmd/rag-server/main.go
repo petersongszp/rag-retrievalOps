@@ -53,6 +53,13 @@ func main() {
 	}
 	log.Printf("[RAG-Server] Config loaded: env=%s rag.enabled=%t", cfg.RAG.Environment, cfg.RAG.Enabled)
 
+	// 初始化 JWT 管理器
+	jwtMgr := auth.NewJWTManager(auth.JWTConfig{
+		Secret:     cfg.RAG.Auth.JWTSecret,
+		AccessTTL:  cfg.RAG.Auth.GetAccessTokenTTL(),
+		RefreshTTL: cfg.RAG.Auth.GetRefreshTokenTTL(),
+	})
+
 	// Bootstrap 测试管理员
 	if err := auth.BootstrapAdmin(cfg); err != nil {
 		log.Printf("[RAG-Server] Bootstrap admin failed: %v", err)
@@ -110,6 +117,10 @@ func main() {
 		log.Println("[RAG-Server] RAG disabled, skipping Milvus initialization")
 	}
 
+	// 初始化 Auth Handler 依赖
+	ragrouter.InitAuthHandler(repository.GetDB(), cfg)
+	ragrouter.SetJWTManager(jwtMgr)
+
 	addr := fmt.Sprintf("%s:%d", cfg.Host, cfg.Port)
 	h := server.Default(
 		server.WithHostPorts(addr),
@@ -117,48 +128,70 @@ func main() {
 		server.WithWriteTimeout(3*time.Second),
 	)
 
-	// Keep admin routes usable in rag-server mode and populate user context
-	// for token-based requests handled by shared KB handlers.
+	// 全局中间件：优先解析真实 JWT，注入统一身份上下文
 	h.Use(func(ctx context.Context, c *app.RequestContext) {
 		if string(c.Method()) == consts.MethodOptions {
 			c.Next(ctx)
 			return
 		}
 
-		path := strings.TrimSuffix(string(c.Path()), "/")
-		if path == "" {
-			path = "/"
-		}
-
-		if strings.HasPrefix(path, "/api/admin/") {
-			// 检查环境门禁
-			if cfg.RAG.Environment == "prod" {
-				// 生产环境不允许 Admin 注入
-				log.Printf("[Auth] Admin bypass disabled in production environment")
-				c.AbortWithStatus(401)
+		// 尝试从 Authorization header 解析真实 JWT
+		authHeader := string(c.GetHeader("Authorization"))
+		if strings.HasPrefix(authHeader, "Bearer ") {
+			tokenStr := strings.TrimPrefix(authHeader, "Bearer ")
+			if claims, err := jwtMgr.ValidateToken(tokenStr); err == nil && claims.TokenType == "access" {
+				identity := &auth.Identity{
+					AuthType: auth.AuthTypeJWT,
+					UserID:   uint(claims.UserID),
+					TenantID: claims.TenantID,
+					Role:     claims.Role,
+				}
+				ctx = auth.WithIdentity(ctx, identity)
+				c.Set("auth_type", "jwt")
+				c.Set("user_id", claims.UserID)
+				c.Set("tenant_id", claims.TenantID)
+				c.Set("role", claims.Role)
+				c.Next(ctx)
 				return
 			}
-			if !cfg.RAG.Auth.DevAdminBypassEnabled {
-				// 未开启 Admin 注入
-				log.Printf("[Auth] Admin bypass disabled by configuration")
-				c.AbortWithStatus(401)
-				return
-			}
-			// 开发环境且开启注入
-			c.Set("user_id", uint(1))
-			c.Set("role", "admin")
-			c.Set("username", "admin")
-			c.Set("auth_type", "dev_admin_bypass")
-			log.Printf("[Auth] Dev admin bypass: user_id=1, path=%s", path)
-			c.Next(ctx)
-			return
 		}
 
+		// 非 JWT 请求，回退到旧逻辑
 		appMiddleware.ParseAndSetUserFromToken(c)
 		c.Next(ctx)
 	})
 
-	ragrouter.Register(h)
+	// Admin 路由组：优先使用真实 JWT，dev 环境回退到 bypass
+	adminGroup := h.Group("/api/admin")
+	adminGroup.Use(func(ctx context.Context, c *app.RequestContext) {
+		// 检查是否已有真实 JWT 身份
+		identity := auth.GetIdentity(ctx)
+		if identity.UserID > 0 && identity.AuthType == auth.AuthTypeJWT {
+			c.Next(ctx)
+			return
+		}
+
+		// 没有真实 JWT，检查 dev bypass
+		if cfg.RAG.Environment == "prod" {
+			c.JSON(401, map[string]string{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+		if !cfg.RAG.Auth.DevAdminBypassEnabled {
+			c.JSON(401, map[string]string{"error": "Authentication required"})
+			c.Abort()
+			return
+		}
+
+		// dev bypass
+		c.Set("user_id", uint64(1))
+		c.Set("role", "admin")
+		c.Set("username", "admin")
+		c.Set("auth_type", "dev_admin_bypass")
+		c.Next(ctx)
+	})
+
+	ragrouter.Register(h, adminGroup)
 
 	h.GET("/healthz", func(ctx context.Context, c *app.RequestContext) {
 		c.JSON(http.StatusOK, map[string]string{"status": "ok"})
