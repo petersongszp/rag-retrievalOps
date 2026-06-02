@@ -62,6 +62,19 @@ func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 			authGroup.PUT("/password", authhandler.ChangePassword)
 		}
 	}
+
+	// API Key 管理路由（需要 JWT 认证）
+	if jwtManager != nil {
+		log.Println("[RAG] Registering API key management routes")
+		apiKeyGroup := h.Group("/v1/api-keys")
+		apiKeyGroup.Use(middleware.JWTAuth(jwtManager))
+		{
+			apiKeyGroup.GET("", authhandler.ListAPIKeys)
+			apiKeyGroup.POST("", authhandler.CreateAPIKey)
+			apiKeyGroup.PUT("/:id", authhandler.UpdateAPIKey)
+			apiKeyGroup.DELETE("/:id", authhandler.DeleteAPIKey)
+		}
+	}
 }
 
 func registerRAGPublicRoutes(r *route.RouterGroup) {
@@ -74,6 +87,7 @@ func registerRAGPublicRoutes(r *route.RouterGroup) {
 // InitAuthHandler initializes auth handler dependencies (call after DB is ready)
 func InitAuthHandler(db *gorm.DB, cfg *config.Config) {
 	authhandler.InitAuthHandler(db, cfg)
+	authhandler.InitAPIKeyHandler(db)
 }
 
 func registerKBGroup(group *route.RouterGroup, adminOnly bool) {
