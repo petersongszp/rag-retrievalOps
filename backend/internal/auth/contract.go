@@ -71,5 +71,8 @@ const (
 	ErrCodeAPIKeyExpired      = "API_KEY_EXPIRED"
 	ErrCodePermissionDenied   = "PERMISSION_DENIED"
 	ErrCodeTenantNotFound     = "TENANT_NOT_FOUND"
+	ErrCodeTenantDisabled     = "TENANT_DISABLED"
 	ErrCodeQuotaExceeded      = "QUOTA_EXCEEDED"
+	ErrCodeTokenExpired       = "TOKEN_EXPIRED"
+	ErrCodeTokenInvalid       = "TOKEN_INVALID"
 )

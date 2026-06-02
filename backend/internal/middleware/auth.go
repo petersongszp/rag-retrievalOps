@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	authpkg "interview-agents/internal/auth"
+	"interview-agents/internal/repository"
 
 	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/hertz/pkg/common/utils"
@@ -77,6 +78,55 @@ func RequireRole(roles ...string) app.HandlerFunc {
 
 		if !allowed {
 			c.JSON(403, utils.H{"error": "Permission denied"})
+			c.Abort()
+			return
+		}
+
+		c.Next(ctx)
+	}
+}
+
+// RequirePermission 权限检查中间件
+func RequirePermission(permission string) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		identity := authpkg.GetIdentity(ctx)
+
+		if !authpkg.HasPermission(identity.Role, permission) {
+			c.JSON(403, utils.H{
+				"error":    "Permission denied",
+				"required": permission,
+				"role":     identity.Role,
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next(ctx)
+	}
+}
+
+// RequireTenantActive 租户状态检查中间件
+func RequireTenantActive(tenantRepo *repository.RAGTenantRepository) app.HandlerFunc {
+	return func(ctx context.Context, c *app.RequestContext) {
+		identity := authpkg.GetIdentity(ctx)
+
+		if identity.TenantID == 0 {
+			c.Next(ctx)
+			return
+		}
+
+		tenant, err := tenantRepo.GetByID(identity.TenantID)
+		if err != nil {
+			c.JSON(404, utils.H{"error": "Tenant not found"})
+			c.Abort()
+			return
+		}
+
+		if tenant.Status != "active" {
+			c.JSON(403, utils.H{
+				"error":  "Tenant is not active",
+				"status": tenant.Status,
+			})
 			c.Abort()
 			return
 		}
