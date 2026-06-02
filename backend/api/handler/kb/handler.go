@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"interview-agents/api/response"
+	authpkg "interview-agents/internal/auth"
 	"interview-agents/internal/config"
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/middleware"
@@ -324,7 +325,21 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	// 获取 tenant_id
+	var tenantID uint64
+	if tid, ok := c.Get("tenant_id"); ok {
+		switch v := tid.(type) {
+		case uint64:
+			tenantID = v
+		case uint:
+			tenantID = uint64(v)
+		case float64:
+			tenantID = uint64(v)
+		}
+	}
+
 	kb := &model.KBKnowledgeBase{
+		TenantID:    tenantID,
 		UserID:      userID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -337,6 +352,19 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 	if _, err := ensureKnowledgeBaseCollectionAssigned(kb); err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to assign knowledge base collection", err))
 		return
+	}
+
+	// 自动授予创建者 admin 权限
+	if tenantID > 0 {
+		permRepo := repository.NewRAGTenantKBPermissionRepository(repository.GetDB())
+		perm := &model.RAGTenantKBPermission{
+			TenantID:   tenantID,
+			KBID:       kb.ID,
+			Permission: model.RAGTenantKBPermissionAdmin,
+		}
+		if err := permRepo.Create(perm); err != nil {
+			log.Printf("[KB Create] Warning: failed to grant admin permission: kb_id=%d tenant_id=%d err=%v", kb.ID, tenantID, err)
+		}
 	}
 
 	response.Success(ctx, c, kb)
@@ -1074,6 +1102,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			DurationMs:             durationMs,
 			TimeoutMs:              retrieveTimeout.Milliseconds(),
 		}
+		enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 		retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 			retrieveLog,
 			searchResult.Metrics,
@@ -1243,6 +1272,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		DurationMs:             durationMs,
 		TimeoutMs:              retrieveTimeout.Milliseconds(),
 	}
+	enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 	retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 		retrieveLog,
 		searchMetrics,
@@ -2154,6 +2184,81 @@ func persistAuditEvent(entry *model.KBAuditEvent) {
 	}()
 }
 
+func enrichRetrieveLogWithPlatformContext(ctx context.Context, c *app.RequestContext, entry *model.KBRetrieveLog, permissionResult string) {
+	if entry == nil {
+		return
+	}
+
+	identity := authpkg.GetIdentity(ctx)
+	if identity.TenantID > 0 {
+		entry.TenantID = identity.TenantID
+	}
+	if identity.AppID != "" {
+		entry.AppID = identity.AppID
+	}
+	if identity.APIKeyID > 0 {
+		entry.APIKeyID = identity.APIKeyID
+	}
+	if identity.AuthType != "" {
+		entry.AuthType = string(identity.AuthType)
+	}
+	if identity.IsLegacy {
+		entry.IsLegacy = true
+	}
+
+	if tenantID, ok := c.Get("tenant_id"); ok && entry.TenantID == 0 {
+		switch v := tenantID.(type) {
+		case uint64:
+			entry.TenantID = v
+		case uint:
+			entry.TenantID = uint64(v)
+		case int:
+			if v > 0 {
+				entry.TenantID = uint64(v)
+			}
+		}
+	}
+	if appID, ok := c.Get("app_id"); ok && entry.AppID == "" {
+		if v, ok := appID.(string); ok {
+			entry.AppID = v
+		}
+	}
+	if apiKeyID, ok := c.Get("api_key_id"); ok && entry.APIKeyID == 0 {
+		switch v := apiKeyID.(type) {
+		case uint64:
+			entry.APIKeyID = v
+		case uint:
+			entry.APIKeyID = uint64(v)
+		case int:
+			if v > 0 {
+				entry.APIKeyID = uint64(v)
+			}
+		}
+	}
+	if authType, ok := c.Get("auth_type"); ok && entry.AuthType == "" {
+		if v, ok := authType.(string); ok {
+			entry.AuthType = v
+		}
+	}
+	if isLegacy, ok := c.Get("is_legacy"); ok && !entry.IsLegacy {
+		if v, ok := isLegacy.(bool); ok {
+			entry.IsLegacy = v
+		}
+	}
+
+	if permissionResult != "" {
+		entry.PermissionResult = permissionResult
+	}
+
+	path := string(c.Path())
+	switch {
+	case strings.HasPrefix(path, "/v1/retrieve"):
+		entry.SourceAPI = "v1"
+	case path != "":
+		entry.SourceAPI = "legacy_kb"
+	}
+}
+
 func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
 	if logEntry == nil {
 		return nil
@@ -2731,7 +2836,8 @@ func requireAdmin(ctx context.Context, c *app.RequestContext) bool {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSpace(middleware.GetUserRole(c)), "admin") {
+	role := strings.ToLower(strings.TrimSpace(middleware.GetUserRole(c)))
+	if role != "admin" && role != "owner" {
 		response.Error(ctx, c, 403, "admin role required")
 		return false
 	}

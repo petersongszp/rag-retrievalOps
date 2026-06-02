@@ -17,6 +17,7 @@ type (
 	_KBKnowledgeBase struct{}
 	KBKnowledgeBase  struct {
 		ID               uint64                `json:"id" gorm:"primaryKey;autoIncrement"`
+		TenantID         uint64                `json:"tenant_id" gorm:"index"`
 		UserID           uint                  `json:"user_id" gorm:"index;not null"`
 		Name             string                `json:"name" gorm:"size:255;not null"`
 		Description      string                `json:"description" gorm:"size:1000"`

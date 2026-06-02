@@ -10,39 +10,42 @@ import (
 	"time"
 )
 
-// Client RAG Platform SDK 客户端
+type APIError struct {
+	StatusCode int
+	Body       string
+}
+
+func (e *APIError) Error() string {
+	return fmt.Sprintf("RAG API returned %d: %s", e.StatusCode, e.Body)
+}
+
 type Client struct {
 	BaseURL    string
 	APIKey     string
-	AppID      string
 	HTTPClient *http.Client
 }
 
-// ClientConfig SDK 配置
 type ClientConfig struct {
-	BaseURL string // e.g. "http://localhost:8081"
+	BaseURL string
 	APIKey  string
-	AppID   string
-	Timeout time.Duration // default 10s
+	Timeout time.Duration
 }
 
-// NewClient 创建 SDK 客户端
 func NewClient(cfg ClientConfig) *Client {
 	timeout := cfg.Timeout
 	if timeout == 0 {
 		timeout = 10 * time.Second
 	}
+
 	return &Client{
 		BaseURL: cfg.BaseURL,
 		APIKey:  cfg.APIKey,
-		AppID:   cfg.AppID,
 		HTTPClient: &http.Client{
 			Timeout: timeout,
 		},
 	}
 }
 
-// RetrieveRequest 检索请求
 type RetrieveRequest struct {
 	Query           string                 `json:"query"`
 	KBIDs           []uint64               `json:"kb_ids,omitempty"`
@@ -51,13 +54,11 @@ type RetrieveRequest struct {
 	MetadataFilter  map[string]interface{} `json:"metadata_filter,omitempty"`
 }
 
-// RetrieveResponse 检索响应
 type RetrieveResponse struct {
 	RequestID string         `json:"request_id"`
 	Items     []RetrieveItem `json:"items"`
 }
 
-// RetrieveItem 检索结果项
 type RetrieveItem struct {
 	Content  string      `json:"content"`
 	Score    float64     `json:"score"`
@@ -65,7 +66,6 @@ type RetrieveItem struct {
 	Source   interface{} `json:"source"`
 }
 
-// Retrieve 执行检索
 func (c *Client) Retrieve(ctx context.Context, req RetrieveRequest) (*RetrieveResponse, error) {
 	body, err := json.Marshal(req)
 	if err != nil {
@@ -73,11 +73,12 @@ func (c *Client) Retrieve(ctx context.Context, req RetrieveRequest) (*RetrieveRe
 	}
 
 	url := c.BaseURL + "/v1/retrieve"
-	httpReq, err := http.NewRequestWithContext(ctx, "POST", url, bytes.NewReader(body))
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
 	if err != nil {
 		return nil, fmt.Errorf("create request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+
 	if c.APIKey != "" {
 		httpReq.Header.Set("Authorization", "Bearer "+c.APIKey)
 	}
@@ -94,7 +95,10 @@ func (c *Client) Retrieve(ctx context.Context, req RetrieveRequest) (*RetrieveRe
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("RAG API returned %d: %s", resp.StatusCode, string(respBody))
+		return nil, &APIError{
+			StatusCode: resp.StatusCode,
+			Body:       string(respBody),
+		}
 	}
 
 	var result RetrieveResponse

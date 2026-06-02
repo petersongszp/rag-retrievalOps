@@ -10,6 +10,8 @@ import {
   ReloadOutlined,
 } from '@ant-design/icons';
 import { Alert, Button, Card, Empty, Modal, Space, Spin, Tag, Typography } from 'antd';
+import { canCreateKB, canDeleteKB } from '@/services/auth/permissions';
+import { useAuth } from '@/services/auth/store';
 import { CreateKnowledgeBaseModal } from './create-knowledge-base-modal';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
@@ -17,6 +19,7 @@ const { Paragraph, Text, Title } = Typography;
 
 export function KnowledgeBasesPage() {
   const router = useRouter();
+  const { user } = useAuth();
   const {
     bases,
     selectedBase,
@@ -31,6 +34,8 @@ export function KnowledgeBasesPage() {
   const [modalOpen, setModalOpen] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [deletingBaseId, setDeletingBaseId] = useState<number | null>(null);
+  const allowCreate = canCreateKB(user?.role);
+  const allowDelete = canDeleteKB(user?.role);
 
   return (
     <div className="space-y-6">
@@ -40,7 +45,7 @@ export function KnowledgeBasesPage() {
             知识库
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            这里展示知识库列表，并提供创建、删除和进入详情页的操作入口。
+            在这里查看知识库列表，并进入详情页完成文档上传、任务跟踪和检索联调。
           </Paragraph>
         </div>
         <Space>
@@ -50,8 +55,8 @@ export function KnowledgeBasesPage() {
           <Button
             type="primary"
             icon={<PlusOutlined />}
-            disabled={isPermissionDenied}
-            title={isPermissionDenied ? '权限不足，无法创建知识库' : undefined}
+            disabled={isPermissionDenied || !allowCreate}
+            title={isPermissionDenied || !allowCreate ? '当前角色无权创建知识库' : undefined}
             onClick={() => setModalOpen(true)}
           >
             新建
@@ -59,21 +64,21 @@ export function KnowledgeBasesPage() {
         </Space>
       </div>
 
-      {error && !isPermissionDenied && <Alert type="error" showIcon message={error} />}
-      {isPermissionDenied && (
+      {error && !isPermissionDenied ? <Alert type="error" showIcon message={error} /> : null}
+      {isPermissionDenied ? (
         <Alert
           type="error"
           showIcon
           message="权限不足"
           description="当前账号无权访问知识库列表（403）。请联系管理员确认权限配置。"
         />
-      )}
+      ) : null}
 
       <Card>
         <Spin spinning={isLoading}>
           {bases.length === 0 ? (
             <Empty
-              description="暂无知识库。新建一个以解锁详情页、文档流程和检索实验室。"
+              description="暂无知识库。创建一个新知识库以解锁详情页、文档流程和检索实验室。"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
             />
           ) : (
@@ -104,8 +109,8 @@ export function KnowledgeBasesPage() {
                         type="link"
                         icon={<DeleteOutlined />}
                         loading={deletingBaseId === base.id}
-                        disabled={isPermissionDenied}
-                        title={isPermissionDenied ? '权限不足，无法删除知识库' : undefined}
+                        disabled={isPermissionDenied || !allowDelete}
+                        title={isPermissionDenied || !allowDelete ? '当前角色无权删除知识库' : undefined}
                         onClick={() => {
                           Modal.confirm({
                             title: '删除知识库',

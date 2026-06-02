@@ -215,10 +215,24 @@ type LLMConfig struct {
 	ProviderName string `yaml:"provider_name"`
 }
 
+// AuthConfig 认证配置
+type AuthConfig struct {
+	DevAdminBypassEnabled  bool   `yaml:"dev_admin_bypass_enabled" env:"RAG_DEV_ADMIN_BYPASS_ENABLED"`
+	JWTSecret              string `yaml:"jwt_secret" env:"JWT_SECRET"`
+	AccessTokenTTL         string `yaml:"access_token_ttl" env:"ACCESS_TOKEN_TTL"`   // e.g. "2h"
+	RefreshTokenTTL        string `yaml:"refresh_token_ttl" env:"REFRESH_TOKEN_TTL"` // e.g. "168h"
+	BootstrapEnabled       bool   `yaml:"bootstrap_enabled" env:"BOOTSTRAP_ENABLED"`
+	BootstrapAdminEmail    string `yaml:"bootstrap_admin_email" env:"BOOTSTRAP_ADMIN_EMAIL"`
+	BootstrapAdminPassword string `yaml:"bootstrap_admin_password" env:"BOOTSTRAP_ADMIN_PASSWORD"`
+	BootstrapAdminName     string `yaml:"bootstrap_admin_name" env:"BOOTSTRAP_ADMIN_NAME"`
+	BootstrapTenantName    string `yaml:"bootstrap_tenant_name" env:"BOOTSTRAP_TENANT_NAME"`
+}
+
 // RAGConfig RAG 鑳藉姏鎬诲紑鍏?
 type RAGConfig struct {
 	Enabled      bool             `yaml:"enabled"`
 	Environment  string           `yaml:"environment"`
+	Auth         AuthConfig       `yaml:"auth"`
 	FeatureFlags RAGFeatureFlags  `yaml:"feature_flags"`
 	Thresholds   RAGThresholds    `yaml:"thresholds"`
 	Phase2       RAGPhase2Config  `yaml:"phase2"`
@@ -754,6 +768,13 @@ func (c *Config) applyRAGDefaults() {
 	if strings.TrimSpace(c.RAG.Phase3.CitationCheckVersion) == "" {
 		c.RAG.Phase3.CitationCheckVersion = "phase3-citation-v1"
 	}
+	// Auth TTL defaults
+	if strings.TrimSpace(c.RAG.Auth.AccessTokenTTL) == "" {
+		c.RAG.Auth.AccessTokenTTL = "2h"
+	}
+	if strings.TrimSpace(c.RAG.Auth.RefreshTokenTTL) == "" {
+		c.RAG.Auth.RefreshTokenTTL = "168h"
+	}
 	if c.RAG.Phase3.DomainTermTimeoutMS <= 0 {
 		c.RAG.Phase3.DomainTermTimeoutMS = 80
 	}
@@ -1049,6 +1070,84 @@ func (c *Config) applyRAGEnvOverrides() error {
 		return err
 	} else if ok {
 		c.RAG.Release.UserAllowlist = values
+	}
+	// Auth env overrides
+	if value, ok, err := readEnvBool("RAG_DEV_ADMIN_BYPASS_ENABLED"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Auth.DevAdminBypassEnabled = value
+	}
+	if value, ok := os.LookupEnv("JWT_SECRET"); ok {
+		c.RAG.Auth.JWTSecret = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("ACCESS_TOKEN_TTL"); ok {
+		c.RAG.Auth.AccessTokenTTL = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("REFRESH_TOKEN_TTL"); ok {
+		c.RAG.Auth.RefreshTokenTTL = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvBool("BOOTSTRAP_ENABLED"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Auth.BootstrapEnabled = value
+	}
+	if value, ok := os.LookupEnv("BOOTSTRAP_ADMIN_EMAIL"); ok {
+		c.RAG.Auth.BootstrapAdminEmail = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("BOOTSTRAP_ADMIN_PASSWORD"); ok {
+		c.RAG.Auth.BootstrapAdminPassword = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("BOOTSTRAP_ADMIN_NAME"); ok {
+		c.RAG.Auth.BootstrapAdminName = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("BOOTSTRAP_TENANT_NAME"); ok {
+		c.RAG.Auth.BootstrapTenantName = strings.TrimSpace(value)
+	}
+	return nil
+}
+
+// GetAccessTokenTTL 解析 access token TTL 配置，返回 time.Duration
+func (c *AuthConfig) GetAccessTokenTTL() time.Duration {
+	ttl := strings.TrimSpace(c.AccessTokenTTL)
+	if ttl == "" {
+		ttl = "2h"
+	}
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return 2 * time.Hour
+	}
+	return d
+}
+
+// GetRefreshTokenTTL 解析 refresh token TTL 配置，返回 time.Duration
+func (c *AuthConfig) GetRefreshTokenTTL() time.Duration {
+	ttl := strings.TrimSpace(c.RefreshTokenTTL)
+	if ttl == "" {
+		ttl = "168h"
+	}
+	d, err := time.ParseDuration(ttl)
+	if err != nil {
+		return 168 * time.Hour
+	}
+	return d
+}
+
+// ValidateAuthProductionSafety 生产环境认证安全检查
+func (c *Config) ValidateAuthProductionSafety() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if c.RAG.Environment != "prod" {
+		return nil
+	}
+	if c.RAG.Auth.DevAdminBypassEnabled {
+		return fmt.Errorf("[FATAL] Dev admin bypass cannot be enabled in production")
+	}
+	if c.RAG.Auth.JWTSecret == "" || c.RAG.Auth.JWTSecret == "your-jwt-secret-key-here" {
+		return fmt.Errorf("[FATAL] JWT secret must be set in production")
+	}
+	if c.RAG.Auth.BootstrapEnabled {
+		return fmt.Errorf("[FATAL] Bootstrap cannot be enabled in production")
 	}
 	return nil
 }
@@ -1626,6 +1725,7 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.APIKey = expandEnvVar(c.Embedding.APIKey)
 	c.Embedding.AccessKey = expandEnvVar(c.Embedding.AccessKey)
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
+	c.Embedding.Provider = expandEnvVar(c.Embedding.Provider)
 	c.Embedding.Model = expandEnvVar(c.Embedding.Model)
 	c.Embedding.BaseURL = expandEnvVar(c.Embedding.BaseURL)
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)

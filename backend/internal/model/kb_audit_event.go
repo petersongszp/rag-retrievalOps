@@ -28,6 +28,7 @@ type (
 		ID                    uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
 		AuditTraceID          string    `json:"audit_trace_id" gorm:"size:128;index;not null"`
 		RequestID             string    `json:"request_id" gorm:"size:64;index"`
+		TenantID              uint64    `json:"tenant_id" gorm:"index"`
 		OperatorID            uint      `json:"operator_id" gorm:"index"`
 		UserID                uint      `json:"user_id" gorm:"index"`
 		KBID                  uint64    `json:"kb_id" gorm:"index"`

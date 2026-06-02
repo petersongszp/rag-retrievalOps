@@ -20,6 +20,8 @@ type RetrieveOptions struct {
 	Language         DocumentLanguage
 	Category         DocumentCategory
 	Expr             string
+	TenantID         uint64
+	AllowedKBIDs     []uint64
 	TopK             int
 	CandidateTopK    int
 	Database         string

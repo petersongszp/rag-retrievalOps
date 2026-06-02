@@ -168,13 +168,21 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	if err != nil {
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
+	kbRecord, err := model.KBKnowledgeBaseDao.GetByID(payload.KBID)
+	if err != nil {
+		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load knowledge base", err)
+	}
+	tenantID := kbRecord.TenantID
+	if tenantID == 0 {
+		tenantID = docRecord.TenantID
+	}
 
 	collection, err := resolveKnowledgeBaseCollectionForIngest(payload.KBID, payload.Collection)
 	if err != nil {
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to resolve knowledge base collection", err)
 	}
 
-	baseMeta := milvus.NewKBDocumentMetadata(payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
+	baseMeta := milvus.NewKBDocumentMetadata(tenantID, payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
 	baseMeta.Extra["collection"] = collection
 	doc := &schema.Document{
 		Content:  rawText,

@@ -103,13 +103,13 @@ services:
       dockerfile: Dockerfile
       args:
         NEXT_PUBLIC_API_BASE_URL: /api
-        API_PROXY_TARGET: http://rag-server:8899/api
+        API_PROXY_TARGET: http://rag-server:8899
     restart: unless-stopped
     ports:
       - "3003:3001"
     environment:
       NEXT_PUBLIC_API_BASE_URL: /api
-      API_PROXY_TARGET: http://rag-server:8899/api
+      API_PROXY_TARGET: http://rag-server:8899
     depends_on:
       rag-server:
         condition: service_healthy
