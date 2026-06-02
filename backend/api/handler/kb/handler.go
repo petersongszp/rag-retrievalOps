@@ -325,7 +325,21 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	// 获取 tenant_id
+	var tenantID uint64
+	if tid, ok := c.Get("tenant_id"); ok {
+		switch v := tid.(type) {
+		case uint64:
+			tenantID = v
+		case uint:
+			tenantID = uint64(v)
+		case float64:
+			tenantID = uint64(v)
+		}
+	}
+
 	kb := &model.KBKnowledgeBase{
+		TenantID:    tenantID,
 		UserID:      userID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -338,6 +352,19 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 	if _, err := ensureKnowledgeBaseCollectionAssigned(kb); err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to assign knowledge base collection", err))
 		return
+	}
+
+	// 自动授予创建者 admin 权限
+	if tenantID > 0 {
+		permRepo := repository.NewRAGTenantKBPermissionRepository(repository.GetDB())
+		perm := &model.RAGTenantKBPermission{
+			TenantID:   tenantID,
+			KBID:       kb.ID,
+			Permission: model.RAGTenantKBPermissionAdmin,
+		}
+		if err := permRepo.Create(perm); err != nil {
+			log.Printf("[KB Create] Warning: failed to grant admin permission: kb_id=%d tenant_id=%d err=%v", kb.ID, tenantID, err)
+		}
 	}
 
 	response.Success(ctx, c, kb)
