@@ -2836,7 +2836,8 @@ func requireAdmin(ctx context.Context, c *app.RequestContext) bool {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSpace(middleware.GetUserRole(c)), "admin") {
+	role := strings.ToLower(strings.TrimSpace(middleware.GetUserRole(c)))
+	if role != "admin" && role != "owner" {
 		response.Error(ctx, c, 403, "admin role required")
 		return false
 	}
