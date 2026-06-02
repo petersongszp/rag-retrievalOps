@@ -61,10 +61,17 @@ type RAGRequestCost struct {
 
 // allowedAppIDs is a static whitelist for the first version.
 // TODO: move to config or database in later versions.
+// NOTE: This is a legacy auth path. Will be replaced by API Key in Phase 2+.
 var allowedAppIDs = map[string]string{
 	"interview-agent":   "interview-agent",
 	"mianshiba-web":     "mianshiba-web",
 	"mianshiba-admin":   "mianshiba-admin",
+}
+
+// isLegacyAppID 检查是否是旧白名单 app_id
+func isLegacyAppID(appID string) bool {
+	_, ok := allowedAppIDs[appID]
+	return ok
 }
 
 // Retrieve is the v1 public API handler for RAG retrieval.
@@ -90,9 +97,17 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		response.BadRequest(ctx, c, "app_id is required")
 		return
 	}
-	if _, ok := allowedAppIDs[appID]; !ok {
+	if !isLegacyAppID(appID) {
 		response.Forbidden(ctx, c, "invalid app_id")
 		return
+	}
+
+	// 标记为 legacy 认证路径，便于 Phase 2 迁移时区分来源
+	if isLegacyAppID(appID) {
+		c.Set("auth_type", "legacy_app_id")
+		c.Set("app_id", appID)
+		c.Set("is_legacy", true)
+		log.Printf("[Auth] Legacy app_id=%s, will be replaced by API Key in Phase 2", appID)
 	}
 
 	log.Printf("[RAG Public API] source_api=v1 app_id=%s query=%q top_k=%d", appID, req.Query, req.TopK)
