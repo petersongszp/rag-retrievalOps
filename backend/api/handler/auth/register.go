@@ -2,8 +2,10 @@ package auth
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"interview-agents/api/response"
 	authpkg "interview-agents/internal/auth"
@@ -48,8 +50,8 @@ func Register(ctx context.Context, c *app.RequestContext) {
 	}
 
 	// 检查邮箱是否已存在
-	existingUser, _ := userRepo.GetByEmail(req.Email)
-	if existingUser != nil {
+	existingUser, err := userRepo.GetByEmail(req.Email)
+	if err == nil && existingUser != nil && existingUser.ID > 0 {
 		response.Error(ctx, c, 409, "Email already registered")
 		return
 	}
@@ -67,7 +69,7 @@ func Register(ctx context.Context, c *app.RequestContext) {
 	if tenantName == "" {
 		tenantName = req.Name + "'s Workspace"
 	}
-	slug := generateSlug(tenantName)
+	slug := generateSlug(tenantName) + "-" + fmt.Sprintf("%d", time.Now().UnixMilli()%100000)
 
 	// 创建租户
 	tenant := &model.RAGTenant{
