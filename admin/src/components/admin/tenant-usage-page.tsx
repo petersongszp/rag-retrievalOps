@@ -5,7 +5,10 @@ import { Alert, Card, Progress, Skeleton, Space, Statistic, Typography } from 'a
 import { TENANT_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import { getErrorMessage } from '@/services/api/errors';
+import { canViewUsage } from '@/services/auth/permissions';
+import { useAuth } from '@/services/auth/store';
 import type { TenantUsage } from '@/types/tenant';
+import { ForbiddenState } from './forbidden-state';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -30,6 +33,7 @@ function getProgressStatus(percent?: number): 'normal' | 'exception' | 'success'
 }
 
 export function TenantUsagePage() {
+  const { user } = useAuth();
   const [usage, setUsage] = useState<TenantUsage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +91,15 @@ export function TenantUsagePage() {
       },
     ];
   }, [usage]);
+
+  if (!canViewUsage(user?.role)) {
+    return (
+      <ForbiddenState
+        title="当前角色无权查看租户用量"
+        description="viewer 角色默认不开放租户级配额视图，避免将运营口径误当成普通浏览能力。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

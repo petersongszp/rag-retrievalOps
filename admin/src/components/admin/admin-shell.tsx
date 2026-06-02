@@ -38,6 +38,11 @@ import {
 import type { MenuProps } from 'antd';
 import { TENANT_API } from '@/config/api';
 import apiClient from '@/services/api/client';
+import {
+  canManageAPIKey,
+  canViewTenantSettings,
+  canViewUsage,
+} from '@/services/auth/permissions';
 import { useAuth } from '@/services/auth/store';
 import type { TenantDetail } from '@/types/tenant';
 import { KnowledgeBaseProvider, useKnowledgeBaseContext } from './knowledge-base-provider';
@@ -253,6 +258,36 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   }, []);
 
   const menuItems = useMemo<MenuProps['items']>(() => {
+    const role = user?.role;
+    const filteredNavItems = navItems
+      .map((item) => {
+        if (item.key === '/api-keys' && !canManageAPIKey(role)) {
+          return null;
+        }
+
+        if (item.key === '/tenant') {
+          const tenantChildren =
+            item.children?.filter((child) => {
+              if (child.key === '/tenant/settings') {
+                return canViewTenantSettings(role);
+              }
+              if (child.key === '/tenant/usage') {
+                return canViewUsage(role);
+              }
+              return true;
+            }) ?? [];
+
+          if (tenantChildren.length === 0) {
+            return null;
+          }
+
+          return { ...item, children: tenantChildren };
+        }
+
+        return item;
+      })
+      .filter(Boolean) as NavItem[];
+
     const toMenuItem = (item: NavItem): NonNullable<MenuProps['items']>[number] => ({
       key: item.key,
       icon: item.icon,
@@ -261,8 +296,8 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       children: item.children?.map((child) => toMenuItem(child)),
     });
 
-    return navItems.map((item) => toMenuItem(item));
-  }, []);
+    return filteredNavItems.map((item) => toMenuItem(item));
+  }, [user?.role]);
 
   const breadcrumbItems = useMemo(() => {
     if (pathname.startsWith('/knowledge-bases/')) {

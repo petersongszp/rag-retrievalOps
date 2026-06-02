@@ -28,12 +28,15 @@ import {
 import { API_KEY_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import { getErrorMessage } from '@/services/api/errors';
+import { canManageAPIKey } from '@/services/auth/permissions';
+import { useAuth } from '@/services/auth/store';
 import type {
   APIKeyRecord,
   CreateAPIKeyPayload,
   CreateAPIKeyResponse,
   RotateAPIKeyResponse,
 } from '@/types/api-key';
+import { ForbiddenState } from './forbidden-state';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -67,6 +70,8 @@ function buildRetrieveCurlCommand(key: string): string {
 }
 
 export function APIKeysPage() {
+  const { user } = useAuth();
+  const canManage = canManageAPIKey(user?.role);
   const [items, setItems] = useState<APIKeyRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -181,6 +186,15 @@ export function APIKeysPage() {
         .map((value) => ({ label: value, value })),
     [items]
   );
+
+  if (!canManage) {
+    return (
+      <ForbiddenState
+        title="当前角色无权管理 API Key"
+        description="viewer 角色不会显示或开放 API Key 的创建、轮换、吊销入口。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">

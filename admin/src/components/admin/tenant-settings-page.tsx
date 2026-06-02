@@ -5,7 +5,10 @@ import { Alert, Card, Descriptions, Skeleton, Space, Tag, Typography } from 'ant
 import { TENANT_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import { getErrorMessage } from '@/services/api/errors';
+import { canViewTenantSettings } from '@/services/auth/permissions';
+import { useAuth } from '@/services/auth/store';
 import type { TenantDetail } from '@/types/tenant';
+import { ForbiddenState } from './forbidden-state';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -17,6 +20,7 @@ function getStatusColor(status?: string): string {
 }
 
 export function TenantSettingsPage() {
+  const { user } = useAuth();
   const [tenant, setTenant] = useState<TenantDetail | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -37,6 +41,15 @@ export function TenantSettingsPage() {
 
     void loadTenant();
   }, []);
+
+  if (!canViewTenantSettings(user?.role)) {
+    return (
+      <ForbiddenState
+        title="当前角色无权查看租户设置"
+        description="租户设置只对 owner 角色开放，避免非 owner 误读或误操作租户级配置。"
+      />
+    );
+  }
 
   return (
     <div className="space-y-6">
