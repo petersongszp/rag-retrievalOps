@@ -116,14 +116,14 @@ func (s *KBPermissionService) ListByTenant(tenantID uint64) ([]*model.RAGTenantK
 	return permissions, nil
 }
 
-func (s *KBPermissionService) ListByKB(kbID uint64) ([]*model.RAGTenantKBPermission, error) {
-	if kbID == 0 {
-		return nil, apperrors.NewValidationError("kb_id must be greater than 0")
+func (s *KBPermissionService) ListByKB(tenantID, kbID uint64) ([]*model.RAGTenantKBPermission, error) {
+	if err := s.validateIDs(tenantID, kbID); err != nil {
+		return nil, err
 	}
 	if err := s.ensureRepo(); err != nil {
 		return nil, err
 	}
-	permissions, err := s.repo.ListByKBID(kbID)
+	permissions, err := s.repo.ListByKBID(tenantID, kbID)
 	if err != nil {
 		return nil, apperrors.NewDBError("failed to list kb permissions by knowledge base", err)
 	}
