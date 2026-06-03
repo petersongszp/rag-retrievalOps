@@ -27,3 +27,4 @@ admin/.next-dev-*-cache/
 backend/runtime/eval-reports/*.json
 .gocache/
 backend/.tmp/
+gaoerDocs/
