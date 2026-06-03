@@ -1,0 +1,131 @@
+{
+  "config_version": "3fa17f45a51a295d",
+  "generated_at": "2026-06-02T15:57:31Z",
+  "metrics_snapshot": {
+    "audit_coverage_rate": null,
+    "avg_context_tokens": null,
+    "citation_precision": null,
+    "citation_support_score": null,
+    "collection_health_score": null,
+    "cost_per_1k_queries": null,
+    "mrr": null,
+    "ndcg": null,
+    "notes": "Fill in after the frozen Phase 3 regression run completes.",
+    "quality_score": null,
+    "recall_at_k": null,
+    "retrieval_p95_ms": null,
+    "rollback_success_rate": null,
+    "strategy_regression_rate": null
+  },
+  "phase4_governance": {
+    "degrade_contract": [
+      "governance collection failures do not block retrieval",
+      "audit persistence failures emit alert and enter compensation queue",
+      "cost collection failures affect dashboard only",
+      "collection switch guard failures must block switching"
+    ],
+    "feature_flags": [
+      "RAG_ENABLE_COST_GOVERNANCE",
+      "RAG_ENABLE_AUDIT_CENTER",
+      "RAG_ENABLE_VECTOR_OPS",
+      "RAG_ENABLE_GOVERNANCE_ALERTS",
+      "RAG_ENABLE_WEEKLY_REPORT"
+    ],
+    "metric_keys": [
+      "quality_score",
+      "cost_per_1k_queries",
+      "avg_context_tokens",
+      "strategy_regression_rate",
+      "rollback_success_rate",
+      "audit_coverage_rate",
+      "collection_health_score"
+    ],
+    "trace_fields": [
+      "experiment_id",
+      "strategy_version",
+      "index_version",
+      "collection_version",
+      "cost_trace_id",
+      "audit_trace_id",
+      "release_id"
+    ]
+  },
+  "rag": {
+    "enabled": true,
+    "environment": "dev",
+    "feature_flags": {
+      "EnableProdGuard": false,
+      "EnableIngestRetry": false,
+      "EnableRetrieveAudit": true,
+      "EnableHybridRetrieval": true,
+      "EnableQueryRewrite": true,
+      "EnableDynamicTopK": true,
+      "EnableAdvancedRerank": true,
+      "EnableParentChildRetrieval": true,
+      "EnableStrategicTopK": false,
+      "EnableEvidenceRefusal": false,
+      "EnableCitationConsistency": false,
+      "EnableDomainTerms": false,
+      "EnableRouteSpecificRewrite": false,
+      "EnableModelAssistedRewrite": false,
+      "EnableExperimentPlatform": false,
+      "EnableIndexLifecycle": false,
+      "EnableCostDashboard": false,
+      "EnableComplianceAudit": false,
+      "EnableWeeklyReport": false,
+      "EnableMilvusOpsTooling": false,
+      "EnableCollectionSwitchGuard": false,
+      "EnableCostGovernance": false,
+      "EnableAuditCenter": false,
+      "EnableVectorOps": false,
+      "EnableGovernanceAlerts": false
+    },
+    "phase2": {
+      "HybridDenseWeight": 0.7,
+      "HybridSparseWeight": 0.3,
+      "CandidateTopK": 10,
+      "MinTopK": 3,
+      "MaxTopK": 8,
+      "TokenBudget": 0,
+      "MinAnswerChunks": 2,
+      "RewriteTimeoutMS": 120,
+      "RewriteMaxExpansions": 3,
+      "RerankTimeoutMS": 250,
+      "RerankModel": "jaccard-v1"
+    },
+    "phase3": {
+      "ParentChildFillStrategy": "section_window",
+      "ParentChildWindowSize": 1,
+      "ParentChildMaxTokens": 1200,
+      "StrategicTopKMinK": 2,
+      "StrategicTopKMaxK": 8,
+      "StrategicTopKBudgetRatio": 0.6,
+      "EvidenceMinRerankScore": 0.55,
+      "EvidenceMinDensity": 0.2,
+      "EvidenceMinCitationCoverage": 0.5,
+      "CitationCheckThreshold": 0.7,
+      "CitationCheckVersion": "phase3-citation-v1",
+      "DomainTermTimeoutMS": 80,
+      "ModelRewriteTimeoutMS": 150,
+      "ModelRewriteShadowRatio": 0.1
+    },
+    "release": {
+      "Enabled": false,
+      "Stage": "full",
+      "InternalRoles": [
+        "admin"
+      ],
+      "CanaryPercent": 5,
+      "BatchPercent": 25,
+      "UserAllowlist": []
+    },
+    "thresholds": {
+      "MaxRetryCount": 3,
+      "RetryBackoffMS": 500,
+      "RetrieveTimeoutMS": 3000,
+      "UserQPSLimit": 20
+    }
+  },
+  "snapshot_type": "phase3_baseline",
+  "strategy_digest": "e2a8fbe92ba34a3b"
+}

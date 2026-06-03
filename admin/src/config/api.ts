@@ -1,5 +1,26 @@
 export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
 
+export const AUTH_API = {
+  REGISTER: '/v1/auth/register',
+  LOGIN: '/v1/auth/login',
+  REFRESH: '/v1/auth/refresh',
+  ME: '/v1/auth/me',
+  PASSWORD: '/v1/auth/password',
+};
+
+export const API_KEY_API = {
+  LIST: '/v1/api-keys',
+  CREATE: '/v1/api-keys',
+  UPDATE: (id: number | string) => `/v1/api-keys/${id}`,
+  DELETE: (id: number | string) => `/v1/api-keys/${id}`,
+  ROTATE: (id: number | string) => `/v1/api-keys/${id}/rotate`,
+};
+
+export const TENANT_API = {
+  DETAIL: '/v1/tenant',
+  USAGE: '/v1/tenant/usage',
+};
+
 export const KB_ADMIN_API = {
   DASHBOARD_STATS: `${API_BASE_URL}/admin/kb/dashboard/stats`,
   METRICS_OVERVIEW: `${API_BASE_URL}/admin/kb/metrics/overview`,

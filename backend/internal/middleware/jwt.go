@@ -139,7 +139,16 @@ func GetUserID(ctx *app.RequestContext) uint {
 	if !exists {
 		return 0
 	}
-	return userID.(uint)
+	switch v := userID.(type) {
+	case uint:
+		return v
+	case uint64:
+		return uint(v)
+	case float64:
+		return uint(v)
+	default:
+		return 0
+	}
 }
 
 // GetUsername 从上下文获取用户名

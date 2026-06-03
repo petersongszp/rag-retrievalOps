@@ -19,6 +19,7 @@ import (
 	"time"
 
 	"interview-agents/api/response"
+	authpkg "interview-agents/internal/auth"
 	"interview-agents/internal/config"
 	myerrors "interview-agents/internal/errors"
 	"interview-agents/internal/middleware"
@@ -300,6 +301,7 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
+	tenantID := getCurrentTenantID(c)
 
 	var req createKnowledgeBaseRequest
 	if err := c.BindAndValidate(&req); err != nil {
@@ -314,8 +316,15 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	existing, err := model.KBKnowledgeBaseDao.GetByName(req.Name)
-	if err == nil && existing != nil {
+	var existing model.KBKnowledgeBase
+	err := applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBKnowledgeBase{}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	).Where("name = ?", req.Name).First(&existing).Error
+	if err == nil {
 		response.BadRequest(ctx, c, "knowledge base name already exists")
 		return
 	}
@@ -325,6 +334,7 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 	}
 
 	kb := &model.KBKnowledgeBase{
+		TenantID:    tenantID,
 		UserID:      userID,
 		Name:        req.Name,
 		Description: req.Description,
@@ -339,17 +349,48 @@ func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	// 自动授予创建者 admin 权限
+	if tenantID > 0 {
+		permRepo := repository.NewRAGTenantKBPermissionRepository(repository.GetDB())
+		perm := &model.RAGTenantKBPermission{
+			TenantID:   tenantID,
+			KBID:       kb.ID,
+			Permission: model.RAGTenantKBPermissionAdmin,
+		}
+		if err := permRepo.Create(perm); err != nil {
+			log.Printf("[KB Create] Warning: failed to grant admin permission: kb_id=%d tenant_id=%d err=%v", kb.ID, tenantID, err)
+		}
+	}
+
 	response.Success(ctx, c, kb)
 }
 
 func ListKnowledgeBases(ctx context.Context, c *app.RequestContext) {
-	if middleware.GetUserID(c) == 0 {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
+	tenantID := getCurrentTenantID(c)
 
 	page, pageSize := getPagination(c)
-	items, total, err := model.KBKnowledgeBaseDao.List(page, pageSize)
+	var items []*model.KBKnowledgeBase
+	var total int64
+	query := applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBKnowledgeBase{}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	)
+	if err := query.Count(&total).Error; err != nil {
+		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list knowledge bases", err))
+		return
+	}
+	err := query.Offset((page - 1) * pageSize).
+		Limit(pageSize).
+		Order("created_at DESC").
+		Find(&items).Error
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list knowledge bases", err))
 		return
@@ -382,7 +423,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	kb, err := mustKnowledgeBaseExist(kbID)
+	kb, err := mustKnowledgeBaseExistForActor(c, kbID)
 	if err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
@@ -444,7 +485,13 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
+	resourceTenantID := kb.TenantID
+	if resourceTenantID == 0 {
+		resourceTenantID = getCurrentTenantID(c)
+	}
+
 	doc := &model.KBDocument{
+		TenantID:    resourceTenantID,
 		KbID:        kbID,
 		UserID:      userID,
 		FileName:    fileName,
@@ -455,6 +502,7 @@ func UploadDocument(ctx context.Context, c *app.RequestContext) {
 		Status:      model.KBDocumentStatusPending,
 	}
 	job := &model.KBIngestJob{
+		TenantID:   resourceTenantID,
 		KbID:       kbID,
 		DocumentID: 0,
 		UserID:     userID,
@@ -536,7 +584,7 @@ func ListDocuments(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	if _, err := mustKnowledgeBaseExist(kbID); err != nil {
+	if _, err := mustKnowledgeBaseExistForActor(c, kbID); err != nil {
 		response.ErrorFromErr(ctx, c, err)
 		return
 	}
@@ -591,9 +639,28 @@ func ListJobs(ctx context.Context, c *app.RequestContext) {
 	var total int64
 	var err error
 	if kbID != nil {
+		if _, err := mustKnowledgeBaseExistForActor(c, *kbID); err != nil {
+			response.ErrorFromErr(ctx, c, err)
+			return
+		}
 		items, total, err = model.KBIngestJobDao.ListByKbID(*kbID, status, page, pageSize)
 	} else {
-		items, total, err = model.KBIngestJobDao.List(status, page, pageSize)
+		query := applyActorIsolationScope(
+			repository.GetDB().Model(&model.KBIngestJob{}),
+			getCurrentTenantID(c),
+			userID,
+			"tenant_id",
+			"user_id",
+		)
+		if status != nil {
+			query = query.Where("status = ?", *status)
+		}
+		if err = query.Count(&total).Error; err == nil {
+			err = query.Offset((page - 1) * pageSize).
+				Limit(pageSize).
+				Order("created_at DESC").
+				Find(&items).Error
+		}
 	}
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list jobs", err))
@@ -621,13 +688,9 @@ func GetJob(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	job, err := model.KBIngestJobDao.GetByID(jobID)
+	job, err := mustJobExistForActor(c, jobID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(ctx, c, "job not found")
-			return
-		}
-		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
+		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 	response.Success(ctx, c, job)
@@ -646,13 +709,9 @@ func RetryJob(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	job, err := model.KBIngestJobDao.GetByID(jobID)
+	job, err := mustJobExistForActor(c, jobID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(ctx, c, "job not found")
-			return
-		}
-		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
+		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 	if job.Status != model.KBIngestJobStatusFailed && job.Status != model.KBIngestJobStatusDead {
@@ -736,13 +795,9 @@ func CancelJob(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	job, err := model.KBIngestJobDao.GetByID(jobID)
+	job, err := mustJobExistForActor(c, jobID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(ctx, c, "job not found")
-			return
-		}
-		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get job", err))
+		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 	if job.Status == model.KBIngestJobStatusCompleted || job.Status == model.KBIngestJobStatusCanceled {
@@ -803,13 +858,9 @@ func DeleteDocument(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	doc, err := model.KBDocumentDao.GetByID(documentID)
+	doc, err := mustDocumentExistForActor(c, documentID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(ctx, c, "document not found")
-			return
-		}
-		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get document", err))
+		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 	if err := model.KBDocumentDao.SoftDelete(documentID); err != nil {
@@ -1074,6 +1125,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			DurationMs:             durationMs,
 			TimeoutMs:              retrieveTimeout.Milliseconds(),
 		}
+		enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 		retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 			retrieveLog,
 			searchResult.Metrics,
@@ -1243,6 +1295,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		DurationMs:             durationMs,
 		TimeoutMs:              retrieveTimeout.Milliseconds(),
 	}
+	enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 	retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
 		retrieveLog,
 		searchMetrics,
@@ -1710,6 +1763,100 @@ func mustKnowledgeBaseExist(kbID uint64) (*model.KBKnowledgeBase, error) {
 	return kb, nil
 }
 
+func mustKnowledgeBaseExistForActor(c *app.RequestContext, kbID uint64) (*model.KBKnowledgeBase, error) {
+	kb, err := mustKnowledgeBaseExist(kbID)
+	if err != nil {
+		return nil, err
+	}
+	if !isKnowledgeBaseAccessibleToActor(kb, getCurrentTenantID(c), middleware.GetUserID(c)) {
+		return nil, myerrors.NewNotFoundError("knowledge base")
+	}
+	return kb, nil
+}
+
+func mustDocumentExistForActor(c *app.RequestContext, documentID uint64) (*model.KBDocument, error) {
+	doc, err := model.KBDocumentDao.GetByID(documentID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, myerrors.NewNotFoundError("document")
+		}
+		return nil, myerrors.NewDBError("failed to get document", err)
+	}
+	if _, err := mustKnowledgeBaseExistForActor(c, doc.KbID); err != nil {
+		return nil, err
+	}
+	return doc, nil
+}
+
+func mustJobExistForActor(c *app.RequestContext, jobID uint64) (*model.KBIngestJob, error) {
+	job, err := model.KBIngestJobDao.GetByID(jobID)
+	if err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, myerrors.NewNotFoundError("job")
+		}
+		return nil, myerrors.NewDBError("failed to get job", err)
+	}
+	if _, err := mustKnowledgeBaseExistForActor(c, job.KbID); err != nil {
+		return nil, err
+	}
+	return job, nil
+}
+
+func getCurrentTenantID(c *app.RequestContext) uint64 {
+	if c == nil {
+		return 0
+	}
+	tid, ok := c.Get("tenant_id")
+	if !ok {
+		return 0
+	}
+	switch v := tid.(type) {
+	case uint64:
+		return v
+	case uint:
+		return uint64(v)
+	case uint32:
+		return uint64(v)
+	case int:
+		if v > 0 {
+			return uint64(v)
+		}
+	case int64:
+		if v > 0 {
+			return uint64(v)
+		}
+	case float64:
+		if v > 0 {
+			return uint64(v)
+		}
+	}
+	return 0
+}
+
+func isKnowledgeBaseAccessibleToActor(kb *model.KBKnowledgeBase, tenantID uint64, userID uint) bool {
+	if kb == nil || userID == 0 {
+		return false
+	}
+	if tenantID > 0 && kb.TenantID > 0 {
+		return kb.TenantID == tenantID
+	}
+	return kb.UserID == userID
+}
+
+func applyActorIsolationScope(query *gorm.DB, tenantID uint64, userID uint, tenantColumn, userColumn string) *gorm.DB {
+	if tenantID > 0 {
+		return query.Where(
+			fmt.Sprintf("(%s = ? OR (%s = 0 AND %s = ?))", tenantColumn, tenantColumn, userColumn),
+			tenantID,
+			userID,
+		)
+	}
+	if userID > 0 {
+		return query.Where(fmt.Sprintf("%s = ?", userColumn), userID)
+	}
+	return query.Where("1 = 0")
+}
+
 func getPagination(c *app.RequestContext) (int, int) {
 	page := getIntWithDefault(string(c.Query("page")), 1)
 	pageSize := getIntWithDefault(string(c.Query("page_size")), defaultKBPageSize)
@@ -2152,6 +2299,81 @@ func persistAuditEvent(entry *model.KBAuditEvent) {
 			)
 		}
 	}()
+}
+
+func enrichRetrieveLogWithPlatformContext(ctx context.Context, c *app.RequestContext, entry *model.KBRetrieveLog, permissionResult string) {
+	if entry == nil {
+		return
+	}
+
+	identity := authpkg.GetIdentity(ctx)
+	if identity.TenantID > 0 {
+		entry.TenantID = identity.TenantID
+	}
+	if identity.AppID != "" {
+		entry.AppID = identity.AppID
+	}
+	if identity.APIKeyID > 0 {
+		entry.APIKeyID = identity.APIKeyID
+	}
+	if identity.AuthType != "" {
+		entry.AuthType = string(identity.AuthType)
+	}
+	if identity.IsLegacy {
+		entry.IsLegacy = true
+	}
+
+	if tenantID, ok := c.Get("tenant_id"); ok && entry.TenantID == 0 {
+		switch v := tenantID.(type) {
+		case uint64:
+			entry.TenantID = v
+		case uint:
+			entry.TenantID = uint64(v)
+		case int:
+			if v > 0 {
+				entry.TenantID = uint64(v)
+			}
+		}
+	}
+	if appID, ok := c.Get("app_id"); ok && entry.AppID == "" {
+		if v, ok := appID.(string); ok {
+			entry.AppID = v
+		}
+	}
+	if apiKeyID, ok := c.Get("api_key_id"); ok && entry.APIKeyID == 0 {
+		switch v := apiKeyID.(type) {
+		case uint64:
+			entry.APIKeyID = v
+		case uint:
+			entry.APIKeyID = uint64(v)
+		case int:
+			if v > 0 {
+				entry.APIKeyID = uint64(v)
+			}
+		}
+	}
+	if authType, ok := c.Get("auth_type"); ok && entry.AuthType == "" {
+		if v, ok := authType.(string); ok {
+			entry.AuthType = v
+		}
+	}
+	if isLegacy, ok := c.Get("is_legacy"); ok && !entry.IsLegacy {
+		if v, ok := isLegacy.(bool); ok {
+			entry.IsLegacy = v
+		}
+	}
+
+	if permissionResult != "" {
+		entry.PermissionResult = permissionResult
+	}
+
+	path := string(c.Path())
+	switch {
+	case strings.HasPrefix(path, "/v1/retrieve"):
+		entry.SourceAPI = "v1"
+	case path != "":
+		entry.SourceAPI = "legacy_kb"
+	}
 }
 
 func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
@@ -2731,7 +2953,8 @@ func requireAdmin(ctx context.Context, c *app.RequestContext) bool {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return false
 	}
-	if !strings.EqualFold(strings.TrimSpace(middleware.GetUserRole(c)), "admin") {
+	role := strings.ToLower(strings.TrimSpace(middleware.GetUserRole(c)))
+	if role != "admin" && role != "owner" {
 		response.Error(ctx, c, 403, "admin role required")
 		return false
 	}
@@ -3054,10 +3277,12 @@ func GetMetricsOverview(ctx context.Context, c *app.RequestContext) {
 }
 
 func ListIngestLogs(ctx context.Context, c *app.RequestContext) {
-	if middleware.GetUserID(c) == 0 {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
+	tenantID := getCurrentTenantID(c)
 
 	var kbID *uint64
 	kbIDRaw := strings.TrimSpace(string(c.Query("kb_id")))
@@ -3068,6 +3293,10 @@ func ListIngestLogs(ctx context.Context, c *app.RequestContext) {
 			return
 		}
 		kbID = &parsed
+		if _, err := mustKnowledgeBaseExistForActor(c, parsed); err != nil {
+			response.ErrorFromErr(ctx, c, err)
+			return
+		}
 	}
 
 	var status *model.KBIngestJobStatus
@@ -3103,15 +3332,37 @@ func ListIngestLogs(ctx context.Context, c *app.RequestContext) {
 	}
 
 	page, pageSize := getPagination(c)
-	items, total, err := model.KBIngestJobDao.ListWithFilter(model.KBIngestJobListFilter{
-		KBID:      kbID,
-		Status:    status,
-		ErrorCode: errorCode,
-		StartTime: startTime,
-		EndTime:   endTime,
-		Page:      page,
-		PageSize:  pageSize,
-	})
+	var items []*model.KBIngestJob
+	var total int64
+	query := applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBIngestJob{}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	)
+	if kbID != nil {
+		query = query.Where("kb_id = ?", *kbID)
+	}
+	if status != nil {
+		query = query.Where("status = ?", *status)
+	}
+	if errorCode != nil && strings.TrimSpace(*errorCode) != "" {
+		query = query.Where("last_error_code = ?", strings.TrimSpace(*errorCode))
+	}
+	if startTime != nil {
+		query = query.Where("created_at >= ?", *startTime)
+	}
+	if endTime != nil {
+		query = query.Where("created_at <= ?", *endTime)
+	}
+	err = query.Count(&total).Error
+	if err == nil {
+		err = query.Offset((page - 1) * pageSize).
+			Limit(pageSize).
+			Order("created_at DESC").
+			Find(&items).Error
+	}
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to list ingest logs", err))
 		return
@@ -3137,13 +3388,9 @@ func GetIngestLogDetail(ctx context.Context, c *app.RequestContext) {
 		return
 	}
 
-	job, err := model.KBIngestJobDao.GetByID(jobID)
+	job, err := mustJobExistForActor(c, jobID)
 	if err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			response.NotFound(ctx, c, "job not found")
-			return
-		}
-		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to get ingest log detail", err))
+		response.ErrorFromErr(ctx, c, err)
 		return
 	}
 
@@ -3397,37 +3644,67 @@ type dashboardStatsResponse struct {
 }
 
 func GetDashboardStats(ctx context.Context, c *app.RequestContext) {
-	if middleware.GetUserID(c) == 0 {
+	userID := middleware.GetUserID(c)
+	if userID == 0 {
 		response.Unauthorized(ctx, c, "Authorization token is required")
 		return
 	}
+	tenantID := getCurrentTenantID(c)
 
-	kbCount, err := model.KBKnowledgeBaseDao.Count()
+	var kbCount int64
+	err := applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBKnowledgeBase{}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	).Count(&kbCount).Error
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count knowledge bases", err))
 		return
 	}
 
-	docCount, err := model.KBDocumentDao.CountNonDeleted()
+	var docCount int64
+	err = applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBDocument{}).Where("deleted = 0"),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	).Count(&docCount).Error
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count documents", err))
 		return
 	}
 
-	processingCount, err := model.KBIngestJobDao.CountByStatuses([]model.KBIngestJobStatus{
-		model.KBIngestJobStatusPending,
-		model.KBIngestJobStatusProcessing,
-		model.KBIngestJobStatusRetrying,
-	})
+	var processingCount int64
+	err = applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBIngestJob{}).Where("status IN ?", []model.KBIngestJobStatus{
+			model.KBIngestJobStatusPending,
+			model.KBIngestJobStatusProcessing,
+			model.KBIngestJobStatusRetrying,
+		}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	).Count(&processingCount).Error
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count processing jobs", err))
 		return
 	}
 
-	failedCount, err := model.KBIngestJobDao.CountByStatuses([]model.KBIngestJobStatus{
-		model.KBIngestJobStatusFailed,
-		model.KBIngestJobStatusDead,
-	})
+	var failedCount int64
+	err = applyActorIsolationScope(
+		repository.GetDB().Model(&model.KBIngestJob{}).Where("status IN ?", []model.KBIngestJobStatus{
+			model.KBIngestJobStatusFailed,
+			model.KBIngestJobStatusDead,
+		}),
+		tenantID,
+		userID,
+		"tenant_id",
+		"user_id",
+	).Count(&failedCount).Error
 	if err != nil {
 		response.ErrorFromErr(ctx, c, myerrors.NewDBError("failed to count failed jobs", err))
 		return

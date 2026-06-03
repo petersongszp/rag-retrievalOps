@@ -8,6 +8,7 @@ type (
 	_KBJobOperationLog struct{}
 	KBJobOperationLog  struct {
 		ID              uint64    `json:"id" gorm:"primaryKey;autoIncrement"`
+		TenantID        uint64    `json:"tenant_id" gorm:"index"`
 		JobID           uint64    `json:"job_id" gorm:"index;not null"`
 		OperatorID      uint      `json:"operator_id" gorm:"index;not null"`
 		Operation       string    `json:"operation" gorm:"size:64;not null;index"`

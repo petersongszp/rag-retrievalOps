@@ -3,17 +3,29 @@ package ragrouter
 import (
 	"log"
 
+	authhandler "interview-agents/api/handler/auth"
 	kb "interview-agents/api/handler/kb"
 	rag "interview-agents/api/handler/rag"
+	authpkg "interview-agents/internal/auth"
 	"interview-agents/internal/config"
+	"interview-agents/internal/middleware"
 	"interview-agents/internal/rag/phase3"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/route"
+	"gorm.io/gorm"
 )
 
+var jwtManager *authpkg.JWTManager
+
+// SetJWTManager 设置路由层使用的 JWT 管理器（在 Register 之前调用）
+func SetJWTManager(m *authpkg.JWTManager) {
+	jwtManager = m
+}
+
 // Register wires the RAG admin and public retrieval routes.
-func Register(h *server.Hertz) {
+// adminGroup is the /api/admin group with auth middleware already applied.
+func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 	if !config.Global.RAG.Enabled {
 		log.Println("[RAG] rag.enabled=false, skip route registration")
 		return
@@ -21,17 +33,72 @@ func Register(h *server.Hertz) {
 
 	log.Println("[RAG] Registering knowledge base routes")
 	registerKBGroup(h.Group("/api/kb"), false)
-	registerKBGroup(h.Group("/api/admin/kb"), true)
+	registerKBGroup(adminGroup.Group("/kb"), true)
 
 	log.Println("[RAG] Registering v1 public RAG routes")
 	registerRAGPublicRoutes(h.Group(""))
+
+	log.Println("[RAG] Registering auth routes")
+	// 公开路由（不需要认证）
+	publicAuth := h.Group("/v1/auth")
+	{
+		publicAuth.POST("/register", authhandler.Register)
+		publicAuth.POST("/login", authhandler.Login)
+		publicAuth.POST("/refresh", authhandler.Refresh)
+	}
+	// 需要认证的路由
+	if jwtManager != nil {
+		protectedAuth := h.Group("/v1/auth")
+		protectedAuth.Use(middleware.JWTAuth(jwtManager))
+		{
+			protectedAuth.GET("/me", authhandler.Me)
+			protectedAuth.PUT("/password", authhandler.ChangePassword)
+		}
+	} else {
+		log.Println("[RAG] Warning: jwtManager not set, protected auth routes registered without JWT middleware")
+		authGroup := h.Group("/v1/auth")
+		{
+			authGroup.GET("/me", authhandler.Me)
+			authGroup.PUT("/password", authhandler.ChangePassword)
+		}
+	}
+
+	// API Key 管理路由（需要 JWT 认证）
+	if jwtManager != nil {
+		log.Println("[RAG] Registering API key management routes")
+		apiKeyGroup := h.Group("/v1/api-keys")
+		apiKeyGroup.Use(middleware.JWTAuth(jwtManager))
+		{
+			apiKeyGroup.GET("", authhandler.ListAPIKeys)
+			apiKeyGroup.POST("", authhandler.CreateAPIKey)
+			apiKeyGroup.PUT("/:id", authhandler.UpdateAPIKey)
+			apiKeyGroup.POST("/:id/rotate", authhandler.RotateAPIKey)
+			apiKeyGroup.DELETE("/:id", authhandler.DeleteAPIKey)
+		}
+
+		log.Println("[RAG] Registering tenant routes")
+		tenantGroup := h.Group("/v1/tenant")
+		tenantGroup.Use(middleware.JWTAuth(jwtManager))
+		{
+			tenantGroup.GET("", authhandler.GetTenant)
+			tenantGroup.GET("/usage", authhandler.GetTenantUsage)
+		}
+	}
 }
 
 func registerRAGPublicRoutes(r *route.RouterGroup) {
 	v1 := r.Group("/v1")
 	{
+		// /v1/retrieve 支持多种认证：API Key > JWT > Legacy app_id
+		// 使用 OptionalAuth 中间件，不强制认证，让 handler 内部判断
 		v1.POST("/retrieve", rag.Retrieve)
 	}
+}
+
+// InitAuthHandler initializes auth handler dependencies (call after DB is ready)
+func InitAuthHandler(db *gorm.DB, cfg *config.Config) {
+	authhandler.InitAuthHandler(db, cfg)
+	authhandler.InitAPIKeyHandler(db)
 }
 
 func registerKBGroup(group *route.RouterGroup, adminOnly bool) {

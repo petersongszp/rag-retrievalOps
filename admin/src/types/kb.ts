@@ -132,6 +132,13 @@ export interface KBRetrieveLog {
   rerank_model?: string;
   duration_ms: number;
   timeout_ms: number;
+  tenant_id?: number;
+  app_id?: string;
+  api_key_id?: number;
+  auth_type?: string;
+  source_api?: string;
+  permission_result?: string;
+  is_legacy?: boolean;
   created_at: string;
 }
 

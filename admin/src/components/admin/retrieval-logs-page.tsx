@@ -461,6 +461,15 @@ export function RetrievalLogsPage() {
             </Descriptions>
 
             <Descriptions title="错误与补充信息" column={1} size="small" bordered>
+              <Descriptions.Item label="Tenant ID">{renderField(detail.tenant_id)}</Descriptions.Item>
+              <Descriptions.Item label="App ID">{renderField(detail.app_id)}</Descriptions.Item>
+              <Descriptions.Item label="API Key ID">{renderField(detail.api_key_id)}</Descriptions.Item>
+              <Descriptions.Item label="Auth Type">{renderField(detail.auth_type)}</Descriptions.Item>
+              <Descriptions.Item label="Source API">{renderField(detail.source_api)}</Descriptions.Item>
+              <Descriptions.Item label="Permission Result">
+                {renderField(detail.permission_result)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Legacy Path">{renderField(detail.is_legacy)}</Descriptions.Item>
               <Descriptions.Item label="P3 摘要">
                 <Space direction="vertical" size="middle" className="w-full">
                   <div>

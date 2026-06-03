@@ -1,0 +1,109 @@
+{
+  "config_version": "3fa17f45a51a295d",
+  "evaluation_baseline": {
+    "baseline_profile": "phase2_baseline",
+    "candidate_profile": "parent_child+advanced_rewrite",
+    "dataset_path": "scripts/evaluation/dataset.json",
+    "experiment_groups": [
+      "phase2_baseline",
+      "parent_child",
+      "parent_child+strategic_topk",
+      "parent_child+refusal",
+      "parent_child+advanced_rewrite"
+    ],
+    "profile_path": "scripts/evaluation/retrieval_strategy_profiles.example.json"
+  },
+  "generated_at": "2026-06-02T15:57:31Z",
+  "metrics_snapshot": {
+    "citation_precision": null,
+    "context_avg_tokens": null,
+    "mrr": null,
+    "ndcg": null,
+    "notes": "Fill in after the frozen Phase 2 regression run completes.",
+    "recall_at_k": null,
+    "retrieval_p95_ms": null
+  },
+  "rag": {
+    "enabled": true,
+    "environment": "dev",
+    "feature_flags": {
+      "EnableProdGuard": false,
+      "EnableIngestRetry": false,
+      "EnableRetrieveAudit": true,
+      "EnableHybridRetrieval": true,
+      "EnableQueryRewrite": true,
+      "EnableDynamicTopK": true,
+      "EnableAdvancedRerank": true,
+      "EnableParentChildRetrieval": true,
+      "EnableStrategicTopK": false,
+      "EnableEvidenceRefusal": false,
+      "EnableCitationConsistency": false,
+      "EnableDomainTerms": false,
+      "EnableRouteSpecificRewrite": false,
+      "EnableModelAssistedRewrite": false,
+      "EnableExperimentPlatform": false,
+      "EnableIndexLifecycle": false,
+      "EnableCostDashboard": false,
+      "EnableComplianceAudit": false,
+      "EnableWeeklyReport": false,
+      "EnableMilvusOpsTooling": false,
+      "EnableCollectionSwitchGuard": false,
+      "EnableCostGovernance": false,
+      "EnableAuditCenter": false,
+      "EnableVectorOps": false,
+      "EnableGovernanceAlerts": false
+    },
+    "phase2": {
+      "HybridDenseWeight": 0.7,
+      "HybridSparseWeight": 0.3,
+      "CandidateTopK": 10,
+      "MinTopK": 3,
+      "MaxTopK": 8,
+      "TokenBudget": 0,
+      "MinAnswerChunks": 2,
+      "RewriteTimeoutMS": 120,
+      "RewriteMaxExpansions": 3,
+      "RerankTimeoutMS": 250,
+      "RerankModel": "jaccard-v1"
+    },
+    "phase3": {
+      "ParentChildFillStrategy": "section_window",
+      "ParentChildWindowSize": 1,
+      "ParentChildMaxTokens": 1200,
+      "StrategicTopKMinK": 2,
+      "StrategicTopKMaxK": 8,
+      "StrategicTopKBudgetRatio": 0.6,
+      "EvidenceMinRerankScore": 0.55,
+      "EvidenceMinDensity": 0.2,
+      "EvidenceMinCitationCoverage": 0.5,
+      "CitationCheckThreshold": 0.7,
+      "CitationCheckVersion": "phase3-citation-v1",
+      "DomainTermTimeoutMS": 80,
+      "ModelRewriteTimeoutMS": 150,
+      "ModelRewriteShadowRatio": 0.1
+    },
+    "release": {
+      "Enabled": false,
+      "Stage": "full",
+      "InternalRoles": [
+        "admin"
+      ],
+      "CanaryPercent": 5,
+      "BatchPercent": 25,
+      "UserAllowlist": []
+    },
+    "thresholds": {
+      "MaxRetryCount": 3,
+      "RetryBackoffMS": 500,
+      "RetrieveTimeoutMS": 3000,
+      "UserQPSLimit": 20
+    }
+  },
+  "rollback_contract": {
+    "phase2_main_path_unchanged": true,
+    "phase3_flags_independent": true,
+    "rollback_target": "phase2_baseline"
+  },
+  "snapshot_type": "phase2_baseline",
+  "strategy_digest": "e2a8fbe92ba34a3b"
+}

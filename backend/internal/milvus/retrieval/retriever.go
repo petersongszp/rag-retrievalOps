@@ -136,7 +136,11 @@ func (s *RetrieverService) RetrieveWithDatabaseAndCollection(
 		retrieveOpts.Language = opts.Language
 		retrieveOpts.Category = opts.Category
 		retrieveOpts.Expr = opts.Expr
+		retrieveOpts.TenantID = opts.TenantID
+		retrieveOpts.AllowedKBIDs = append([]uint64(nil), opts.AllowedKBIDs...)
 		retrieveOpts.TopK = opts.TopK
+		retrieveOpts.KBScope = opts.KBScope
+		retrieveOpts.ActiveGlobalKBID = opts.ActiveGlobalKBID
 		if opts.Collection != "" {
 			retrieveOpts.Collection = opts.Collection
 		}
