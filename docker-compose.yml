@@ -97,6 +97,19 @@ services:
     networks:
       - rag-network
 
+  attu:
+    image: zilliz/attu:v2.4.12
+    restart: unless-stopped
+    ports:
+      - "8001:3000"
+    environment:
+      MILVUS_URL: milvus:19530
+    depends_on:
+      milvus:
+        condition: service_healthy
+    networks:
+      - rag-network
+
   rag-admin:
     build:
       context: ./admin
