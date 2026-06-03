@@ -25,3 +25,6 @@ admin/.next-dev-*-cache/
 
 # 评估报告（运行时生成，不提交）
 backend/runtime/eval-reports/*.json
+.gocache/
+backend/.tmp/
+gaoerDocs/
