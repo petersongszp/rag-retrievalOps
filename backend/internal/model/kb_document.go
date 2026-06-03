@@ -19,23 +19,24 @@ var KBDocumentDao _KBDocument
 type (
 	_KBDocument struct{}
 	KBDocument  struct {
-		ID               uint64           `json:"id" gorm:"primaryKey;autoIncrement"`
-		KbID             uint64           `json:"kb_id" gorm:"index;not null"`
-		UserID           uint             `json:"user_id" gorm:"index;not null"`
-		FileName         string           `json:"file_name" gorm:"size:255;not null"`
-		FileType         string           `json:"file_type" gorm:"size:50;not null"`
-		FileSize         int64            `json:"file_size" gorm:"not null"`
-		FileHash         string           `json:"file_hash" gorm:"index;size:64;not null"`
-		StoragePath      string           `json:"storage_path" gorm:"size:500;not null"`
-		Status           KBDocumentStatus `json:"status" gorm:"size:20;not null;default:'pending';index"`
-		ChunkCount       int              `json:"chunk_count" gorm:"default:0"`
-		ErrorMsg         string           `json:"error_msg" gorm:"size:500"`
-		Deleted          int              `json:"deleted" gorm:"default:0;index"`
-		CreatedAt        time.Time        `json:"created_at" gorm:"autoCreateTime:milli"`
-		UpdatedAt        time.Time        `json:"updated_at" gorm:"autoUpdateTime:milli"`
+		ID          uint64           `json:"id" gorm:"primaryKey;autoIncrement"`
+		TenantID    uint64           `json:"tenant_id" gorm:"index"`
+		KbID        uint64           `json:"kb_id" gorm:"index;not null"`
+		UserID      uint             `json:"user_id" gorm:"index;not null"`
+		FileName    string           `json:"file_name" gorm:"size:255;not null"`
+		FileType    string           `json:"file_type" gorm:"size:50;not null"`
+		FileSize    int64            `json:"file_size" gorm:"not null"`
+		FileHash    string           `json:"file_hash" gorm:"index;size:64;not null"`
+		StoragePath string           `json:"storage_path" gorm:"size:500;not null"`
+		Status      KBDocumentStatus `json:"status" gorm:"size:20;not null;default:'pending';index"`
+		ChunkCount  int              `json:"chunk_count" gorm:"default:0"`
+		ErrorMsg    string           `json:"error_msg" gorm:"size:500"`
+		Deleted     int              `json:"deleted" gorm:"default:0;index"`
+		CreatedAt   time.Time        `json:"created_at" gorm:"autoCreateTime:milli"`
+		UpdatedAt   time.Time        `json:"updated_at" gorm:"autoUpdateTime:milli"`
 		// 以下字段由关联查询填充，不存储在 kb_document 表中
-		LastIngestJobID  *uint64          `json:"last_ingest_job_id,omitempty" gorm:"-"`
-		IngestDurationMs *int64           `json:"ingest_duration_ms,omitempty" gorm:"-"`
+		LastIngestJobID  *uint64 `json:"last_ingest_job_id,omitempty" gorm:"-"`
+		IngestDurationMs *int64  `json:"ingest_duration_ms,omitempty" gorm:"-"`
 	}
 )
 

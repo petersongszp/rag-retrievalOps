@@ -137,6 +137,13 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 		PostprocessMs:          10,
 		DurationMs:             180,
 		TimeoutMs:              3000,
+		TenantID:               7,
+		AppID:                  "support-bot",
+		APIKeyID:               9,
+		AuthType:               "api_key",
+		SourceAPI:              "v1",
+		PermissionResult:       "allowed",
+		IsLegacy:               false,
 	}
 
 	if log.RequestID != "test-req-001" {
@@ -177,6 +184,12 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	}
 	if log.DurationMs != 180 {
 		t.Errorf("DurationMs = %d, want 180", log.DurationMs)
+	}
+	if log.TenantID != 7 || log.AppID != "support-bot" || log.APIKeyID != 9 {
+		t.Errorf("unexpected platform fields: %+v", log)
+	}
+	if log.AuthType != "api_key" || log.SourceAPI != "v1" || log.PermissionResult != "allowed" {
+		t.Errorf("unexpected auth trace fields: %+v", log)
 	}
 	if log.ResultStatus != RetrieveResultStatusSuccess {
 		t.Errorf("ResultStatus = %q, want %q", log.ResultStatus, RetrieveResultStatusSuccess)

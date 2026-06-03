@@ -6,43 +6,88 @@
 import "interview-agents/pkg/ragsdk"
 ```
 
-## 使用
+## 快速开始
 
 ```go
-client := ragsdk.NewClient(ragsdk.ClientConfig{
+package main
+
+import (
+  "context"
+  "errors"
+  "fmt"
+  "log"
+
+  "interview-agents/pkg/ragsdk"
+)
+
+func main() {
+  client := ragsdk.NewClient(ragsdk.ClientConfig{
     BaseURL: "http://localhost:8081",
-    APIKey:  "your-api-key",
-    AppID:   "your-app-id",
-})
+    APIKey:  "rag_xxxxxxxxxxxx",
+  })
 
-resp, err := client.Retrieve(ctx, ragsdk.RetrieveRequest{
-    Query: "什么是 JVM 调优？",
-    KBIDs: []uint64{1, 2, 3},
+  resp, err := client.Retrieve(context.Background(), ragsdk.RetrieveRequest{
+    Query: "知识库里关于 Go 并发的内容是什么？",
+    KBIDs: []uint64{1},
     TopK:  5,
-})
+  })
+  if err != nil {
+    var apiErr *ragsdk.APIError
+    if errors.As(err, &apiErr) {
+      log.Fatalf("retrieve failed: status=%d body=%s", apiErr.StatusCode, apiErr.Body)
+    }
+    log.Fatal(err)
+  }
 
-for _, item := range resp.Items {
-    fmt.Printf("Score: %.2f, Content: %s\n", item.Score, item.Content)
+  fmt.Println("request_id:", resp.RequestID)
+  for _, item := range resp.Items {
+    fmt.Printf("[%.2f] %s\n", item.Score, item.Content)
+  }
 }
 ```
 
-## API
+## 认证方式
 
-### Retrieve
+- SDK / Agent 使用 API Key：
+  - `Authorization: Bearer rag_<key>`
+- Admin UI 使用 JWT，不推荐混用。
+- 终端用户不直接持有 API Key。
 
-执行知识库检索。
+## 请求参数
 
-**参数：**
-- `Query` (required): 检索查询内容
-- `KBIDs`: 知识库 ID 列表
-- `TopK`: 返回结果数量
-- `StrategyProfile`: 策略配置
-- `MetadataFilter`: 元数据过滤
+```json
+{
+  "query": "知识库里关于 Go 并发的内容是什么？",
+  "kb_ids": [1],
+  "top_k": 5
+}
+```
 
-**返回：**
-- `RequestID`: 请求 ID（用于审计和调试）
-- `Items`: 检索结果列表
-  - `Content`: 文本内容
-  - `Score`: 相关性分数
-  - `Citation`: 引用信息
-  - `Source`: 来源信息
+## 错误处理
+
+当服务端返回非 `200` 时，SDK 会返回 `*ragsdk.APIError`：
+
+```go
+var apiErr *ragsdk.APIError
+if errors.As(err, &apiErr) {
+  switch apiErr.StatusCode {
+  case 401:
+    // invalid_api_key / api_key_revoked / api_key_expired
+  case 403:
+    // forbidden / tenant_suspended
+  case 429:
+    // quota_exceeded / rate_limited
+  }
+}
+```
+
+## 常见状态码
+
+- `401 invalid_api_key`
+- `401 api_key_revoked`
+- `401 api_key_expired`
+- `403 forbidden`
+- `403 tenant_suspended`
+- `404 not_found`
+- `429 quota_exceeded`
+- `429 rate_limited`

@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS rag_api_key (
+    id BIGINT UNSIGNED AUTO_INCREMENT PRIMARY KEY,
+    tenant_id BIGINT UNSIGNED NOT NULL COMMENT '所属租户',
+    user_id BIGINT UNSIGNED NOT NULL COMMENT '创建者',
+    app_id VARCHAR(64) NOT NULL COMMENT '应用标识',
+    key_hash VARCHAR(255) NOT NULL COMMENT 'Key哈希',
+    key_prefix VARCHAR(16) NOT NULL COMMENT 'Key前缀',
+    name VARCHAR(128) COMMENT 'Key名称',
+    permissions TEXT COMMENT '权限配置JSON',
+    status VARCHAR(16) DEFAULT 'active' COMMENT '状态',
+    last_used_at TIMESTAMP NULL COMMENT '最后使用时间',
+    expires_at TIMESTAMP NULL COMMENT '过期时间',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    KEY idx_tenant_id (tenant_id),
+    KEY idx_user_id (user_id),
+    KEY idx_key_hash (key_hash),
+    KEY idx_status (status),
+    CONSTRAINT fk_apikey_tenant FOREIGN KEY (tenant_id) REFERENCES rag_tenant(id) ON DELETE CASCADE,
+    CONSTRAINT fk_apikey_user FOREIGN KEY (user_id) REFERENCES rag_user(id) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;

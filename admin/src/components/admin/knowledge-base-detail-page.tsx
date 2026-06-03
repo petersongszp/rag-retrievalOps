@@ -31,6 +31,8 @@ import type { ColumnsType } from 'antd/es/table';
 import type { UploadFile, UploadProps } from 'antd';
 import apiClient from '@/services/api/client';
 import { KB_ADMIN_API } from '@/config/api';
+import { canDeleteKB, canUploadDocument } from '@/services/auth/permissions';
+import { useAuth } from '@/services/auth/store';
 import type { KBDocument, KBIngestJob } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
@@ -58,6 +60,7 @@ function formatContractField(value: unknown): string {
 
 export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const router = useRouter();
+  const { user } = useAuth();
   const {
     bases,
     selectedBase,
@@ -76,6 +79,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const allowUpload = canUploadDocument(user?.role);
+  const allowDeleteKnowledgeBase = canDeleteKB(user?.role);
 
   const base = useMemo(
     () =>
@@ -88,10 +93,10 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       const jobsData = await (apiClient.get(KB_ADMIN_API.LIST_JOBS_BY_KB(kbId)) as Promise<{
         items?: KBIngestJob[];
       }>);
-      setJobs(jobsData?.items ?? []);
-      return jobsData?.items ?? [];
+      const nextJobs = jobsData?.items ?? [];
+      setJobs(nextJobs);
+      return nextJobs;
     } catch {
-      // silent on poll failure
       return null;
     }
   }, [kbId]);
@@ -108,10 +113,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
 
       setDocuments(documentsData?.items ?? []);
       return latestJobs;
-    } catch (error) {
-      message.error(
-        error instanceof Error ? error.message : '加载知识库详情失败'
-      );
+    } catch (loadError) {
+      message.error(loadError instanceof Error ? loadError.message : '加载知识库详情失败');
       return null;
     } finally {
       setIsLoading(false);
@@ -126,9 +129,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     void refreshDetail();
   }, [refreshDetail]);
 
-  // Auto-poll while any job is in an active state
   useEffect(() => {
-    const hasActiveJobs = jobs.some((j) => ACTIVE_STATUSES.has(j.status));
+    const hasActiveJobs = jobs.some((job) => ACTIVE_STATUSES.has(job.status));
 
     if (!hasActiveJobs) {
       if (pollTimerRef.current) {
@@ -148,7 +150,6 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
         pollTimerRef.current = null;
       }
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [jobs, refreshJobs]);
 
   const uploadProps: UploadProps = {
@@ -161,7 +162,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const handleDeleteDocument = (document: KBDocument) => {
     Modal.confirm({
       title: '删除文档',
-      content: `确认删除"${document.file_name}"？此操作不可撤销。`,
+      content: `确认删除 "${document.file_name}"？此操作不可撤销。`,
       okText: '确认删除',
       okButtonProps: { danger: true },
       cancelText: '取消',
@@ -233,9 +234,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       }
     });
 
-    setUploadLoading(true);
-
     try {
+      setUploadLoading(true);
       await apiClient.post(KB_ADMIN_API.UPLOAD_DOCUMENT, formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
@@ -243,8 +243,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       setUploadOpen(false);
       setFileList([]);
       await refreshDetail();
-    } catch (error) {
-      message.error(error instanceof Error ? error.message : '上传失败');
+    } catch (uploadError) {
+      message.error(uploadError instanceof Error ? uploadError.message : '上传失败');
     } finally {
       setUploadLoading(false);
     }
@@ -281,12 +281,6 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       render: (value: number | undefined) => formatContractField(value),
     },
     {
-      title: '文件哈希',
-      dataIndex: 'file_hash',
-      key: 'file_hash',
-      render: (value: string | undefined) => formatContractField(value),
-    },
-    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
@@ -300,8 +294,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           danger
           type="text"
           icon={<DeleteOutlined />}
-          disabled={isPermissionDenied}
-          title={isPermissionDenied ? '权限不足，无法删除文档' : undefined}
+          disabled={isPermissionDenied || !allowUpload}
+          title={isPermissionDenied || !allowUpload ? '当前角色无权删除文档' : undefined}
           onClick={() => handleDeleteDocument(record)}
         >
           删除
@@ -326,36 +320,10 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       render: (value: number | undefined) => formatContractField(value),
     },
     {
-      title: '开始时间',
-      dataIndex: 'started_at',
-      key: 'started_at',
-      render: (value: string | undefined) => formatContractField(value),
-    },
-    {
-      title: '完成时间',
-      dataIndex: 'finished_at',
-      key: 'finished_at',
-      render: (value: string | undefined) => formatContractField(value),
-    },
-    {
       title: '错误信息',
       dataIndex: 'error_msg',
       key: 'error_msg',
       render: (value: string | undefined) => formatContractField(value),
-    },
-    {
-      title: '错误码',
-      dataIndex: 'last_error_code',
-      key: 'last_error_code',
-      render: (value: string | undefined) =>
-        value ? <Tag color="error">{value}</Tag> : null,
-    },
-    {
-      title: '最近操作',
-      dataIndex: 'operation',
-      key: 'operation',
-      render: (value: string | undefined) =>
-        value ? <Tag>{value}</Tag> : null,
     },
     {
       title: '操作',
@@ -367,8 +335,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               type="text"
               icon={<ReloadOutlined />}
               loading={actionLoadingId === record.id}
-              disabled={isPermissionDenied}
-              title={isPermissionDenied ? '权限不足，无法重试任务' : undefined}
+              disabled={isPermissionDenied || !allowUpload}
+              title={isPermissionDenied || !allowUpload ? '当前角色无权重试任务' : undefined}
               onClick={() => handleRetryJob(record)}
             >
               重试
@@ -380,8 +348,8 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               type="text"
               icon={<StopOutlined />}
               loading={actionLoadingId === record.id}
-              disabled={isPermissionDenied}
-              title={isPermissionDenied ? '权限不足，无法取消任务' : undefined}
+              disabled={isPermissionDenied || !allowUpload}
+              title={isPermissionDenied || !allowUpload ? '当前角色无权取消任务' : undefined}
               onClick={() => handleCancelJob(record)}
             >
               取消
@@ -409,15 +377,15 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
 
   return (
     <div className="space-y-6">
-      {error && !isPermissionDenied && <Alert type="warning" showIcon message={error} />}
-      {isPermissionDenied && (
+      {error && !isPermissionDenied ? <Alert type="warning" showIcon message={error} /> : null}
+      {isPermissionDenied ? (
         <Alert
           type="error"
           showIcon
           message="权限不足"
           description="当前账号无权访问知识库数据（403）。请联系管理员确认权限配置。"
         />
-      )}
+      ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -425,7 +393,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
             {base?.name ?? '知识库详情'}
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            此路由承载了原单页管理后台的上传、文档及摄入任务管理流程。
+            在这里管理文档上传、入库任务和基础知识库信息。
           </Paragraph>
         </div>
         <Space wrap>
@@ -439,14 +407,18 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
             danger
             icon={<DeleteOutlined />}
             loading={deleteLoading}
-            disabled={isPermissionDenied}
-            title={isPermissionDenied ? 'Delete knowledge base is unavailable without permission' : undefined}
+            disabled={isPermissionDenied || !allowDeleteKnowledgeBase}
+            title={
+              isPermissionDenied || !allowDeleteKnowledgeBase
+                ? '当前角色无权删除知识库'
+                : undefined
+            }
             onClick={() => {
               Modal.confirm({
-                title: 'Delete Knowledge Base',
-                content: `Delete "${base?.name || `#${kbId}`}" and its bound vector collection?`,
-                okText: 'Delete',
-                cancelText: 'Cancel',
+                title: '删除知识库',
+                content: `删除 "${base?.name || `#${kbId}`}" 及其绑定的向量 collection？`,
+                okText: '删除',
+                cancelText: '取消',
                 okButtonProps: { danger: true },
                 onOk: async () => {
                   try {
@@ -460,13 +432,13 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               });
             }}
           >
-            Delete KB
+            删除知识库
           </Button>
           <Button
             type="primary"
             icon={<UploadOutlined />}
-            disabled={isPermissionDenied}
-            title={isPermissionDenied ? '权限不足，无法上传文档' : undefined}
+            disabled={isPermissionDenied || !allowUpload}
+            title={isPermissionDenied || !allowUpload ? '当前角色无权上传文档' : undefined}
             onClick={() => setUploadOpen(true)}
           >
             上传文档
@@ -496,26 +468,16 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               label: `文档（${documents.length}）`,
               children: (
                 <Card>
-                  <Table
-                    rowKey="id"
-                    columns={documentColumns}
-                    dataSource={documents}
-                    pagination={{ pageSize: 10 }}
-                  />
+                  <Table rowKey="id" columns={documentColumns} dataSource={documents} pagination={{ pageSize: 10 }} />
                 </Card>
               ),
             },
             {
               key: 'jobs',
-              label: `摄入任务（${jobs.length}）`,
+              label: `入库任务（${jobs.length}）`,
               children: (
                 <Card>
-                  <Table
-                    rowKey="id"
-                    columns={jobColumns}
-                    dataSource={jobs}
-                    pagination={{ pageSize: 10 }}
-                  />
+                  <Table rowKey="id" columns={jobColumns} dataSource={jobs} pagination={{ pageSize: 10 }} />
                 </Card>
               ),
             },
@@ -535,7 +497,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           setFileList([]);
         }}
         onOk={() => void handleUpload()}
-        destroyOnHidden
+        destroyOnClose
       >
         <Space direction="vertical" className="w-full">
           <Text type="secondary">当前知识库：{base?.name ?? `#${kbId}`}</Text>

@@ -67,6 +67,7 @@ type (
 	_KBIngestJob struct{}
 	KBIngestJob  struct {
 		ID              uint64            `json:"id" gorm:"primaryKey;autoIncrement"`
+		TenantID        uint64            `json:"tenant_id" gorm:"index"`
 		KbID            uint64            `json:"kb_id" gorm:"index;not null"`
 		DocumentID      uint64            `json:"document_id" gorm:"index;not null"`
 		UserID          uint              `json:"user_id" gorm:"index;not null"`

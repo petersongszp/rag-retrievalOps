@@ -142,6 +142,10 @@ func NewRateLimitExceededError(message string, err error) *AppError {
 	return WrapError(err, ErrCodeRateLimitExceeded, message, http.StatusTooManyRequests)
 }
 
+func NewTooManyRequestsError(message string) *AppError {
+	return NewAppError(ErrCodeRateLimitExceeded, message, http.StatusTooManyRequests)
+}
+
 // NewContextLengthExceededError 创建上下文长度超出错误
 // 用于处理模型API上下文长度超出限制的情况
 // 返回HTTP 413 (Payload Too Large)状态码

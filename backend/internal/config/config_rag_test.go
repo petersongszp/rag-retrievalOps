@@ -215,6 +215,39 @@ rag:
 	}
 }
 
+func TestLoadConfig_ExpandsEmbeddingProvider(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	baseConfig := `
+rag:
+  enabled: false
+  environment: dev
+Embedding:
+  Provider: "${EMBEDDING_PROVIDER}"
+  APIKey: "${EMBEDDING_API_KEY}"
+  Model: "${EMBEDDING_MODEL}"
+  BaseURL: "${EMBEDDING_BASE_URL}"
+  Dimensions: 1024
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("EMBEDDING_PROVIDER", "openai")
+	t.Setenv("EMBEDDING_API_KEY", "test-key")
+	t.Setenv("EMBEDDING_MODEL", "bge-m3")
+	t.Setenv("EMBEDDING_BASE_URL", "https://example.com/v1")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Embedding.Provider != "openai" {
+		t.Fatalf("expected embedding provider to expand to openai, got %q", cfg.Embedding.Provider)
+	}
+}
+
 func TestRAGFeatureFlagsPhase3StrategyFlags(t *testing.T) {
 	flags := RAGFeatureFlags{
 		EnableParentChildRetrieval: true,
