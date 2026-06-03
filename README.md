@@ -19,6 +19,7 @@ docker-compose up -d --build
 
 - RAG API: `http://localhost:8899`
 - 管理后台: `http://localhost:3003`
+- Attu: `http://localhost:8001`
 - API 健康检查: `http://localhost:8899/healthz`
 
 ### 方式二：本地分开启动
@@ -26,7 +27,7 @@ docker-compose up -d --build
 先启动依赖：
 
 ```bash
-docker-compose up -d mysql redis milvus
+docker-compose up -d mysql redis milvus attu
 ```
 
 启动后端：
