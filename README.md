@@ -9,6 +9,9 @@
 
 ## 快速启动
 
+项目根目录下的.env.example，复制粘贴，命名为新的文件.env
+(.env文件不要同步到git仓库，避免团队协作环境冲突)
+
 ### 方式一：Docker Compose
 
 ```bash
