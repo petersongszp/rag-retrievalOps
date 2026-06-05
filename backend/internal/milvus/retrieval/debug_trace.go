@@ -34,6 +34,8 @@ type RouteDebugHit struct {
 	PrimaryCount           int            `json:"primary_count,omitempty"`
 	Contribution           int            `json:"contribution"`
 	SparseTerms            []string       `json:"sparse_terms,omitempty"`
+	TermSources            map[string]string `json:"term_sources,omitempty"`
+	DroppedTerms           map[string]string `json:"dropped_terms,omitempty"`
 	PerTermCandidateCounts map[string]int `json:"per_term_candidate_counts,omitempty"`
 	CandidateCountBefore   int            `json:"candidate_count_before_bm25,omitempty"`
 	CandidateCountAfter    int            `json:"candidate_count_after_bm25,omitempty"`

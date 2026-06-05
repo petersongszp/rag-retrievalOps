@@ -289,6 +289,8 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			metrics: SearchMetrics{
 				SparseHits:            len(docs),
 				SparseTerms:           append([]string(nil), sparseStats.Terms...),
+				TermSources:           copyStringMap(sparseStats.TermSources),
+				DroppedTerms:          copyStringMap(sparseStats.DroppedTerms),
 				SparseCandidateBefore: sparseStats.CandidateCountBefore,
 				SparseCandidateAfter:  sparseStats.CandidateCountAfter,
 			},
@@ -340,6 +342,8 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				Hits:                 SnapshotDocuments(sparseDocs),
 				HitsCount:            len(sparseDocs),
 				SparseTerms:          append([]string(nil), sparseMetric.SparseTerms...),
+				TermSources:          copyStringMap(sparseMetric.TermSources),
+				DroppedTerms:         copyStringMap(sparseMetric.DroppedTerms),
 				CandidateCountBefore: sparseMetric.SparseCandidateBefore,
 				CandidateCountAfter:  sparseMetric.SparseCandidateAfter,
 				LatencyMs:            sparseMS,
@@ -416,6 +420,8 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				DenseHits:             len(denseDocs),
 				SparseHits:            len(sparseDocs),
 				SparseTerms:           append([]string(nil), sparseMetric.SparseTerms...),
+				TermSources:           copyStringMap(sparseMetric.TermSources),
+				DroppedTerms:          copyStringMap(sparseMetric.DroppedTerms),
 				SparseCandidateBefore: sparseMetric.SparseCandidateBefore,
 				SparseCandidateAfter:  sparseMetric.SparseCandidateAfter,
 				ParentChildEnabled:    h.parentChild != nil,
@@ -710,6 +716,8 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 			DenseContribution:     routeSummary.PrimaryDenseCount,
 			SparseContribution:    routeSummary.PrimarySparseCount,
 			SparseTerms:           append([]string(nil), sparseMetric.SparseTerms...),
+			TermSources:           copyStringMap(sparseMetric.TermSources),
+			DroppedTerms:          copyStringMap(sparseMetric.DroppedTerms),
 			SparseCandidateBefore: sparseMetric.SparseCandidateBefore,
 			SparseCandidateAfter:  sparseMetric.SparseCandidateAfter,
 			TopKPolicyVersion:     topKDecision.PolicyVersion,
@@ -826,6 +834,17 @@ func buildFilterDropReasons(before, after []*schema.Document, truncateReason str
 		reason = "removed_after_filter"
 	}
 	return map[string]int{reason: removed}
+}
+
+func copyStringMap(input map[string]string) map[string]string {
+	if len(input) == 0 {
+		return nil
+	}
+	out := make(map[string]string, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
 }
 
 func maxInt64(a, b int64) int64 {

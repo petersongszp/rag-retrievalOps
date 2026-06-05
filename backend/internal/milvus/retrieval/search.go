@@ -55,6 +55,8 @@ type SearchMetrics struct {
 	DenseContribution      int
 	SparseContribution     int
 	SparseTerms            []string
+	TermSources            map[string]string
+	DroppedTerms           map[string]string
 	SparseCandidateBefore  int
 	SparseCandidateAfter   int
 	TopKPolicyVersion      string

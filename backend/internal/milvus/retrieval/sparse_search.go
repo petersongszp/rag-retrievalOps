@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/cloudwego/eino/schema"
@@ -16,21 +17,67 @@ type SparseRetrieverConfig struct {
 	MaxTerms      int
 	PerTermFactor int
 	MinPerTermK   int
+	ProviderName  string
 }
 
 // SparseRetriever provides keyword recall and ranks candidates with an explicit inverted BM25 index.
 type SparseRetriever struct {
-	client     milvusClient.Client
-	collection string
-	config     SparseRetrieverConfig
+	client            milvusClient.Client
+	collection        string
+	config            SparseRetrieverConfig
+	candidateProvider SparseCandidateProvider
+	ranker            SparseRanker
 }
 
 type SparseSearchStats struct {
+	ProviderName         string
+	TermSources          map[string]string
+	DroppedTerms         map[string]string
 	Terms                 []string
 	PerTermCandidateCount map[string]int
 	CandidateCountBefore  int
 	CandidateCountAfter   int
 }
+
+type SparseTerm struct {
+	Value  string
+	Kind   string
+	Source string
+}
+
+type SparseCandidateProviderStats struct {
+	ProviderName        string
+	ProviderVersion     string
+	TermCount           int
+	PerTermLimit        int
+	RawCandidateCount   int
+	DedupCandidateCount int
+	LatencyMS           int64
+	FallbackReason      string
+	PerTermCandidateCount map[string]int
+}
+
+type SparseCandidateProvider interface {
+	SearchCandidates(ctx context.Context, req *HybridSearchRequest, terms []string) ([]*schema.Document, SparseCandidateProviderStats, error)
+}
+
+type SparseRankStats struct {
+	RankerName          string
+	CandidateCountBefore int
+	CandidateCountAfter  int
+}
+
+type SparseRanker interface {
+	Rank(ctx context.Context, query string, terms []string, candidates []*schema.Document, topK int) ([]SparseSearchHit, SparseRankStats, error)
+}
+
+type MilvusLikeCandidateProvider struct {
+	client     milvusClient.Client
+	collection string
+	config     SparseRetrieverConfig
+}
+
+type CandidateBM25Ranker struct{}
 
 func NewSparseRetriever(client milvusClient.Client, collection string, cfg *SparseRetrieverConfig) (*SparseRetriever, error) {
 	if client == nil {
@@ -62,9 +109,11 @@ func NewSparseRetriever(client milvusClient.Client, collection string, cfg *Spar
 	}
 
 	return &SparseRetriever{
-		client:     client,
-		collection: collection,
-		config:     out,
+		client:            client,
+		collection:        collection,
+		config:            out,
+		candidateProvider: &MilvusLikeCandidateProvider{client: client, collection: collection, config: out},
+		ranker:            &CandidateBM25Ranker{},
 	}, nil
 }
 
@@ -91,103 +140,48 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	if strings.TrimSpace(req.SparseQuery) != "" && !strings.EqualFold(strings.TrimSpace(req.SparseQuery), strings.TrimSpace(req.OriginalQuery)) && termLimit < 10 {
 		termLimit = 10
 	}
-	terms := extractSparseTerms(query, termLimit)
+	extractedTerms, droppedTerms := extractSparseTermsDetailed(query, termLimit)
+	terms := flattenSparseTerms(extractedTerms)
 	if len(terms) == 0 {
 		return []*schema.Document{}, SparseSearchStats{}, nil
 	}
 	stats := SparseSearchStats{
 		Terms:                 append([]string(nil), terms...),
+		TermSources:           make(map[string]string, len(extractedTerms)),
+		DroppedTerms:          droppedTerms,
 		PerTermCandidateCount: make(map[string]int, len(terms)),
 	}
-
-	baseExpr := strings.TrimSpace(req.Expr)
-	if baseExpr == "" && (strings.TrimSpace(req.KBScope) != "" || req.KBID > 0) {
-		baseExpr = BuildFilterExpr(&RetrieveOptions{
-			KBScope:          req.KBScope,
-			ActiveGlobalKBID: req.KBID,
-		})
+	for _, term := range extractedTerms {
+		stats.TermSources[term.Value] = term.Source
 	}
 
+	candidates, providerStats, err := s.candidateProvider.SearchCandidates(ctx, req, terms)
+	if err != nil {
+		return nil, stats, err
+	}
+	stats.ProviderName = providerStats.ProviderName
+	for key, value := range providerStats.PerTermCandidateCount {
+		stats.PerTermCandidateCount[key] = value
+	}
+	if len(candidates) == 0 {
+		return []*schema.Document{}, stats, nil
+	}
+	stats.CandidateCountBefore = providerStats.DedupCandidateCount
+
+	hits, rankStats, err := s.ranker.Rank(ctx, query, terms, candidates, topK)
+	if err != nil {
+		return nil, stats, err
+	}
+	if len(hits) == 0 {
+		return []*schema.Document{}, stats, nil
+	}
+	stats.CandidateCountAfter = rankStats.CandidateCountAfter
+
+	results := make([]*schema.Document, 0, len(hits))
 	collection := strings.TrimSpace(req.Collection)
 	if collection == "" {
 		collection = s.collection
 	}
-
-	perTermLimit := topK * s.config.PerTermFactor
-	if perTermLimit < s.config.MinPerTermK {
-		perTermLimit = s.config.MinPerTermK
-	}
-
-	merged := make(map[string]*schema.Document, perTermLimit)
-	for _, term := range terms {
-		likeExpr := fmt.Sprintf("content like \"%%%s%%\"", escapeLikeValue(term))
-		expr := likeExpr
-		if baseExpr != "" {
-			expr = fmt.Sprintf("(%s) && (%s)", baseExpr, likeExpr)
-		}
-
-		resultSet, err := s.client.Query(
-			ctx,
-			collection,
-			nil,
-			expr,
-			[]string{"id", "content", "metadata"},
-			milvusClient.WithLimit(int64(perTermLimit)),
-		)
-		if err != nil {
-			return nil, stats, fmt.Errorf("sparse query failed, term=%q expr=%q: %w", term, expr, err)
-		}
-		stats.PerTermCandidateCount[term] = resultSet.Len()
-
-		for _, doc := range parseQueryResultSet(resultSet) {
-			docID := strings.TrimSpace(doc.ID)
-			if docID == "" {
-				docID = buildPseudoDocID(doc)
-			}
-			if docID == "" {
-				continue
-			}
-
-			if _, exists := merged[docID]; exists {
-				continue
-			}
-			if doc.MetaData == nil {
-				doc.MetaData = make(map[string]interface{})
-			}
-			doc.MetaData["route"] = "sparse"
-			doc.MetaData["retriever_version"] = hybridRetrieverVersion
-			if collection != "" {
-				doc.MetaData["collection"] = collection
-			}
-			source := ensureSourceMetadata(doc)
-			source["route"] = routeSparse
-			source["retriever_version"] = hybridRetrieverVersion
-			if collection != "" {
-				source["collection"] = collection
-			}
-			doc.MetaData["source"] = source
-			annotateParentChildSource(doc)
-			merged[docID] = doc
-		}
-	}
-
-	if len(merged) == 0 {
-		return []*schema.Document{}, stats, nil
-	}
-	stats.CandidateCountBefore = len(merged)
-
-	candidates := make([]*schema.Document, 0, len(merged))
-	for _, doc := range merged {
-		candidates = append(candidates, doc)
-	}
-	index := BuildSparseInvertedIndex(candidates, nil)
-	hits := index.Search(terms, topK)
-	if len(hits) == 0 {
-		return []*schema.Document{}, stats, nil
-	}
-	stats.CandidateCountAfter = len(hits)
-
-	results := make([]*schema.Document, 0, len(hits))
 	for _, hit := range hits {
 		doc := hit.Document
 		if doc == nil {
@@ -216,6 +210,99 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	}
 
 	return results, stats, nil
+}
+
+func (p *MilvusLikeCandidateProvider) SearchCandidates(ctx context.Context, req *HybridSearchRequest, terms []string) ([]*schema.Document, SparseCandidateProviderStats, error) {
+	stats := SparseCandidateProviderStats{
+		ProviderName:         "milvus_like",
+		ProviderVersion:      "v1",
+		TermCount:            len(terms),
+		PerTermCandidateCount: make(map[string]int, len(terms)),
+	}
+	baseExpr := strings.TrimSpace(req.Expr)
+	if baseExpr == "" && (strings.TrimSpace(req.KBScope) != "" || req.KBID > 0) {
+		baseExpr = BuildFilterExpr(&RetrieveOptions{
+			KBScope:          req.KBScope,
+			ActiveGlobalKBID: req.KBID,
+		})
+	}
+	collection := strings.TrimSpace(req.Collection)
+	if collection == "" {
+		collection = p.collection
+	}
+	perTermLimit := req.CandidateTopK * p.config.PerTermFactor
+	if perTermLimit < p.config.MinPerTermK {
+		perTermLimit = p.config.MinPerTermK
+	}
+	stats.PerTermLimit = perTermLimit
+	start := time.Now()
+	merged := make(map[string]*schema.Document, perTermLimit)
+	for _, term := range terms {
+		likeExpr := fmt.Sprintf("content like \"%%%s%%\"", escapeLikeValue(term))
+		expr := likeExpr
+		if baseExpr != "" {
+			expr = fmt.Sprintf("(%s) && (%s)", baseExpr, likeExpr)
+		}
+		resultSet, err := p.client.Query(
+			ctx,
+			collection,
+			nil,
+			expr,
+			[]string{"id", "content", "metadata"},
+			milvusClient.WithLimit(int64(perTermLimit)),
+		)
+		if err != nil {
+			return nil, stats, fmt.Errorf("sparse query failed, term=%q expr=%q: %w", term, expr, err)
+		}
+		stats.PerTermCandidateCount[term] = resultSet.Len()
+		stats.RawCandidateCount += resultSet.Len()
+		for _, doc := range parseQueryResultSet(resultSet) {
+			docID := strings.TrimSpace(doc.ID)
+			if docID == "" {
+				docID = buildPseudoDocID(doc)
+			}
+			if docID == "" {
+				continue
+			}
+			if _, exists := merged[docID]; exists {
+				continue
+			}
+			if doc.MetaData == nil {
+				doc.MetaData = make(map[string]interface{})
+			}
+			doc.MetaData["route"] = routeSparse
+			doc.MetaData["retriever_version"] = hybridRetrieverVersion
+			if collection != "" {
+				doc.MetaData["collection"] = collection
+			}
+			source := ensureSourceMetadata(doc)
+			source["route"] = routeSparse
+			source["retriever_version"] = hybridRetrieverVersion
+			if collection != "" {
+				source["collection"] = collection
+			}
+			doc.MetaData["source"] = source
+			annotateParentChildSource(doc)
+			merged[docID] = doc
+		}
+	}
+	stats.LatencyMS = time.Since(start).Milliseconds()
+	stats.DedupCandidateCount = len(merged)
+	out := make([]*schema.Document, 0, len(merged))
+	for _, doc := range merged {
+		out = append(out, doc)
+	}
+	return out, stats, nil
+}
+
+func (r *CandidateBM25Ranker) Rank(ctx context.Context, query string, terms []string, candidates []*schema.Document, topK int) ([]SparseSearchHit, SparseRankStats, error) {
+	index := BuildSparseInvertedIndex(candidates, nil)
+	hits := index.Search(terms, topK)
+	return hits, SparseRankStats{
+		RankerName:           "candidate_bm25",
+		CandidateCountBefore: len(candidates),
+		CandidateCountAfter:  len(hits),
+	}, nil
 }
 
 func parseQueryResultSet(rs milvusClient.ResultSet) []*schema.Document {
@@ -278,6 +365,11 @@ func buildPseudoDocID(doc *schema.Document) string {
 }
 
 func extractSparseTerms(query string, maxTerms int) []string {
+	terms, _ := extractSparseTermsDetailed(query, maxTerms)
+	return flattenSparseTerms(terms)
+}
+
+func extractSparseTermsDetailed(query string, maxTerms int) ([]SparseTerm, map[string]string) {
 	if maxTerms <= 0 {
 		maxTerms = 6
 	}
@@ -292,26 +384,58 @@ func extractSparseTerms(query string, maxTerms int) []string {
 		"the": {}, "a": {}, "an": {}, "to": {}, "of": {}, "in": {}, "on": {}, "for": {}, "is": {}, "are": {},
 		"and": {}, "or": {}, "with": {}, "what": {}, "how": {}, "why": {}, "when": {}, "where": {},
 	}
-	terms := make([]string, 0, maxTerms)
+	terms := make([]SparseTerm, 0, maxTerms)
+	dropped := make(map[string]string)
 	seen := make(map[string]struct{}, maxTerms)
 	for _, part := range parts {
 		term := strings.TrimSpace(part)
 		if term == "" || len([]rune(term)) < 2 {
+			if term != "" {
+				dropped[term] = "too_short"
+			}
 			continue
 		}
 		if _, blocked := stopWords[term]; blocked {
+			dropped[term] = "stopword"
 			continue
 		}
 		if _, ok := seen[term]; ok {
+			dropped[term] = "duplicate"
 			continue
 		}
 		seen[term] = struct{}{}
-		terms = append(terms, term)
+		kind := "word"
+		if isLikelyAcronym(term) {
+			kind = "acronym"
+		}
+		terms = append(terms, SparseTerm{
+			Value:  term,
+			Kind:   kind,
+			Source: "original",
+		})
 		if len(terms) >= maxTerms {
 			break
 		}
 	}
-	return terms
+	return terms, dropped
+}
+
+func flattenSparseTerms(terms []SparseTerm) []string {
+	out := make([]string, 0, len(terms))
+	for _, term := range terms {
+		if strings.TrimSpace(term.Value) == "" {
+			continue
+		}
+		out = append(out, term.Value)
+	}
+	return out
+}
+
+func isLikelyAcronym(term string) bool {
+	if len(term) < 2 || len(term) > 8 {
+		return false
+	}
+	return strings.ToUpper(term) == term || strings.ToLower(term) == term
 }
 
 func escapeLikeValue(value string) string {
