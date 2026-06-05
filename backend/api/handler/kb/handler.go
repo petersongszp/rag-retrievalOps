@@ -196,6 +196,8 @@ type retrieveDebugRouteView struct {
 	FinalQuery      string `json:"final_query,omitempty"`
 	RewriteStrategy string `json:"rewrite_strategy,omitempty"`
 	Hits            int    `json:"hits"`
+	Participation   int    `json:"participation"`
+	PrimaryCount    int    `json:"primary_count"`
 	Contribution    int    `json:"contribution"`
 }
 
@@ -291,6 +293,11 @@ type retrieveDebugTrace struct {
 	RetrieverVersion   string                       `json:"retriever_version,omitempty"`
 	DenseHits          int                          `json:"dense_hits"`
 	SparseHits         int                          `json:"sparse_hits"`
+	DenseParticipation int                          `json:"dense_participation"`
+	SparseParticipation int                         `json:"sparse_participation"`
+	PrimaryDenseCount  int                          `json:"primary_dense_count"`
+	PrimarySparseCount int                          `json:"primary_sparse_count"`
+	DualRouteFinalCount int                         `json:"dual_route_final_count"`
 	DenseContribution  int                          `json:"dense_contribution"`
 	SparseContribution int                          `json:"sparse_contribution"`
 }
@@ -1120,8 +1127,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			RerankModel:            searchResult.Metrics.RerankModel,
 			DenseHits:              searchResult.Metrics.DenseHits,
 			SparseHits:             searchResult.Metrics.SparseHits,
+			DenseParticipation:     searchResult.Metrics.DenseParticipation,
+			SparseParticipation:    searchResult.Metrics.SparseParticipation,
+			PrimaryDenseCount:      searchResult.Metrics.PrimaryDenseCount,
+			PrimarySparseCount:     searchResult.Metrics.PrimarySparseCount,
+			DualRouteFinalCount:    searchResult.Metrics.DualRouteFinalCount,
 			DenseContribution:      searchResult.Metrics.DenseContribution,
 			SparseContribution:     searchResult.Metrics.SparseContribution,
+			SparseCandidateBefore:  searchResult.Metrics.SparseCandidateBefore,
+			SparseCandidateAfter:   searchResult.Metrics.SparseCandidateAfter,
 			DurationMs:             durationMs,
 			TimeoutMs:              retrieveTimeout.Milliseconds(),
 		}
@@ -1274,8 +1288,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		TruncatedCount:         searchMetrics.TruncatedCount,
 		DenseHits:              searchMetrics.DenseHits,
 		SparseHits:             searchMetrics.SparseHits,
+		DenseParticipation:     searchMetrics.DenseParticipation,
+		SparseParticipation:    searchMetrics.SparseParticipation,
+		PrimaryDenseCount:      searchMetrics.PrimaryDenseCount,
+		PrimarySparseCount:     searchMetrics.PrimarySparseCount,
+		DualRouteFinalCount:    searchMetrics.DualRouteFinalCount,
 		DenseContribution:      searchMetrics.DenseContribution,
 		SparseContribution:     searchMetrics.SparseContribution,
+		SparseCandidateBefore:  searchMetrics.SparseCandidateBefore,
+		SparseCandidateAfter:   searchMetrics.SparseCandidateAfter,
 		EvidenceGateResult:     searchMetrics.EvidenceGateResult,
 		RefusalReason:          searchMetrics.RefusalReason,
 		CitationSupported:      searchMetrics.CitationSupported,
@@ -1490,6 +1511,8 @@ func buildRetrieveDebugTrace(
 				FinalQuery:      firstNonEmptyString(searchMetrics.DenseQuery, searchMetrics.FinalQuery),
 				RewriteStrategy: searchMetrics.RouteRewriteDense,
 				Hits:            searchMetrics.DenseHits,
+				Participation:   searchMetrics.DenseParticipation,
+				PrimaryCount:    searchMetrics.PrimaryDenseCount,
 				Contribution:    searchMetrics.DenseContribution,
 			},
 			{
@@ -1497,6 +1520,8 @@ func buildRetrieveDebugTrace(
 				FinalQuery:      firstNonEmptyString(searchMetrics.SparseQuery, searchMetrics.FinalQuery),
 				RewriteStrategy: searchMetrics.RouteRewriteSparse,
 				Hits:            searchMetrics.SparseHits,
+				Participation:   searchMetrics.SparseParticipation,
+				PrimaryCount:    searchMetrics.PrimarySparseCount,
 				Contribution:    searchMetrics.SparseContribution,
 			},
 		},
@@ -1652,6 +1677,11 @@ func buildRetrieveDebugTrace(
 		trace.RetrieverVersion = logEntry.RetrieverVersion
 		trace.DenseHits = logEntry.DenseHits
 		trace.SparseHits = logEntry.SparseHits
+		trace.DenseParticipation = logEntry.DenseParticipation
+		trace.SparseParticipation = logEntry.SparseParticipation
+		trace.PrimaryDenseCount = logEntry.PrimaryDenseCount
+		trace.PrimarySparseCount = logEntry.PrimarySparseCount
+		trace.DualRouteFinalCount = logEntry.DualRouteFinalCount
 		trace.DenseContribution = logEntry.DenseContribution
 		trace.SparseContribution = logEntry.SparseContribution
 	}
@@ -3043,8 +3073,15 @@ func GetRetrieveDebugView(ctx context.Context, c *app.RequestContext) {
 			TruncateReason:         logEntry.TruncateReason,
 			DenseHits:              logEntry.DenseHits,
 			SparseHits:             logEntry.SparseHits,
+			DenseParticipation:     logEntry.DenseParticipation,
+			SparseParticipation:    logEntry.SparseParticipation,
+			PrimaryDenseCount:      logEntry.PrimaryDenseCount,
+			PrimarySparseCount:     logEntry.PrimarySparseCount,
+			DualRouteFinalCount:    logEntry.DualRouteFinalCount,
 			DenseContribution:      logEntry.DenseContribution,
 			SparseContribution:     logEntry.SparseContribution,
+			SparseCandidateBefore:  logEntry.SparseCandidateBefore,
+			SparseCandidateAfter:   logEntry.SparseCandidateAfter,
 		}, nil, nil)
 		trace = &fallback
 	}

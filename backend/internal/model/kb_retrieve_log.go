@@ -87,8 +87,15 @@ type (
 		TruncatedCount         int                  `json:"truncated_count"`
 		DenseHits              int                  `json:"dense_hits"`
 		SparseHits             int                  `json:"sparse_hits"`
+		DenseParticipation     int                  `json:"dense_participation"`
+		SparseParticipation    int                  `json:"sparse_participation"`
+		PrimaryDenseCount      int                  `json:"primary_dense_count"`
+		PrimarySparseCount     int                  `json:"primary_sparse_count"`
+		DualRouteFinalCount    int                  `json:"dual_route_final_count"`
 		DenseContribution      int                  `json:"dense_contribution"`
 		SparseContribution     int                  `json:"sparse_contribution"`
+		SparseCandidateBefore  int                  `json:"sparse_candidate_before_bm25"`
+		SparseCandidateAfter   int                  `json:"sparse_candidate_after_bm25"`
 		ResultStatus           RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
 		ErrorCode              string               `json:"error_code" gorm:"size:64"`
 		ErrorMsg               string               `json:"error_msg" gorm:"size:1000"`

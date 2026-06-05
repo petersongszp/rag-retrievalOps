@@ -264,14 +264,17 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	go func() {
 		defer wg.Done()
 		routeStart := time.Now()
-		docs, err := h.sparseRetriever.Search(ctx, req)
+		docs, sparseStats, err := h.sparseRetriever.Search(ctx, req)
 		resultCh <- routeResult{
 			route:    routeSparse,
 			docs:     docs,
 			err:      err,
 			duration: time.Since(routeStart),
 			metrics: SearchMetrics{
-				SparseHits: len(docs),
+				SparseHits:            len(docs),
+				SparseTerms:           append([]string(nil), sparseStats.Terms...),
+				SparseCandidateBefore: sparseStats.CandidateCountBefore,
+				SparseCandidateAfter:  sparseStats.CandidateCountAfter,
 			},
 		}
 	}()
@@ -280,13 +283,14 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	close(resultCh)
 
 	var (
-		denseDocs   []*schema.Document
-		sparseDocs  []*schema.Document
-		denseErr    error
-		sparseErr   error
-		denseMS     int64
-		sparseMS    int64
-		denseMetric SearchMetrics
+		denseDocs    []*schema.Document
+		sparseDocs   []*schema.Document
+		denseErr     error
+		sparseErr    error
+		denseMS      int64
+		sparseMS     int64
+		denseMetric  SearchMetrics
+		sparseMetric SearchMetrics
 	)
 	for routeRes := range resultCh {
 		switch routeRes.route {
@@ -299,6 +303,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			sparseDocs = routeRes.docs
 			sparseErr = routeRes.err
 			sparseMS = routeRes.duration.Milliseconds()
+			sparseMetric = routeRes.metrics
 		}
 		h.observeRouteMetric(routeRes.route, routeRes.duration, routeRes.err, len(routeRes.docs))
 	}
@@ -309,15 +314,20 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				Route:     routeDense,
 				Query:     req.DenseQuery,
 				Hits:      SnapshotDocuments(denseDocs),
+				HitsCount: len(denseDocs),
 				LatencyMs: denseMS,
 				Error:     toLogError(denseErr),
 			},
 			{
-				Route:     routeSparse,
-				Query:     req.SparseQuery,
-				Hits:      SnapshotDocuments(sparseDocs),
-				LatencyMs: sparseMS,
-				Error:     toLogError(sparseErr),
+				Route:                routeSparse,
+				Query:                req.SparseQuery,
+				Hits:                 SnapshotDocuments(sparseDocs),
+				HitsCount:            len(sparseDocs),
+				SparseTerms:          append([]string(nil), sparseMetric.SparseTerms...),
+				CandidateCountBefore: sparseMetric.SparseCandidateBefore,
+				CandidateCountAfter:  sparseMetric.SparseCandidateAfter,
+				LatencyMs:            sparseMS,
+				Error:                toLogError(sparseErr),
 			},
 		},
 		StageDurations: map[string]int64{
@@ -387,6 +397,9 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				EmptyReason:           EmptyReasonAfterRetrieve,
 				DenseHits:             len(denseDocs),
 				SparseHits:            len(sparseDocs),
+				SparseTerms:           append([]string(nil), sparseMetric.SparseTerms...),
+				SparseCandidateBefore: sparseMetric.SparseCandidateBefore,
+				SparseCandidateAfter:  sparseMetric.SparseCandidateAfter,
 				ParentChildEnabled:    h.parentChild != nil,
 				ParentFillStrategy:    h.parentChildStrategy(),
 				EvidenceGateResult:    evidenceOutcome.Result,
@@ -414,7 +427,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
+		return h.buildHybridResultMetrics(req, denseMetric, sparseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
 	}
 
 	merged := DeduplicateFusedDocuments(fused)
@@ -430,7 +443,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_support_score=%.4f evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=0 empty_reason=%s duration_ms=%d dense_ms=%d sparse_ms=%d dense_error=%q sparse_error=%q",
 			req.RequestID, req.OriginalQuery, req.RewriteQuery, req.FinalQuery, req.RewriteStrategy, req.RewriteApplied, req.Expr, topKDecision.CandidateTopK, topKDecision.FinalTopK, topKDecision.TokenBudget, topKDecision.TruncateReason, topKDecision.PolicyVersion, topKDecision.ScoreDistribution, topKDecision.RerankGap, topKDecision.EvidenceDensity, topKDecision.DecisionReason, evidenceOutcome.Result, evidenceOutcome.RefusalReason, evidenceOutcome.CitationSupportScore, evidenceOutcome.Error, "dense+sparse", len(denseDocs), len(sparseDocs), EmptyReasonAfterFusion, totalMS, denseMS, sparseMS, toLogError(denseErr), toLogError(sparseErr),
 		)
-		return h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
+		return h.buildHybridResultMetrics(req, denseMetric, sparseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
 	}
 
 	beforeRerank := append([]*schema.Document(nil), merged...)
@@ -502,6 +515,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		BeforeCount:    len(beforeFilter),
 		AfterCount:     len(merged),
 		Removed:        RemovedSnapshots(beforeFilter, merged),
+		DropReasons:    buildFilterDropReasons(beforeFilter, merged, topKDecision.TruncateReason),
 		TruncateReason: topKDecision.TruncateReason,
 	}
 	evidenceOutcome := h.evaluateEvidenceGate(req.FinalQuery, merged, topKDecision, citationOutcome)
@@ -575,7 +589,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		toLogError(sparseErr),
 	)
 
-	result := h.buildHybridResultMetrics(req, denseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome, debugTrace)
+	result := h.buildHybridResultMetrics(req, denseMetric, sparseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, merged, emptyReason, evidenceOutcome, debugTrace)
 	result.Metrics.CitationSupported = citationOutcome.Supported
 	result.Metrics.UnsupportedClaims = append([]string(nil), citationOutcome.UnsupportedClaims...)
 	result.Metrics.UnsupportedClaimCount = len(citationOutcome.UnsupportedClaims)
@@ -599,6 +613,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 func (h *HybridRetriever) buildHybridResultMetrics(
 	req *HybridSearchRequest,
 	denseMetric SearchMetrics,
+	sparseMetric SearchMetrics,
 	denseHits, sparseHits int,
 	sparseMS int64,
 	topKDecision TopKDecision,
@@ -608,16 +623,27 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 	evidenceOutcome EvidenceGateOutcome,
 	debugTrace *DebugTrace,
 ) *SearchResult {
-	denseContribution, sparseContribution := countRouteContributions(docs)
+	routeSummary := summarizeFinalRouteStats(docs)
 	searchStageMS := denseMetric.SearchMs + sparseMS
 	if debugTrace != nil {
 		for index := range debugTrace.RouteHits {
 			switch debugTrace.RouteHits[index].Route {
 			case routeDense:
-				debugTrace.RouteHits[index].Contribution = denseContribution
+				debugTrace.RouteHits[index].ParticipationCount = routeSummary.DenseParticipation
+				debugTrace.RouteHits[index].PrimaryCount = routeSummary.PrimaryDenseCount
+				debugTrace.RouteHits[index].Contribution = routeSummary.PrimaryDenseCount
 			case routeSparse:
-				debugTrace.RouteHits[index].Contribution = sparseContribution
+				debugTrace.RouteHits[index].ParticipationCount = routeSummary.SparseParticipation
+				debugTrace.RouteHits[index].PrimaryCount = routeSummary.PrimarySparseCount
+				debugTrace.RouteHits[index].Contribution = routeSummary.PrimarySparseCount
 			}
+		}
+		debugTrace.Fusion.DenseParticipationCount = routeSummary.DenseParticipation
+		debugTrace.Fusion.SparseParticipationCount = routeSummary.SparseParticipation
+		debugTrace.Fusion.DualRouteFinalCount = routeSummary.DualRouteFinalCount
+		debugTrace.Fusion.PrimaryRouteDistribution = map[string]int{
+			routeDense:  routeSummary.PrimaryDenseCount,
+			routeSparse: routeSummary.PrimarySparseCount,
 		}
 	}
 	return &SearchResult{
@@ -652,8 +678,16 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 			EmptyReason:           emptyReason,
 			DenseHits:             denseHits,
 			SparseHits:            sparseHits,
-			DenseContribution:     denseContribution,
-			SparseContribution:    sparseContribution,
+			DenseParticipation:    routeSummary.DenseParticipation,
+			SparseParticipation:   routeSummary.SparseParticipation,
+			PrimaryDenseCount:     routeSummary.PrimaryDenseCount,
+			PrimarySparseCount:    routeSummary.PrimarySparseCount,
+			DualRouteFinalCount:   routeSummary.DualRouteFinalCount,
+			DenseContribution:     routeSummary.PrimaryDenseCount,
+			SparseContribution:    routeSummary.PrimarySparseCount,
+			SparseTerms:           append([]string(nil), sparseMetric.SparseTerms...),
+			SparseCandidateBefore: sparseMetric.SparseCandidateBefore,
+			SparseCandidateAfter:  sparseMetric.SparseCandidateAfter,
 			TopKPolicyVersion:     topKDecision.PolicyVersion,
 			ScoreDistribution:     topKDecision.ScoreDistribution,
 			RerankGap:             topKDecision.RerankGap,
@@ -686,21 +720,88 @@ func resolveRetrieveStrategy(parentChild *parentChildPostProcessor) string {
 	return "phase2"
 }
 
-func countRouteContributions(docs []*schema.Document) (int, int) {
-	denseCount := 0
-	sparseCount := 0
+type finalRouteStats struct {
+	DenseParticipation  int
+	SparseParticipation int
+	PrimaryDenseCount   int
+	PrimarySparseCount  int
+	DualRouteFinalCount int
+}
+
+func summarizeFinalRouteStats(docs []*schema.Document) finalRouteStats {
+	stats := finalRouteStats{}
 	for _, doc := range docs {
 		if doc == nil || doc.MetaData == nil {
 			continue
 		}
+		routeContrib := getRouteContrib(doc.MetaData)
+		_, hasDense := routeContrib[routeDense]
+		_, hasSparse := routeContrib[routeSparse]
+		if hasDense {
+			stats.DenseParticipation++
+		}
+		if hasSparse {
+			stats.SparseParticipation++
+		}
+		if hasDense && hasSparse {
+			stats.DualRouteFinalCount++
+		}
 		switch strings.TrimSpace(strings.ToLower(getStringMetadata(doc.MetaData, "route"))) {
 		case routeSparse:
-			sparseCount++
+			stats.PrimarySparseCount++
 		default:
-			denseCount++
+			stats.PrimaryDenseCount++
 		}
 	}
-	return denseCount, sparseCount
+	return stats
+}
+
+func getRouteContrib(metadata map[string]interface{}) map[string]float64 {
+	result := make(map[string]float64)
+	if metadata == nil {
+		return result
+	}
+	raw, ok := metadata["route_contrib"].(map[string]interface{})
+	if !ok {
+		return result
+	}
+	for key, value := range raw {
+		if score, ok := castScore(value); ok {
+			result[strings.TrimSpace(strings.ToLower(key))] = score
+		}
+	}
+	return result
+}
+
+func buildFilterDropReasons(before, after []*schema.Document, truncateReason string) map[string]int {
+	if len(before) == 0 {
+		return nil
+	}
+	afterKeys := make(map[string]struct{}, len(after))
+	for _, doc := range after {
+		if doc == nil {
+			continue
+		}
+		afterKeys[debugDocumentKey(doc)] = struct{}{}
+	}
+	removed := 0
+	for _, doc := range before {
+		if doc == nil {
+			continue
+		}
+		if _, ok := afterKeys[debugDocumentKey(doc)]; ok {
+			continue
+		}
+		removed++
+	}
+	if removed == 0 {
+		return nil
+	}
+	reason := strings.TrimSpace(truncateReason)
+	if reason == "" {
+		reason = "removed_after_filter"
+	}
+	return map[string]int{reason: removed}
 }
 
 func maxInt64(a, b int64) int64 {

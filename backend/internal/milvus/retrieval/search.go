@@ -45,8 +45,16 @@ type SearchMetrics struct {
 	RerankReason           string
 	DenseHits              int
 	SparseHits             int
+	DenseParticipation     int
+	SparseParticipation    int
+	PrimaryDenseCount      int
+	PrimarySparseCount     int
+	DualRouteFinalCount    int
 	DenseContribution      int
 	SparseContribution     int
+	SparseTerms            []string
+	SparseCandidateBefore  int
+	SparseCandidateAfter   int
 	TopKPolicyVersion      string
 	ScoreDistribution      string
 	RerankGap              float64
@@ -244,6 +252,8 @@ func SearchWithExprAndMetrics(
 			Strategy:          "phase1",
 			RetrieverVersion:  DenseRetrieverVersion,
 			DenseHits:         len(documents),
+			DenseParticipation: len(documents),
+			PrimaryDenseCount: len(documents),
 			DenseContribution: len(documents),
 		},
 	}, nil

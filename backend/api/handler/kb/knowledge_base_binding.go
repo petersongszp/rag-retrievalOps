@@ -191,8 +191,15 @@ func mergeKnowledgeBaseSearchResults(results []*retrieval.SearchResult, collecti
 	merged.Metrics.TruncatedCount = 0
 	merged.Metrics.DenseHits = 0
 	merged.Metrics.SparseHits = 0
+	merged.Metrics.DenseParticipation = 0
+	merged.Metrics.SparseParticipation = 0
+	merged.Metrics.PrimaryDenseCount = 0
+	merged.Metrics.PrimarySparseCount = 0
+	merged.Metrics.DualRouteFinalCount = 0
 	merged.Metrics.DenseContribution = 0
 	merged.Metrics.SparseContribution = 0
+	merged.Metrics.SparseCandidateBefore = 0
+	merged.Metrics.SparseCandidateAfter = 0
 
 	candidateTopK := 0
 	docs := make([]*schema.Document, 0)
@@ -209,8 +216,15 @@ func mergeKnowledgeBaseSearchResults(results []*retrieval.SearchResult, collecti
 		merged.Metrics.TruncatedCount += result.Metrics.TruncatedCount
 		merged.Metrics.DenseHits += result.Metrics.DenseHits
 		merged.Metrics.SparseHits += result.Metrics.SparseHits
+		merged.Metrics.DenseParticipation += result.Metrics.DenseParticipation
+		merged.Metrics.SparseParticipation += result.Metrics.SparseParticipation
+		merged.Metrics.PrimaryDenseCount += result.Metrics.PrimaryDenseCount
+		merged.Metrics.PrimarySparseCount += result.Metrics.PrimarySparseCount
+		merged.Metrics.DualRouteFinalCount += result.Metrics.DualRouteFinalCount
 		merged.Metrics.DenseContribution += result.Metrics.DenseContribution
 		merged.Metrics.SparseContribution += result.Metrics.SparseContribution
+		merged.Metrics.SparseCandidateBefore += result.Metrics.SparseCandidateBefore
+		merged.Metrics.SparseCandidateAfter += result.Metrics.SparseCandidateAfter
 		if result.Metrics.CandidateTopK > candidateTopK {
 			candidateTopK = result.Metrics.CandidateTopK
 		}
@@ -226,6 +240,14 @@ func mergeKnowledgeBaseSearchResults(results []*retrieval.SearchResult, collecti
 	merged.Documents = docs
 	merged.Metrics.CandidateTopK = candidateTopK
 	merged.Metrics.FinalTopK = len(docs)
+	finalSummary := summarizeMergedKnowledgeBaseRoutes(docs)
+	merged.Metrics.DenseParticipation = finalSummary.DenseParticipation
+	merged.Metrics.SparseParticipation = finalSummary.SparseParticipation
+	merged.Metrics.PrimaryDenseCount = finalSummary.PrimaryDenseCount
+	merged.Metrics.PrimarySparseCount = finalSummary.PrimarySparseCount
+	merged.Metrics.DualRouteFinalCount = finalSummary.DualRouteFinalCount
+	merged.Metrics.DenseContribution = finalSummary.PrimaryDenseCount
+	merged.Metrics.SparseContribution = finalSummary.PrimarySparseCount
 	if merged.Metrics.RetrieverVersion == "" {
 		if useHybrid {
 			merged.Metrics.RetrieverVersion = retrieval.HybridRetrieverVersion
@@ -234,6 +256,42 @@ func mergeKnowledgeBaseSearchResults(results []*retrieval.SearchResult, collecti
 		}
 	}
 	return merged
+}
+
+type mergedRouteSummary struct {
+	DenseParticipation  int
+	SparseParticipation int
+	PrimaryDenseCount   int
+	PrimarySparseCount  int
+	DualRouteFinalCount int
+}
+
+func summarizeMergedKnowledgeBaseRoutes(docs []*schema.Document) mergedRouteSummary {
+	summary := mergedRouteSummary{}
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		routeContrib, _ := doc.MetaData["route_contrib"].(map[string]interface{})
+		if _, ok := routeContrib["dense"]; ok {
+			summary.DenseParticipation++
+		}
+		if _, ok := routeContrib["sparse"]; ok {
+			summary.SparseParticipation++
+		}
+		if _, ok := routeContrib["dense"]; ok {
+			if _, dual := routeContrib["sparse"]; dual {
+				summary.DualRouteFinalCount++
+			}
+		}
+		switch strings.ToLower(strings.TrimSpace(getStringMetadata(doc.MetaData, "route"))) {
+		case "sparse":
+			summary.PrimarySparseCount++
+		default:
+			summary.PrimaryDenseCount++
+		}
+	}
+	return summary
 }
 
 func readRetrieveDocScore(doc *schema.Document) float64 {

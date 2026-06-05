@@ -107,3 +107,41 @@ func TestBuildDedupeKeyPrefersDocumentAndChunkID(t *testing.T) {
 		t.Fatalf("unexpected dedupe key: %s", got)
 	}
 }
+
+func TestSummarizeFinalRouteStats(t *testing.T) {
+	docs := []*schema.Document{
+		{
+			ID: "doc-1",
+			MetaData: map[string]interface{}{
+				"route": "dense",
+				"route_contrib": map[string]interface{}{
+					"dense":  0.7,
+					"sparse": 0.4,
+				},
+			},
+		},
+		{
+			ID: "doc-2",
+			MetaData: map[string]interface{}{
+				"route": "sparse",
+				"route_contrib": map[string]interface{}{
+					"sparse": 0.6,
+				},
+			},
+		},
+	}
+
+	stats := summarizeFinalRouteStats(docs)
+	if stats.DenseParticipation != 1 {
+		t.Fatalf("DenseParticipation = %d, want 1", stats.DenseParticipation)
+	}
+	if stats.SparseParticipation != 2 {
+		t.Fatalf("SparseParticipation = %d, want 2", stats.SparseParticipation)
+	}
+	if stats.PrimaryDenseCount != 1 || stats.PrimarySparseCount != 1 {
+		t.Fatalf("unexpected primary counts: %+v", stats)
+	}
+	if stats.DualRouteFinalCount != 1 {
+		t.Fatalf("DualRouteFinalCount = %d, want 1", stats.DualRouteFinalCount)
+	}
+}

@@ -25,6 +25,13 @@ type SparseRetriever struct {
 	config     SparseRetrieverConfig
 }
 
+type SparseSearchStats struct {
+	Terms                 []string
+	PerTermCandidateCount map[string]int
+	CandidateCountBefore  int
+	CandidateCountAfter   int
+}
+
 func NewSparseRetriever(client milvusClient.Client, collection string, cfg *SparseRetrieverConfig) (*SparseRetriever, error) {
 	if client == nil {
 		return nil, fmt.Errorf("milvus client is nil")
@@ -61,9 +68,9 @@ func NewSparseRetriever(client milvusClient.Client, collection string, cfg *Spar
 	}, nil
 }
 
-func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) ([]*schema.Document, error) {
+func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) ([]*schema.Document, SparseSearchStats, error) {
 	if req == nil {
-		return nil, fmt.Errorf("hybrid search request is nil")
+		return nil, SparseSearchStats{}, fmt.Errorf("hybrid search request is nil")
 	}
 	query := strings.TrimSpace(req.SparseQuery)
 	if query == "" {
@@ -73,7 +80,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		query = strings.TrimSpace(req.Query)
 	}
 	if query == "" {
-		return nil, fmt.Errorf("query is empty")
+		return nil, SparseSearchStats{}, fmt.Errorf("query is empty")
 	}
 
 	topK := req.CandidateTopK
@@ -86,7 +93,11 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	}
 	terms := extractSparseTerms(query, termLimit)
 	if len(terms) == 0 {
-		return []*schema.Document{}, nil
+		return []*schema.Document{}, SparseSearchStats{}, nil
+	}
+	stats := SparseSearchStats{
+		Terms:                 append([]string(nil), terms...),
+		PerTermCandidateCount: make(map[string]int, len(terms)),
 	}
 
 	baseExpr := strings.TrimSpace(req.Expr)
@@ -124,8 +135,9 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 			milvusClient.WithLimit(int64(perTermLimit)),
 		)
 		if err != nil {
-			return nil, fmt.Errorf("sparse query failed, term=%q expr=%q: %w", term, expr, err)
+			return nil, stats, fmt.Errorf("sparse query failed, term=%q expr=%q: %w", term, expr, err)
 		}
+		stats.PerTermCandidateCount[term] = resultSet.Len()
 
 		for _, doc := range parseQueryResultSet(resultSet) {
 			docID := strings.TrimSpace(doc.ID)
@@ -160,8 +172,9 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	}
 
 	if len(merged) == 0 {
-		return []*schema.Document{}, nil
+		return []*schema.Document{}, stats, nil
 	}
+	stats.CandidateCountBefore = len(merged)
 
 	candidates := make([]*schema.Document, 0, len(merged))
 	for _, doc := range merged {
@@ -170,8 +183,9 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 	index := BuildSparseInvertedIndex(candidates, nil)
 	hits := index.Search(terms, topK)
 	if len(hits) == 0 {
-		return []*schema.Document{}, nil
+		return []*schema.Document{}, stats, nil
 	}
+	stats.CandidateCountAfter = len(hits)
 
 	results := make([]*schema.Document, 0, len(hits))
 	for _, hit := range hits {
@@ -201,7 +215,7 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		results = append(results, doc)
 	}
 
-	return results, nil
+	return results, stats, nil
 }
 
 func parseQueryResultSet(rs milvusClient.ResultSet) []*schema.Document {
