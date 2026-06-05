@@ -115,14 +115,18 @@ func RenderMarkdownReport(report *Report) string {
 	}
 	buf.WriteString(fmt.Sprintf("- Baseline: `%s`\n", report.Baseline))
 	buf.WriteString(fmt.Sprintf("- Candidate: `%s`\n\n", report.Candidate))
+	if strings.TrimSpace(report.FusionStrategy) != "" {
+		buf.WriteString(fmt.Sprintf("- Report Fusion Strategy: `%s`\n\n", report.FusionStrategy))
+	}
 
 	buf.WriteString("## Metrics\n\n")
-	buf.WriteString("| Strategy | Recall@K | MRR | nDCG | Citation Acc | Dense Hit | Sparse Hit | Dense Part. | Sparse Part. | Primary Sparse | Empty Rate | P50(ms) | P95(ms) |\n")
-	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	buf.WriteString("| Strategy | Fusion | Recall@K | MRR | nDCG | Citation Acc | Dense Hit | Sparse Hit | Dense Part. | Sparse Part. | Primary Sparse | Empty Rate | P50(ms) | P95(ms) |\n")
+	buf.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, result := range report.Results {
 		buf.WriteString(fmt.Sprintf(
-			"| %s | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
+			"| %s | %s | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
 			result.Strategy.Name,
+			formatFusionStrategy(result.Strategy),
 			result.Metrics.RecallAtK,
 			result.Metrics.MRR,
 			result.Metrics.NDCG,
@@ -139,6 +143,9 @@ func RenderMarkdownReport(report *Report) string {
 	}
 
 	buf.WriteString("\n## Baseline vs Candidate\n\n")
+	if strings.TrimSpace(report.Comparison.BaselineFusionStrategy) != "" || strings.TrimSpace(report.Comparison.CandidateFusionStrategy) != "" {
+		buf.WriteString(fmt.Sprintf("- Fusion Strategy: `%s` -> `%s`\n", report.Comparison.BaselineFusionStrategy, report.Comparison.CandidateFusionStrategy))
+	}
 	buf.WriteString(fmt.Sprintf("- Recall@K Delta: `%.4f`\n", report.Comparison.RecallDelta))
 	buf.WriteString(fmt.Sprintf("- MRR Delta: `%.4f`\n", report.Comparison.MRRDelta))
 	buf.WriteString(fmt.Sprintf("- nDCG Delta: `%.4f`\n", report.Comparison.NDCGDelta))
@@ -165,9 +172,11 @@ func RenderMarkdownReport(report *Report) string {
 	} else {
 		for _, delta := range report.Contribution {
 			buf.WriteString(fmt.Sprintf(
-				"- `%s` vs `%s`: Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Dense/Sparse Hit `%.4f / %.4f`, Dense/Sparse Part. `%.4f / %.4f`, Primary Sparse `%.4f`, Empty `%.4f`, P95 `%.2f ms`\n",
+				"- `%s` (%s) vs `%s` (%s): Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Dense/Sparse Hit `%.4f / %.4f`, Dense/Sparse Part. `%.4f / %.4f`, Primary Sparse `%.4f`, Empty `%.4f`, P95 `%.2f ms`\n",
 				delta.Strategy,
+				blankAsNA(delta.FusionStrategy),
 				delta.ComparedTo,
+				blankAsNA(delta.ComparedToFusionStrategy),
 				delta.RecallDelta,
 				delta.MRRDelta,
 				delta.NDCGDelta,
@@ -193,4 +202,19 @@ func RenderMarkdownReport(report *Report) string {
 		buf.WriteString(fmt.Sprintf("- [%s] %s: actual=`%.4f` expected=`%.4f` %s\n", status, check.Name, check.Actual, check.Expected, strings.TrimSpace(check.Message)))
 	}
 	return buf.String()
+}
+
+func formatFusionStrategy(profile StrategyProfile) string {
+	fusion := blankAsNA(profile.FusionStrategy)
+	if profile.RRFK > 0 {
+		return fmt.Sprintf("%s(k=%d)", fusion, profile.RRFK)
+	}
+	return fusion
+}
+
+func blankAsNA(value string) string {
+	if strings.TrimSpace(value) == "" {
+		return "n/a"
+	}
+	return strings.TrimSpace(value)
 }

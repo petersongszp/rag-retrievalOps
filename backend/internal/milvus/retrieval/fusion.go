@@ -47,8 +47,11 @@ type FusedDocument struct {
 	Key              string
 	Score            float64
 	PrimaryRoute     string
+	FusionStrategy   string
 	RouteContrib     map[string]float64
 	RouteRawScores   map[string]float64
+	RouteRanks       map[string]int
+	RouteRRFContrib  map[string]float64
 	Contributions    []RouteContribution
 	SourceCollection string
 }
@@ -108,12 +111,15 @@ func fuseMinMaxCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionCo
 				Key:          key,
 				Score:        weightedScore,
 				PrimaryRoute: input.route,
+				FusionStrategy: "minmax_v1",
 				RouteContrib: map[string]float64{
 					input.route: weightedScore,
 				},
 				RouteRawScores: map[string]float64{
 					input.route: rawScore,
 				},
+				RouteRanks: map[string]int{},
+				RouteRRFContrib: map[string]float64{},
 				Contributions: []RouteContribution{
 					{
 						Route:           input.route,
@@ -187,11 +193,18 @@ func fuseRRFCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionConfi
 				Key:          key,
 				Score:        rrfScore,
 				PrimaryRoute: input.route,
+				FusionStrategy: "rrf_v1",
 				RouteContrib: map[string]float64{
 					input.route: rrfScore,
 				},
 				RouteRawScores: map[string]float64{
 					input.route: rawScore,
+				},
+				RouteRanks: map[string]int{
+					input.route: routeRank,
+				},
+				RouteRRFContrib: map[string]float64{
+					input.route: rrfScore,
 				},
 				Contributions: []RouteContribution{
 					{

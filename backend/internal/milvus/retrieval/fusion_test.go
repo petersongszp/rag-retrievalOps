@@ -145,3 +145,59 @@ func TestSummarizeFinalRouteStats(t *testing.T) {
 		t.Fatalf("DualRouteFinalCount = %d, want 1", stats.DualRouteFinalCount)
 	}
 }
+
+func TestFuseRouteCandidatesRRFAnnotatesRanksAndContrib(t *testing.T) {
+	denseDocs := []*schema.Document{
+		{
+			ID: "dense-1",
+			MetaData: map[string]interface{}{
+				"document_id": "doc-1",
+				"chunk_id":    "chunk-1",
+				"dense_score": 0.9,
+			},
+		},
+	}
+	sparseDocs := []*schema.Document{
+		{
+			ID: "sparse-1",
+			MetaData: map[string]interface{}{
+				"document_id":  "doc-1",
+				"chunk_id":     "chunk-1",
+				"sparse_score": 8.0,
+			},
+		},
+	}
+
+	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
+		FusionStrategy:  "rrf_v1",
+		RRFK:            60,
+		RRFDenseWeight:  0.7,
+		RRFSparseWeight: 0.3,
+		DenseWeight:     0.7,
+		SparseWeight:    0.3,
+	})
+	if len(fused) != 2 {
+		t.Fatalf("expected 2 fused docs, got %d", len(fused))
+	}
+	if fused[0].FusionStrategy != "rrf_v1" {
+		t.Fatalf("FusionStrategy = %q, want rrf_v1", fused[0].FusionStrategy)
+	}
+
+	merged := DeduplicateFusedDocuments(fused)
+	if len(merged) != 1 {
+		t.Fatalf("expected 1 merged doc, got %d", len(merged))
+	}
+	doc := merged[0]
+	if got := readMetadataString(doc, "primary_route"); got == "" {
+		t.Fatalf("expected primary_route metadata")
+	}
+	if got := readMetadataString(doc, "fusion_strategy"); got != "rrf_v1" {
+		t.Fatalf("fusion_strategy = %q, want rrf_v1", got)
+	}
+	if _, ok := doc.MetaData["route_rank"].(map[string]interface{}); !ok {
+		t.Fatalf("expected route_rank map, got %T", doc.MetaData["route_rank"])
+	}
+	if _, ok := doc.MetaData["route_rrf_contrib"].(map[string]interface{}); !ok {
+		t.Fatalf("expected route_rrf_contrib map, got %T", doc.MetaData["route_rrf_contrib"])
+	}
+}

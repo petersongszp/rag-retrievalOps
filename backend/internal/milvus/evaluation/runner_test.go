@@ -213,3 +213,59 @@ func TestRunnerAggregatesNonRRFRouteMetrics(t *testing.T) {
 		t.Fatalf("expected primary sparse rate > 0")
 	}
 }
+
+func TestRunnerCarriesFusionStrategyIntoComparisonAndReport(t *testing.T) {
+	dataset := []DatasetCase{
+		{
+			ID:          "fusion-case",
+			Query:       "rrf query",
+			TopK:        2,
+			RelevantIDs: []string{"doc-1"},
+		},
+	}
+	profiles := []StrategyProfile{
+		{Name: "phase2_minmax_baseline", Baseline: true, Mode: "hybrid", FusionStrategy: "minmax_v1"},
+		{Name: "phase2_rrf_candidate", Candidate: true, Mode: "hybrid", FusionStrategy: "rrf_v1", RRFK: 60},
+	}
+	searchers := map[string]*fakeSearcher{
+		"phase2_minmax_baseline": {
+			results: map[string]SearchOutcome{
+				"rrf query": {Items: []RetrievedItem{{ResultID: "doc-1"}}},
+			},
+		},
+		"phase2_rrf_candidate": {
+			results: map[string]SearchOutcome{
+				"rrf query": {Items: []RetrievedItem{{ResultID: "doc-1"}}},
+			},
+		},
+	}
+
+	runner := &Runner{
+		Factory: func(profile StrategyProfile) (Searcher, error) {
+			return searchers[profile.Name], nil
+		},
+	}
+
+	report, err := runner.Run(context.Background(), dataset, profiles, GateThresholds{MaxP95LatencyRegressionRatio: 1}, "", "")
+	if err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if report.FusionStrategy != "rrf_v1" {
+		t.Fatalf("report fusion strategy = %q, want rrf_v1", report.FusionStrategy)
+	}
+	if report.Comparison.BaselineFusionStrategy != "minmax_v1" {
+		t.Fatalf("baseline fusion strategy = %q, want minmax_v1", report.Comparison.BaselineFusionStrategy)
+	}
+	if report.Comparison.CandidateFusionStrategy != "rrf_v1" {
+		t.Fatalf("candidate fusion strategy = %q, want rrf_v1", report.Comparison.CandidateFusionStrategy)
+	}
+	if len(report.Contribution) != 1 {
+		t.Fatalf("contribution len = %d, want 1", len(report.Contribution))
+	}
+	if report.Contribution[0].FusionStrategy != "rrf_v1" {
+		t.Fatalf("contribution fusion strategy = %q, want rrf_v1", report.Contribution[0].FusionStrategy)
+	}
+	if report.Contribution[0].ComparedToFusionStrategy != "minmax_v1" {
+		t.Fatalf("contribution compared_to fusion strategy = %q, want minmax_v1", report.Contribution[0].ComparedToFusionStrategy)
+	}
+}
