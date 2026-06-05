@@ -289,6 +289,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			metrics: SearchMetrics{
 				SparseHits:            len(docs),
 				SparseTerms:           append([]string(nil), sparseStats.Terms...),
+				SparseFallbackReason:  sparseStats.FallbackReason,
 				TermSources:           copyStringMap(sparseStats.TermSources),
 				DroppedTerms:          copyStringMap(sparseStats.DroppedTerms),
 				SparseCandidateBefore: sparseStats.CandidateCountBefore,
@@ -342,6 +343,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				Hits:                 SnapshotDocuments(sparseDocs),
 				HitsCount:            len(sparseDocs),
 				SparseTerms:          append([]string(nil), sparseMetric.SparseTerms...),
+				FallbackReason:       sparseMetric.SparseFallbackReason,
 				TermSources:          copyStringMap(sparseMetric.TermSources),
 				DroppedTerms:         copyStringMap(sparseMetric.DroppedTerms),
 				CandidateCountBefore: sparseMetric.SparseCandidateBefore,
@@ -420,6 +422,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				DenseHits:             len(denseDocs),
 				SparseHits:            len(sparseDocs),
 				SparseTerms:           append([]string(nil), sparseMetric.SparseTerms...),
+				SparseFallbackReason:  sparseMetric.SparseFallbackReason,
 				TermSources:           copyStringMap(sparseMetric.TermSources),
 				DroppedTerms:          copyStringMap(sparseMetric.DroppedTerms),
 				SparseCandidateBefore: sparseMetric.SparseCandidateBefore,

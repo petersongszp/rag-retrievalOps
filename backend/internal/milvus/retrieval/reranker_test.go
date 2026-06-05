@@ -63,6 +63,15 @@ func TestJaccardRerankerAnnotatesSourceContract(t *testing.T) {
 	if _, ok := source["rerank_score"]; !ok {
 		t.Fatalf("expected source.rerank_score")
 	}
+	if source["pre_rerank_rank"] != 1 {
+		t.Fatalf("expected source.pre_rerank_rank=1, got %v", source["pre_rerank_rank"])
+	}
+	if source["post_rerank_rank"] != 1 {
+		t.Fatalf("expected source.post_rerank_rank=1, got %v", source["post_rerank_rank"])
+	}
+	if _, ok := source["score_delta"]; !ok {
+		t.Fatalf("expected source.score_delta")
+	}
 }
 
 func TestConfigurableRerankerFallsBackOnPrimaryError(t *testing.T) {

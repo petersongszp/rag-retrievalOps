@@ -18,6 +18,11 @@ type SparseRetrieverConfig struct {
 	PerTermFactor int
 	MinPerTermK   int
 	ProviderName  string
+	TimeoutMS     int
+	BM25K1        float64
+	BM25B         float64
+	BM25TopK      int
+	BM25MinScore  float64
 }
 
 // SparseRetriever provides keyword recall and ranks candidates with an explicit inverted BM25 index.
@@ -31,6 +36,7 @@ type SparseRetriever struct {
 
 type SparseSearchStats struct {
 	ProviderName         string
+	FallbackReason       string
 	TermSources          map[string]string
 	DroppedTerms         map[string]string
 	Terms                 []string
@@ -77,7 +83,9 @@ type MilvusLikeCandidateProvider struct {
 	config     SparseRetrieverConfig
 }
 
-type CandidateBM25Ranker struct{}
+type CandidateBM25Ranker struct {
+	config SparseIndexConfig
+}
 
 func NewSparseRetriever(client milvusClient.Client, collection string, cfg *SparseRetrieverConfig) (*SparseRetriever, error) {
 	if client == nil {
@@ -92,6 +100,11 @@ func NewSparseRetriever(client milvusClient.Client, collection string, cfg *Spar
 		MaxTerms:      6,
 		PerTermFactor: 4,
 		MinPerTermK:   20,
+		TimeoutMS:     0,
+		BM25K1:        1.2,
+		BM25B:         0.75,
+		BM25TopK:      0,
+		BM25MinScore:  0,
 	}
 	if cfg != nil {
 		if cfg.DefaultTopK > 0 {
@@ -106,6 +119,21 @@ func NewSparseRetriever(client milvusClient.Client, collection string, cfg *Spar
 		if cfg.MinPerTermK > 0 {
 			out.MinPerTermK = cfg.MinPerTermK
 		}
+		if cfg.TimeoutMS > 0 {
+			out.TimeoutMS = cfg.TimeoutMS
+		}
+		if cfg.BM25K1 > 0 {
+			out.BM25K1 = cfg.BM25K1
+		}
+		if cfg.BM25B >= 0 && cfg.BM25B <= 1 {
+			out.BM25B = cfg.BM25B
+		}
+		if cfg.BM25TopK > 0 {
+			out.BM25TopK = cfg.BM25TopK
+		}
+		if cfg.BM25MinScore > 0 {
+			out.BM25MinScore = cfg.BM25MinScore
+		}
 	}
 
 	return &SparseRetriever{
@@ -113,7 +141,14 @@ func NewSparseRetriever(client milvusClient.Client, collection string, cfg *Spar
 		collection:        collection,
 		config:            out,
 		candidateProvider: &MilvusLikeCandidateProvider{client: client, collection: collection, config: out},
-		ranker:            &CandidateBM25Ranker{},
+		ranker: &CandidateBM25Ranker{
+			config: SparseIndexConfig{
+				K1:       out.BM25K1,
+				B:        out.BM25B,
+				TopK:     out.BM25TopK,
+				MinScore: out.BM25MinScore,
+			},
+		},
 	}, nil
 }
 
@@ -155,9 +190,16 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 		stats.TermSources[term.Value] = term.Source
 	}
 
+	if s.config.TimeoutMS > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, time.Duration(s.config.TimeoutMS)*time.Millisecond)
+		defer cancel()
+	}
 	candidates, providerStats, err := s.candidateProvider.SearchCandidates(ctx, req, terms)
 	if err != nil {
-		return nil, stats, err
+		stats.ProviderName = providerStats.ProviderName
+		stats.FallbackReason = "provider_error"
+		return []*schema.Document{}, stats, nil
 	}
 	stats.ProviderName = providerStats.ProviderName
 	for key, value := range providerStats.PerTermCandidateCount {
@@ -170,7 +212,8 @@ func (s *SparseRetriever) Search(ctx context.Context, req *HybridSearchRequest) 
 
 	hits, rankStats, err := s.ranker.Rank(ctx, query, terms, candidates, topK)
 	if err != nil {
-		return nil, stats, err
+		stats.FallbackReason = "ranker_error"
+		return []*schema.Document{}, stats, nil
 	}
 	if len(hits) == 0 {
 		return []*schema.Document{}, stats, nil
@@ -296,7 +339,7 @@ func (p *MilvusLikeCandidateProvider) SearchCandidates(ctx context.Context, req 
 }
 
 func (r *CandidateBM25Ranker) Rank(ctx context.Context, query string, terms []string, candidates []*schema.Document, topK int) ([]SparseSearchHit, SparseRankStats, error) {
-	index := BuildSparseInvertedIndex(candidates, nil)
+	index := BuildSparseInvertedIndex(candidates, &r.config)
 	hits := index.Search(terms, topK)
 	return hits, SparseRankStats{
 		RankerName:           "candidate_bm25",
