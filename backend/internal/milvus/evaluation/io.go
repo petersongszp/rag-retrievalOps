@@ -44,15 +44,38 @@ func LoadDatasetBundle(path string) (DatasetBundle, error) {
 }
 
 func LoadProfiles(path string) ([]StrategyProfile, error) {
-	data, err := os.ReadFile(path)
+	bundle, err := LoadProfileBundle(path)
 	if err != nil {
 		return nil, err
 	}
-	var profiles []StrategyProfile
-	if err := json.Unmarshal(data, &profiles); err != nil {
-		return nil, fmt.Errorf("parse profiles %s: %w", path, err)
+	return bundle.Profiles, nil
+}
+
+func LoadProfileBundle(path string) (ProfileBundle, error) {
+	var bundle ProfileBundle
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return bundle, err
 	}
-	return profiles, nil
+
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return bundle, fmt.Errorf("parse profiles %s: empty payload", path)
+	}
+	if trimmed[0] == '[' {
+		if err := json.Unmarshal(trimmed, &bundle.Profiles); err != nil {
+			return bundle, fmt.Errorf("parse profiles %s: %w", path, err)
+		}
+		bundle.ProfileVersion = "legacy-array"
+		return bundle, nil
+	}
+	if err := json.Unmarshal(trimmed, &bundle); err != nil {
+		return bundle, fmt.Errorf("parse profiles %s: %w", path, err)
+	}
+	if bundle.ProfileVersion == "" {
+		bundle.ProfileVersion = "unspecified"
+	}
+	return bundle, nil
 }
 
 func LoadGateThresholds(path string) (GateThresholds, error) {
@@ -87,24 +110,29 @@ func RenderMarkdownReport(report *Report) string {
 	if strings.TrimSpace(report.DatasetVersion) != "" {
 		buf.WriteString(fmt.Sprintf("- Dataset Version: `%s`\n", report.DatasetVersion))
 	}
+	if strings.TrimSpace(report.ProfileVersion) != "" {
+		buf.WriteString(fmt.Sprintf("- Profile Version: `%s`\n", report.ProfileVersion))
+	}
 	buf.WriteString(fmt.Sprintf("- Baseline: `%s`\n", report.Baseline))
 	buf.WriteString(fmt.Sprintf("- Candidate: `%s`\n\n", report.Candidate))
 
 	buf.WriteString("## Metrics\n\n")
-	buf.WriteString("| Strategy | Recall@K | MRR | nDCG | Citation Acc | Citation P/R | Parent Fill Gain | Refusal FP | P50(ms) | P95(ms) |\n")
-	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	buf.WriteString("| Strategy | Recall@K | MRR | nDCG | Citation Acc | Dense Hit | Sparse Hit | Dense Part. | Sparse Part. | Primary Sparse | Empty Rate | P50(ms) | P95(ms) |\n")
+	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, result := range report.Results {
 		buf.WriteString(fmt.Sprintf(
-			"| %s | %.4f | %.4f | %.4f | %.4f | %.4f / %.4f | %.4f | %.4f | %.2f | %.2f |\n",
+			"| %s | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
 			result.Strategy.Name,
 			result.Metrics.RecallAtK,
 			result.Metrics.MRR,
 			result.Metrics.NDCG,
 			result.Metrics.CitationAccuracy,
-			result.Metrics.CitationPrecision,
-			result.Metrics.CitationRecall,
-			result.Metrics.ParentFillGain,
-			result.Metrics.RefusalFalsePositiveRate,
+			result.Metrics.DenseHitRate,
+			result.Metrics.SparseHitRate,
+			result.Metrics.DenseParticipationRate,
+			result.Metrics.SparseParticipationRate,
+			result.Metrics.PrimarySparseRate,
+			result.Metrics.EmptyRate,
 			result.Metrics.P50LatencyMS,
 			result.Metrics.P95LatencyMS,
 		))
@@ -119,6 +147,15 @@ func RenderMarkdownReport(report *Report) string {
 	buf.WriteString(fmt.Sprintf("- Citation Recall Delta: `%.4f`\n", report.Comparison.CitationRecallDelta))
 	buf.WriteString(fmt.Sprintf("- Parent Fill Gain Delta: `%.4f`\n", report.Comparison.ParentFillGainDelta))
 	buf.WriteString(fmt.Sprintf("- Rewrite Gain Delta: `%.4f`\n", report.Comparison.RewriteGainDelta))
+	buf.WriteString(fmt.Sprintf("- Dense Hit Rate Delta: `%.4f`\n", report.Comparison.DenseHitRateDelta))
+	buf.WriteString(fmt.Sprintf("- Sparse Hit Rate Delta: `%.4f`\n", report.Comparison.SparseHitRateDelta))
+	buf.WriteString(fmt.Sprintf("- Dense Participation Delta: `%.4f`\n", report.Comparison.DenseParticipationRateDelta))
+	buf.WriteString(fmt.Sprintf("- Sparse Participation Delta: `%.4f`\n", report.Comparison.SparseParticipationRateDelta))
+	buf.WriteString(fmt.Sprintf("- Primary Dense Rate Delta: `%.4f`\n", report.Comparison.PrimaryDenseRateDelta))
+	buf.WriteString(fmt.Sprintf("- Primary Sparse Rate Delta: `%.4f`\n", report.Comparison.PrimarySparseRateDelta))
+	buf.WriteString(fmt.Sprintf("- Empty Rate Delta: `%.4f`\n", report.Comparison.EmptyRateDelta))
+	buf.WriteString(fmt.Sprintf("- Dense Route Contribution Delta: `%.4f`\n", report.Comparison.DenseRouteContributionDelta))
+	buf.WriteString(fmt.Sprintf("- Sparse Route Contribution Delta: `%.4f`\n", report.Comparison.SparseRouteContributionDelta))
 	buf.WriteString(fmt.Sprintf("- Refusal False Positive Rate: `%.4f`\n", report.Comparison.RefusalFalsePositiveRate))
 	buf.WriteString(fmt.Sprintf("- P95 Latency Delta: `%.2f ms` (`%.2f%%`)\n\n", report.Comparison.P95LatencyDeltaMS, report.Comparison.P95LatencyDeltaRatio*100))
 
@@ -128,16 +165,19 @@ func RenderMarkdownReport(report *Report) string {
 	} else {
 		for _, delta := range report.Contribution {
 			buf.WriteString(fmt.Sprintf(
-				"- `%s` vs `%s`: Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Citation P/R `%.4f / %.4f`, Parent Fill `%.4f`, P95 `%.2f ms`\n",
+				"- `%s` vs `%s`: Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Dense/Sparse Hit `%.4f / %.4f`, Dense/Sparse Part. `%.4f / %.4f`, Primary Sparse `%.4f`, Empty `%.4f`, P95 `%.2f ms`\n",
 				delta.Strategy,
 				delta.ComparedTo,
 				delta.RecallDelta,
 				delta.MRRDelta,
 				delta.NDCGDelta,
 				delta.CitationAccuracyDelta,
-				delta.CitationPrecisionDelta,
-				delta.CitationRecallDelta,
-				delta.ParentFillGainDelta,
+				delta.DenseHitRateDelta,
+				delta.SparseHitRateDelta,
+				delta.DenseParticipationDelta,
+				delta.SparseParticipationDelta,
+				delta.PrimarySparseRateDelta,
+				delta.EmptyRateDelta,
 				delta.P95LatencyDeltaMS,
 			))
 		}

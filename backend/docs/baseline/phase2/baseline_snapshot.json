@@ -14,9 +14,12 @@
   "metrics_snapshot": {
     "citation_precision": null,
     "context_avg_tokens": null,
+    "dense_hit_rate": null,
+    "dense_participation_rate": null,
     "mrr": null,
     "ndcg": null,
     "notes": "Frozen for non-RRF L0. Fill in after running the dedicated phase2 non-RRF replay dataset.",
+    "primary_dense_rate": null,
     "recall_at_k": null,
     "retrieval_p95_ms": null,
     "sparse_hit_rate": null,

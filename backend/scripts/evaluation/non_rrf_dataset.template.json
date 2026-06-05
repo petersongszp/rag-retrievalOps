@@ -1,6 +1,6 @@
 {
   "dataset_version": "phase2-non-rrf-v1",
-  "description": "Minimal dedicated Phase2 non-RRF dataset for route hits, participation, and primary-route regression checks.",
+  "description": "Minimal non-RRF retrieval regression dataset focused on hits, participation, and primary-route behaviour.",
   "cases": [
     {
       "id": "non-rrf-entity-acronym",
@@ -30,7 +30,8 @@
         "non_rrf",
         "acronym",
         "sparse_candidate"
-      ]
+      ],
+      "notes": "Use for validating sparse hit/participation and primary sparse rate."
     },
     {
       "id": "non-rrf-entity-longtail",
@@ -61,7 +62,8 @@
         "non_rrf",
         "entity",
         "dense_primary"
-      ]
+      ],
+      "notes": "Use for validating dense primary preservation under non-RRF tuning."
     }
   ]
 }

@@ -14,6 +14,8 @@ Phase 2 非 RRF 观测/评估地基请优先使用：
 - `scripts/evaluation/dataset.phase2.non_rrf.json`
 - `scripts/evaluation/retrieval_strategy_profiles.phase2.non_rrf.json`
 - `docs/baseline/phase2/baseline_snapshot.json`
+- `scripts/evaluation/non_rrf_dataset.template.json`
+- `scripts/evaluation/non_rrf_profiles.template.json`
 
 每条记录建议至少包含：
 
@@ -31,6 +33,13 @@ Phase 2 非 RRF 观测/评估地基请优先使用：
 - `question/context/ground_truth`
 
 后面三项让同一个文件也能兼容 `Ragas` 模式。
+
+Phase 2 非 RRF 最小模板额外建议补充：
+
+- `expected_primary_route`
+- `expected_participating_routes`
+- `must_contain_terms`
+- `difficulty`
 
 ## 2. 检索回归运行方式
 
@@ -106,6 +115,13 @@ go run ./cmd/retrieval-eval \
 - 混合检索到底有没有带来收益
 - 改写是增益还是噪声
 - 动态 TopK 是否只省 token 还是也伤了质量
+
+Phase 2 非 RRF lane 还会额外输出：
+
+- `dense_hit_rate / sparse_hit_rate`
+- `dense_participation_rate / sparse_participation_rate`
+- `primary_dense_rate / primary_sparse_rate`
+- `empty_rate`
 
 ## 4. 门禁阈值
 

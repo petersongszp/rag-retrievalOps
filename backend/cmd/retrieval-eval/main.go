@@ -41,9 +41,12 @@ func main() {
 	exitIfErr(err)
 
 	profiles := evaluation.DefaultProfiles()
+	profileVersion := "builtin-defaults"
 	if *profilesPath != "" {
-		profiles, err = evaluation.LoadProfiles(*profilesPath)
+		profileBundle, err := evaluation.LoadProfileBundle(*profilesPath)
 		exitIfErr(err)
+		profiles = profileBundle.Profiles
+		profileVersion = profileBundle.ProfileVersion
 	}
 
 	thresholds := evaluation.DefaultGateThresholds()
@@ -65,6 +68,7 @@ func main() {
 	report, err := runner.Run(ctx, datasetBundle.Cases, profiles, thresholds, *baseline, *candidate)
 	exitIfErr(err)
 	report.DatasetVersion = datasetBundle.DatasetVersion
+	report.ProfileVersion = profileVersion
 
 	jsonPath := *outputPrefix + ".json"
 	mdPath := *outputPrefix + ".md"
@@ -260,8 +264,18 @@ func (s *retrievalSearcher) Search(ctx context.Context, item evaluation.DatasetC
 		outcome.ParentFillCount = result.Metrics.ParentFillCount
 		outcome.RewriteApplied = result.Metrics.RewriteApplied
 		outcome.ModelRewriteApplied = result.Metrics.ModelRewriteApplied
+		outcome.DenseHits = result.Metrics.DenseHits
+		outcome.SparseHits = result.Metrics.SparseHits
+		outcome.DenseParticipation = result.Metrics.DenseParticipation
+		outcome.SparseParticipation = result.Metrics.SparseParticipation
+		outcome.PrimaryDenseCount = result.Metrics.PrimaryDenseCount
+		outcome.PrimarySparseCount = result.Metrics.PrimarySparseCount
+		outcome.DualRouteFinalCount = result.Metrics.DualRouteFinalCount
+		outcome.EmptyReason = result.Metrics.EmptyReason
 		outcome.DenseContribution = result.Metrics.DenseContribution
 		outcome.SparseContribution = result.Metrics.SparseContribution
+		outcome.SparseCandidateBefore = result.Metrics.SparseCandidateBefore
+		outcome.SparseCandidateAfter = result.Metrics.SparseCandidateAfter
 	}
 	return outcome, nil
 }
