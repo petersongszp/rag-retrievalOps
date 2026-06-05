@@ -1,0 +1,22 @@
+[
+  {
+    "name": "phase2_non_rrf_baseline",
+    "label": "Phase 2 Non-RRF Baseline",
+    "baseline": true,
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "candidate_top_k": 10
+  },
+  {
+    "name": "phase2_non_rrf_candidate",
+    "label": "Phase 2 Non-RRF Candidate",
+    "candidate": true,
+    "mode": "hybrid",
+    "enable_query_rewrite": true,
+    "enable_dynamic_topk": true,
+    "enable_advanced_rerank": true,
+    "candidate_top_k": 10
+  }
+]

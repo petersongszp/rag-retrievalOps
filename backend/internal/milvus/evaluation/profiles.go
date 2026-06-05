@@ -3,14 +3,24 @@ package evaluation
 func DefaultProfiles() []StrategyProfile {
 	return []StrategyProfile{
 		{
-			Name:                 "phase2_baseline",
-			Label:                "Phase 2 Baseline",
+			Name:                 "phase2_non_rrf_baseline",
+			Label:                "Phase 2 Non-RRF Baseline",
 			Baseline:             true,
 			Mode:                 "hybrid",
 			EnableQueryRewrite:   true,
 			EnableDynamicTopK:    true,
 			EnableAdvancedRerank: true,
 			CandidateTopK:        10,
+		},
+		{
+			Name:                       "phase2_non_rrf_candidate",
+			Label:                      "Phase 2 Non-RRF Candidate",
+			Candidate:                  true,
+			Mode:                       "hybrid",
+			EnableQueryRewrite:         true,
+			EnableDynamicTopK:          true,
+			EnableAdvancedRerank:       true,
+			CandidateTopK:              10,
 		},
 		{
 			Name:                       "parent_child",

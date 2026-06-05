@@ -9,6 +9,12 @@
 
 默认数据集是 [dataset.json](./dataset.json)。
 
+Phase 2 非 RRF 观测/评估地基请优先使用：
+
+- `scripts/evaluation/dataset.phase2.non_rrf.json`
+- `scripts/evaluation/retrieval_strategy_profiles.phase2.non_rrf.json`
+- `docs/baseline/phase2/baseline_snapshot.json`
+
 每条记录建议至少包含：
 
 - `id`
@@ -62,6 +68,17 @@ go run ./cmd/retrieval-eval \
   -profiles ./scripts/evaluation/retrieval_strategy_profiles.example.json \
   -gates ./scripts/evaluation/retrieval_gate_thresholds.example.json \
   -output ./docs/retrieval-regression-report
+```
+
+Phase 2 非 RRF baseline 快照建议命令：
+
+```bash
+go run ./cmd/retrieval-eval \
+  -config ./config.yaml \
+  -dataset ./scripts/evaluation/dataset.phase2.non_rrf.json \
+  -profiles ./scripts/evaluation/retrieval_strategy_profiles.phase2.non_rrf.json \
+  -gates ./scripts/evaluation/retrieval_gate_thresholds.example.json \
+  -output ./docs/baseline/phase2/non-rrf-baseline
 ```
 
 产物：

@@ -1,0 +1,72 @@
+{
+  "dataset_version": "phase2-non-rrf-l0-v1",
+  "description": "Phase 2 non-RRF baseline dataset focusing on entity terms, abbreviations, exact identifiers, short queries, and sparse-sensitive retrieval scenarios.",
+  "cases": [
+    {
+      "id": "abbr-gc-go",
+      "query": "gc",
+      "top_k": 5,
+      "relevant_ids": ["kb_1_doc_1_chunk_0_1779523924191899824"],
+      "citation_targets": [{"chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"}],
+      "query_type": "abbreviation",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "sparse_should_help_abbreviation_expansion",
+      "tags": ["abbreviation", "gc", "go", "sparse_sensitive"]
+    },
+    {
+      "id": "entity-goroutine",
+      "query": "goroutine 是什么",
+      "top_k": 5,
+      "relevant_ids": ["kb_1_doc_1_chunk_0_1779523924191899824"],
+      "citation_targets": [{"chunk_id": "kb_1_doc_1_chunk_0_1779523924191899824"}],
+      "query_type": "entity",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "dense_and_sparse_should_both_have_signal",
+      "tags": ["entity", "goroutine", "go"]
+    },
+    {
+      "id": "entity-react-component",
+      "query": "React 组件",
+      "top_k": 5,
+      "relevant_ids": ["kb_1_doc_2_chunk_0_1779523936358216873"],
+      "citation_targets": [{"chunk_id": "kb_1_doc_2_chunk_0_1779523936358216873"}],
+      "query_type": "entity",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "baseline_should_hit_precise_entity_chunk",
+      "tags": ["entity", "react", "component"]
+    },
+    {
+      "id": "entity-js-promise",
+      "query": "JavaScript Promise 异步",
+      "top_k": 5,
+      "relevant_ids": ["kb_1_doc_4_chunk_0_1779731716268688925"],
+      "citation_targets": [{"chunk_id": "kb_1_doc_4_chunk_0_1779731716268688925"}],
+      "query_type": "entity",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "baseline_should_hit_promise_chunk",
+      "tags": ["entity", "javascript", "promise"]
+    },
+    {
+      "id": "short-query-auth",
+      "query": "鉴权",
+      "top_k": 5,
+      "relevant_ids": [],
+      "citation_targets": [],
+      "query_type": "short_query",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "track_sparse_execution_for_short_query",
+      "tags": ["short_query", "auth", "sparse_sensitive"]
+    },
+    {
+      "id": "short-query-deploy",
+      "query": "部署",
+      "top_k": 5,
+      "relevant_ids": [],
+      "citation_targets": [],
+      "query_type": "short_query",
+      "scenario": "non_rrf_baseline",
+      "expected_behavior": "track_short_query_route_participation",
+      "tags": ["short_query", "deploy", "sparse_sensitive"]
+    }
+  ]
+}
