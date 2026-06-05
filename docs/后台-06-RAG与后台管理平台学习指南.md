@@ -132,11 +132,11 @@
 
 这里已经有 5 篇后台使用文档：
 
-1. `admin-dashboard-overview-page-guide.md`
-2. `admin-knowledge-bases-page-guide.md`
-3. `admin-retrieval-lab-guide.md`
-4. `admin-strategy-center-guide.md`
-5. `admin-trace-logs-guide.md`
+1. `后台-01-后台管理平台概览页面使用文档.md`
+2. `后台-02-后台管理平台知识库页面使用文档.md`
+3. `后台-03-后台管理平台检索实验室使用文档.md`
+4. `后台-04-后台管理页面策略中心使用说明.md`
+5. `后台-05-后台管理平台Trace日志页面使用文档.md`
 
 这 5 篇文档更像“单模块深挖”。本文则是“先学什么、后学什么”的总学习路线。
 
@@ -794,11 +794,11 @@
 
 当你看完本文以后，建议按下面顺序继续读已有文档：
 
-1. `docs/admin-knowledge-bases-page-guide.md`
-2. `docs/admin-retrieval-lab-guide.md`
-3. `docs/admin-trace-logs-guide.md`
-4. `docs/admin-strategy-center-guide.md`
-5. `docs/admin-dashboard-overview-page-guide.md`
+1. `docs/后台-02-后台管理平台知识库页面使用文档.md`
+2. `docs/后台-03-后台管理平台检索实验室使用文档.md`
+3. `docs/后台-05-后台管理平台Trace日志页面使用文档.md`
+4. `docs/后台-04-后台管理页面策略中心使用说明.md`
+5. `docs/后台-01-后台管理平台概览页面使用文档.md`
 
 这个顺序的理由很简单：
 
