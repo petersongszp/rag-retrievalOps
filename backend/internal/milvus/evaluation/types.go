@@ -47,6 +47,9 @@ type StrategyProfile struct {
 	Label                       string  `json:"label,omitempty"`
 	Family                      string  `json:"family,omitempty"`
 	FusionStrategy              string  `json:"fusion_strategy,omitempty"`
+	RRFK                        int     `json:"rrf_k,omitempty"`
+	RRFDenseWeight              float64 `json:"rrf_dense_weight,omitempty"`
+	RRFSparseWeight             float64 `json:"rrf_sparse_weight,omitempty"`
 	Notes                       string  `json:"notes,omitempty"`
 	Baseline                    bool    `json:"baseline,omitempty"`
 	Candidate                   bool    `json:"candidate,omitempty"`
@@ -199,7 +202,9 @@ type StrategyResult struct {
 
 type StrategyDelta struct {
 	Strategy                  string  `json:"strategy"`
+	FusionStrategy            string  `json:"fusion_strategy,omitempty"`
 	ComparedTo                string  `json:"compared_to"`
+	ComparedToFusionStrategy  string  `json:"compared_to_fusion_strategy,omitempty"`
 	RecallDelta               float64 `json:"recall_delta"`
 	MRRDelta                  float64 `json:"mrr_delta"`
 	NDCGDelta                 float64 `json:"ndcg_delta"`
@@ -222,6 +227,8 @@ type StrategyDelta struct {
 type ComparisonSummary struct {
 	Baseline                     string  `json:"baseline"`
 	Candidate                    string  `json:"candidate"`
+	BaselineFusionStrategy       string  `json:"baseline_fusion_strategy,omitempty"`
+	CandidateFusionStrategy      string  `json:"candidate_fusion_strategy,omitempty"`
 	RecallDelta                  float64 `json:"recall_delta"`
 	MRRDelta                     float64 `json:"mrr_delta"`
 	NDCGDelta                    float64 `json:"ndcg_delta"`
@@ -279,6 +286,7 @@ type Report struct {
 	DatasetVersion string            `json:"dataset_version,omitempty"`
 	ProfileVersion string            `json:"profile_version,omitempty"`
 	GeneratedAt    time.Time         `json:"generated_at"`
+	FusionStrategy string            `json:"fusion_strategy,omitempty"`
 	Results        []StrategyResult  `json:"results"`
 	Contribution   []StrategyDelta   `json:"contribution"`
 	Comparison     ComparisonSummary `json:"comparison"`

@@ -16,6 +16,8 @@ const standardRefusalTemplateVersion = "phase3-standard-refusal-v1"
 type retrievalDebugTraceResponse struct {
 	RequestID         string                              `json:"request_id"`
 	DebugAvailable    bool                                `json:"debug_available"`
+	FusionStrategy    string                              `json:"fusion_strategy,omitempty"`
+	RRFK              int                                 `json:"rrf_k,omitempty"`
 	KBIDs             []uint64                            `json:"kb_ids,omitempty"`
 	OriginalQuery     string                              `json:"original_query,omitempty"`
 	RewrittenQuery    string                              `json:"rewritten_query,omitempty"`
@@ -148,6 +150,21 @@ func buildRetrievalDebugTraceResponse(
 	response := retrievalDebugTraceResponse{
 		RequestID:      fallbackRequestID(logEntry),
 		DebugAvailable: debugTrace != nil,
+		FusionStrategy: firstNonEmptyString(searchMetrics.FusionStrategy, func() string {
+			if logEntry != nil {
+				return strings.TrimSpace(logEntry.FusionStrategy)
+			}
+			return ""
+		}()),
+		RRFK: func() int {
+			if searchMetrics.RRFK > 0 {
+				return searchMetrics.RRFK
+			}
+			if logEntry != nil {
+				return logEntry.RRFK
+			}
+			return 0
+		}(),
 		KBIDs:          parseKBIDs(logEntry),
 		OriginalQuery:  firstNonEmptyString(searchMetrics.OriginalQuery, logQuery(logEntry)),
 		RewrittenQuery: firstNonEmptyString(searchMetrics.RewriteQuery, logRewrite(logEntry)),

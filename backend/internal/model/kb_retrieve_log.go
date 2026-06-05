@@ -40,6 +40,8 @@ type (
 		ExperimentID           string               `json:"experiment_id" gorm:"size:128;index"`
 		ExperimentGroup        string               `json:"experiment_group" gorm:"size:32;index"`
 		StrategyVersion        string               `json:"strategy_version" gorm:"size:128;index"`
+		FusionStrategy         string               `json:"fusion_strategy" gorm:"size:32;index"`
+		RRFK                   int                  `json:"rrf_k"`
 		IndexVersion           string               `json:"index_version" gorm:"size:128"`
 		CollectionVersion      string               `json:"collection_version" gorm:"size:128"`
 		CostTraceID            string               `json:"cost_trace_id" gorm:"size:128;index"`

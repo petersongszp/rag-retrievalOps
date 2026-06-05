@@ -17,6 +17,8 @@ const DenseRetrieverVersion = "phase1-dense-v1"
 type SearchMetrics struct {
 	ExperimentID           string
 	StrategyVersion        string
+	FusionStrategy         string
+	RRFK                   int
 	IndexVersion           string
 	CollectionVersion      string
 	CostTraceID            string

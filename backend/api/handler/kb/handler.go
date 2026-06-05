@@ -276,6 +276,8 @@ type retrieveDebugCitationView struct {
 type retrieveDebugTrace struct {
 	RequestID          string                       `json:"request_id"`
 	Strategy           string                       `json:"strategy,omitempty"`
+	FusionStrategy     string                       `json:"fusion_strategy,omitempty"`
+	RRFK               int                          `json:"rrf_k,omitempty"`
 	ReleaseStage       string                       `json:"release_stage,omitempty"`
 	ReleaseReason      string                       `json:"release_reason,omitempty"`
 	ResultStatus       string                       `json:"result_status,omitempty"`
@@ -1074,6 +1076,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			ExperimentID:           searchResult.Metrics.ExperimentID,
 			ExperimentGroup:        searchResult.Metrics.ExperimentGroup,
 			StrategyVersion:        searchResult.Metrics.StrategyVersion,
+			FusionStrategy:         searchResult.Metrics.FusionStrategy,
+			RRFK:                   searchResult.Metrics.RRFK,
 			IndexVersion:           searchResult.Metrics.IndexVersion,
 			CollectionVersion:      searchResult.Metrics.CollectionVersion,
 			CostTraceID:            searchResult.Metrics.CostTraceID,
@@ -1251,6 +1255,8 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		ExperimentID:           searchMetrics.ExperimentID,
 		ExperimentGroup:        searchMetrics.ExperimentGroup,
 		StrategyVersion:        searchMetrics.StrategyVersion,
+		FusionStrategy:         searchMetrics.FusionStrategy,
+		RRFK:                   searchMetrics.RRFK,
 		IndexVersion:           searchMetrics.IndexVersion,
 		CollectionVersion:      searchMetrics.CollectionVersion,
 		CostTraceID:            searchMetrics.CostTraceID,
@@ -1668,6 +1674,8 @@ func buildRetrieveDebugTrace(
 	if logEntry != nil {
 		trace.RequestID = logEntry.RequestID
 		trace.Strategy = logEntry.Strategy
+		trace.FusionStrategy = logEntry.FusionStrategy
+		trace.RRFK = logEntry.RRFK
 		trace.ReleaseStage = logEntry.ReleaseStage
 		trace.ReleaseReason = logEntry.ReleaseReason
 		trace.ResultStatus = string(logEntry.ResultStatus)

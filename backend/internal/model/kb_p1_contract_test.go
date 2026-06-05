@@ -14,6 +14,8 @@ func TestKBRetrieveLogP1JSONContract(t *testing.T) {
 		"ExperimentID":           "experiment_id",
 		"ExperimentGroup":        "experiment_group",
 		"StrategyVersion":        "strategy_version",
+		"FusionStrategy":         "fusion_strategy",
+		"RRFK":                   "rrf_k",
 		"IndexVersion":           "index_version",
 		"CollectionVersion":      "collection_version",
 		"CostTraceID":            "cost_trace_id",

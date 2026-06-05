@@ -117,10 +117,21 @@ func buildSearcher(cfg *config.Config, manager *milvus.MilvusManager, profile ev
 		if profile.SparseWeight > 0 {
 			sparseWeight = profile.SparseWeight
 		}
+		fusionStrategy := strings.TrimSpace(profile.FusionStrategy)
+		if fusionStrategy == "" {
+			fusionStrategy = cfg.RAG.Phase2.FusionStrategy
+		}
+		rrfK := fallbackInt(profile.RRFK, cfg.RAG.Phase2.RRFK)
+		rrfDenseWeight := fallbackFloat(profile.RRFDenseWeight, cfg.RAG.Phase2.RRFDenseWeight)
+		rrfSparseWeight := fallbackFloat(profile.RRFSparseWeight, cfg.RAG.Phase2.RRFSparseWeight)
 		hybridConfig := &retrieval.HybridRetrieverConfig{
-			CandidateTopK: candidateTopK,
-			DenseWeight:   denseWeight,
-			SparseWeight:  sparseWeight,
+			CandidateTopK:   candidateTopK,
+			FusionStrategy:  fusionStrategy,
+			RRFK:            rrfK,
+			RRFDenseWeight:  rrfDenseWeight,
+			RRFSparseWeight: rrfSparseWeight,
+			DenseWeight:     denseWeight,
+			SparseWeight:    sparseWeight,
 			SparseConfig: &retrieval.SparseRetrieverConfig{
 				DefaultTopK: candidateTopK,
 			},

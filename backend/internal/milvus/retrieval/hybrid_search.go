@@ -65,6 +65,10 @@ type HybridRetriever struct {
 
 type HybridRetrieverConfig struct {
 	CandidateTopK int
+	FusionStrategy string
+	RRFK          int
+	RRFDenseWeight float64
+	RRFSparseWeight float64
 	DenseWeight   float64
 	SparseWeight  float64
 	SparseConfig  *SparseRetrieverConfig
@@ -91,6 +95,18 @@ func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConf
 	}
 	if config.SparseWeight <= 0 {
 		config.SparseWeight = 0.3
+	}
+	if strings.TrimSpace(config.FusionStrategy) == "" {
+		config.FusionStrategy = "minmax_v1"
+	}
+	if config.RRFK <= 0 {
+		config.RRFK = 60
+	}
+	if config.RRFDenseWeight <= 0 {
+		config.RRFDenseWeight = config.DenseWeight
+	}
+	if config.RRFSparseWeight <= 0 {
+		config.RRFSparseWeight = config.SparseWeight
 	}
 
 	sparseRetriever, err := NewSparseRetriever(retriever.client, retriever.config.Collection, config.SparseConfig)
@@ -376,9 +392,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				FinalTopK:             0,
 				TokenBudget:           topKDecision.TokenBudget,
 				TruncateReason:        topKDecision.TruncateReason,
-				Strategy:              "phase2",
-				RetrieverVersion:      HybridRetrieverVersion,
-				RewriteStrategy:       req.RewriteStrategy,
+			Strategy:              "phase2",
+			RetrieverVersion:      HybridRetrieverVersion,
+			FusionStrategy:        h.config.FusionStrategy,
+			RRFK:                  h.config.RRFK,
+			RewriteStrategy:       req.RewriteStrategy,
 				RewriteApplied:        req.RewriteApplied,
 				OriginalQuery:         req.OriginalQuery,
 				RewriteQuery:          req.RewriteQuery,
@@ -413,8 +431,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	fusionBefore := append(append([]*schema.Document(nil), denseDocs...), sparseDocs...)
 	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
-		DenseWeight:  h.config.DenseWeight,
-		SparseWeight: h.config.SparseWeight,
+		FusionStrategy: h.config.FusionStrategy,
+		RRFK:           h.config.RRFK,
+		DenseWeight:    h.config.DenseWeight,
+		SparseWeight:   h.config.SparseWeight,
+		RRFDenseWeight: h.config.RRFDenseWeight,
+		RRFSparseWeight: h.config.RRFSparseWeight,
 	})
 	debugTrace.Fusion = FusionDebugInfo{
 		Before: SnapshotDocuments(fusionBefore),
@@ -659,6 +681,8 @@ func (h *HybridRetriever) buildHybridResultMetrics(
 			TruncateReason:        topKDecision.TruncateReason,
 			Strategy:              resolveRetrieveStrategy(h.parentChild),
 			RetrieverVersion:      HybridRetrieverVersion,
+			FusionStrategy:        h.config.FusionStrategy,
+			RRFK:                  h.config.RRFK,
 			RewriteStrategy:       req.RewriteStrategy,
 			RewriteApplied:        req.RewriteApplied,
 			OriginalQuery:         req.OriginalQuery,

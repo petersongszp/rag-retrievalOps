@@ -123,13 +123,14 @@ func (r *Runner) Run(ctx context.Context, dataset []DatasetCase, profiles []Stra
 	}
 
 	report := &Report{
-		DatasetSize:  len(dataset),
-		GeneratedAt:  time.Now(),
-		Results:      results,
-		Contribution: buildContribution(results),
-		Comparison:   buildComparison(*baseline, *candidate),
-		Baseline:     baseline.Strategy.Name,
-		Candidate:    candidate.Strategy.Name,
+		DatasetSize:    len(dataset),
+		GeneratedAt:    time.Now(),
+		FusionStrategy: resolveReportFusionStrategy(*baseline, *candidate),
+		Results:        results,
+		Contribution:   buildContribution(results),
+		Comparison:     buildComparison(*baseline, *candidate),
+		Baseline:       baseline.Strategy.Name,
+		Candidate:      candidate.Strategy.Name,
 	}
 	report.Gate = EvaluateGate(report.Comparison, thresholds)
 	return report, nil
@@ -145,7 +146,9 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 		prev := results[i-1]
 		deltas = append(deltas, StrategyDelta{
 			Strategy:                  current.Strategy.Name,
+			FusionStrategy:            current.Strategy.FusionStrategy,
 			ComparedTo:                prev.Strategy.Name,
+			ComparedToFusionStrategy:  prev.Strategy.FusionStrategy,
 			RecallDelta:               current.Metrics.RecallAtK - prev.Metrics.RecallAtK,
 			MRRDelta:                  current.Metrics.MRR - prev.Metrics.MRR,
 			NDCGDelta:                 current.Metrics.NDCG - prev.Metrics.NDCG,
@@ -176,6 +179,8 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 	return ComparisonSummary{
 		Baseline:                     baseline.Strategy.Name,
 		Candidate:                    candidate.Strategy.Name,
+		BaselineFusionStrategy:       baseline.Strategy.FusionStrategy,
+		CandidateFusionStrategy:      candidate.Strategy.FusionStrategy,
 		RecallDelta:                  candidate.Metrics.RecallAtK - baseline.Metrics.RecallAtK,
 		MRRDelta:                     candidate.Metrics.MRR - baseline.Metrics.MRR,
 		NDCGDelta:                    candidate.Metrics.NDCG - baseline.Metrics.NDCG,
@@ -200,6 +205,13 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 		P95LatencyDeltaRatio:         ratio,
 		CandidateModelRewrite:        candidate.Strategy.EnableModelAssistedRewrite,
 	}
+}
+
+func resolveReportFusionStrategy(baseline, candidate StrategyResult) string {
+	if candidate.Strategy.FusionStrategy != "" {
+		return candidate.Strategy.FusionStrategy
+	}
+	return baseline.Strategy.FusionStrategy
 }
 
 func expectsRefusal(item DatasetCase) bool {
