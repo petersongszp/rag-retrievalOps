@@ -153,6 +153,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   }, [jobs, refreshJobs]);
 
   const uploadProps: UploadProps = {
+    multiple: true,
     fileList,
     beforeUpload: () => false,
     onChange: ({ fileList: nextFileList }) => setFileList(nextFileList),
