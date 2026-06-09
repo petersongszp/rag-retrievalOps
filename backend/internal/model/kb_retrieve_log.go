@@ -40,6 +40,8 @@ type (
 		ExperimentID           string               `json:"experiment_id" gorm:"size:128;index"`
 		ExperimentGroup        string               `json:"experiment_group" gorm:"size:32;index"`
 		StrategyVersion        string               `json:"strategy_version" gorm:"size:128;index"`
+		FusionStrategy         string               `json:"fusion_strategy" gorm:"size:32;index"`
+		RRFK                   int                  `json:"rrf_k"`
 		IndexVersion           string               `json:"index_version" gorm:"size:128"`
 		CollectionVersion      string               `json:"collection_version" gorm:"size:128"`
 		CostTraceID            string               `json:"cost_trace_id" gorm:"size:128;index"`
@@ -87,8 +89,15 @@ type (
 		TruncatedCount         int                  `json:"truncated_count"`
 		DenseHits              int                  `json:"dense_hits"`
 		SparseHits             int                  `json:"sparse_hits"`
+		DenseParticipation     int                  `json:"dense_participation"`
+		SparseParticipation    int                  `json:"sparse_participation"`
+		PrimaryDenseCount      int                  `json:"primary_dense_count"`
+		PrimarySparseCount     int                  `json:"primary_sparse_count"`
+		DualRouteFinalCount    int                  `json:"dual_route_final_count"`
 		DenseContribution      int                  `json:"dense_contribution"`
 		SparseContribution     int                  `json:"sparse_contribution"`
+		SparseCandidateBefore  int                  `json:"sparse_candidate_before_bm25"`
+		SparseCandidateAfter   int                  `json:"sparse_candidate_after_bm25"`
 		ResultStatus           RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
 		ErrorCode              string               `json:"error_code" gorm:"size:64"`
 		ErrorMsg               string               `json:"error_msg" gorm:"size:1000"`
