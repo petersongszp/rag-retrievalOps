@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math"
 	"strings"
 	"time"
 
@@ -25,7 +27,7 @@ type batchingEmbedder struct {
 }
 
 // NewEmbeddingService 根据配置中的 Provider 字段创建对应的 Embedding 服务
-// 支持: ark (火山引擎), openai (OpenAI 及兼容接口), ollama (本地)
+// 支持: ark (火山引擎), openai (OpenAI 及兼容接口), mock (本地测试)
 func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*EmbeddingService, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding config is nil")
@@ -40,6 +42,8 @@ func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*Emb
 	switch cfg.Provider {
 	case "ark":
 		embedder, err = newArkEmbedder(ctx, cfg)
+	case "mock":
+		embedder, err = newMockEmbedder(cfg)
 	case "openai", "":
 		// openai 兼容接口，也是默认值
 		// 国内大多数 API (DashScope/阿里云、智谱、百度千帆等) 均兼容 OpenAI 接口
@@ -123,6 +127,48 @@ func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedd
 		User:       user,
 	}
 	return einoopenai.NewEmbedder(ctx, openaiCfg)
+}
+
+type mockEmbedder struct {
+	dimensions int
+}
+
+func newMockEmbedder(cfg *config.EmbeddingConfig) (embedding.Embedder, error) {
+	dimensions := cfg.Dimensions
+	if dimensions <= 0 {
+		dimensions = 256
+	}
+	return &mockEmbedder{dimensions: dimensions}, nil
+}
+
+func (m *mockEmbedder) EmbedStrings(_ context.Context, texts []string, _ ...embedding.Option) ([][]float64, error) {
+	if m == nil || m.dimensions <= 0 {
+		return nil, fmt.Errorf("mock embedder is not initialized")
+	}
+
+	result := make([][]float64, 0, len(texts))
+	for _, text := range texts {
+		result = append(result, buildMockEmbedding(text, m.dimensions))
+	}
+	return result, nil
+}
+
+func buildMockEmbedding(text string, dimensions int) []float64 {
+	vector := make([]float64, dimensions)
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return vector
+	}
+
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(trimmed))
+	seed := float64(hasher.Sum64()%104729 + 1)
+
+	for i := 0; i < dimensions; i++ {
+		angle := seed*float64(i+1) + float64(len(trimmed))
+		vector[i] = math.Sin(angle/97.0) + math.Cos(angle/57.0)
+	}
+	return vector
 }
 
 // EmbedBatch 批量将文本转换为向量

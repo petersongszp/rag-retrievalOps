@@ -132,4 +132,7 @@ export const KB_ADMIN_API = {
 
   LIST_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates`,
   CHECK_GOVERNANCE_GATES: `${API_BASE_URL}/admin/kb/governance/gates/check`,
+
+  SEMANTIC_CACHE_GATE: `${API_BASE_URL}/admin/kb/semantic-cache/gate`,
+  SEMANTIC_CACHE_ACCEPTANCE: `${API_BASE_URL}/admin/kb/semantic-cache/acceptance`,
 };

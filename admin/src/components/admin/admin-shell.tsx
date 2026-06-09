@@ -16,6 +16,7 @@ import {
   InboxOutlined,
   LockOutlined,
   LogoutOutlined,
+  SafetyCertificateOutlined,
   SettingOutlined,
   UserOutlined,
   WalletOutlined,
@@ -143,6 +144,12 @@ const navItems: NavItem[] = [
     icon: <InboxOutlined />,
     children: [{ key: '/reports/weekly', label: '周报', href: '/reports/weekly' }],
   },
+  {
+    key: '/semantic-cache',
+    label: '语义缓存',
+    href: '/semantic-cache',
+    icon: <SafetyCertificateOutlined />,
+  },
 ];
 
 function getSelectedNavKey(pathname: string): string {
@@ -190,6 +197,9 @@ function getSelectedNavKey(pathname: string): string {
   }
   if (pathname.startsWith('/reports/weekly')) {
     return '/reports/weekly';
+  }
+  if (pathname.startsWith('/semantic-cache')) {
+    return '/semantic-cache';
   }
   if (pathname.startsWith('/quality-monitor')) {
     return '/quality-monitor';
@@ -426,6 +436,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
     }
     if (pathname.startsWith('/reports/weekly')) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '报告' }, { title: '周报' }];
+    }
+    if (pathname.startsWith('/semantic-cache')) {
+      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '语义缓存' }];
     }
 
     return [{ title: '概览' }];

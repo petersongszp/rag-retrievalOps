@@ -12,6 +12,8 @@ func ScopeKey(scope Scope) (string, error) {
 	if err := normalized.Validate(); err != nil {
 		return "", err
 	}
+	// scopeKey 代表一组“同边界候选集”。
+	// 后续会在 Redis 的有序集合里维护这个 scope 下最近写入的 entry_id。
 	return fmt.Sprintf(
 		"%s:scope:t%d:k%s:s%s:q%s",
 		KeyPrefix,
@@ -28,6 +30,16 @@ func EntryKey(entryID string) (string, error) {
 		return "", fmt.Errorf("entry_id must not be empty")
 	}
 	return fmt.Sprintf("%s:entry:%s", KeyPrefix, token), nil
+}
+
+func KnowledgeBaseScopeIndexKey(tenantID uint64, kbID uint64) (string, error) {
+	if tenantID == 0 {
+		return "", fmt.Errorf("tenant_id must be > 0")
+	}
+	if kbID == 0 {
+		return "", fmt.Errorf("kb_id must be > 0")
+	}
+	return fmt.Sprintf("%s:kb_scope_index:t%d:k%d", KeyPrefix, tenantID, kbID), nil
 }
 
 func BuildEntryID(scope Scope, query string, topK int) (string, error) {
@@ -50,6 +62,8 @@ func BuildEntryID(scope Scope, query string, topK int) (string, error) {
 		topK,
 		strings.TrimSpace(query),
 	)
+	// 用 scope + query + top_k 做稳定哈希，
+	// 这样相同边界下的相同问题会得到同一个 entry_id。
 	sum := sha1.Sum([]byte(base))
 	return hex.EncodeToString(sum[:]), nil
 }

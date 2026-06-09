@@ -35,79 +35,85 @@ type KBRetrieveLogListFilter struct {
 type (
 	_KBRetrieveLog struct{}
 	KBRetrieveLog  struct {
-		ID                     uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
-		RequestID              string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
-		ExperimentID           string               `json:"experiment_id" gorm:"size:128;index"`
-		ExperimentGroup        string               `json:"experiment_group" gorm:"size:32;index"`
-		StrategyVersion        string               `json:"strategy_version" gorm:"size:128;index"`
-		IndexVersion           string               `json:"index_version" gorm:"size:128"`
-		CollectionVersion      string               `json:"collection_version" gorm:"size:128"`
-		CostTraceID            string               `json:"cost_trace_id" gorm:"size:128;index"`
-		AuditTraceID           string               `json:"audit_trace_id" gorm:"size:128;index"`
-		ReleaseID              string               `json:"release_id" gorm:"size:128;index"`
-		UserID                 uint                 `json:"user_id" gorm:"index;not null"`
-		KBIDs                  string               `json:"kb_ids" gorm:"size:500"`
-		Query                  string               `json:"query" gorm:"size:2000;not null"`
-		FinalQuery             string               `json:"final_query" gorm:"size:2000"`
-		Expr                   string               `json:"expr" gorm:"size:2000"`
-		TopK                   int                  `json:"top_k"`
-		CandidateTopK          int                  `json:"candidate_topk"`
-		FinalTopK              int                  `json:"final_topk"`
-		TokenBudget            int                  `json:"token_budget"`
-		ContextTokens          int                  `json:"context_tokens"`
-		QueryType              string               `json:"query_type" gorm:"size:64;index"`
-		TruncateReason         string               `json:"truncate_reason" gorm:"size:64"`
-		Rewrite                string               `json:"rewrite" gorm:"size:1000"`
-		RewriteStrategy        string               `json:"rewrite_strategy" gorm:"size:255"`
-		RewriteApplied         bool                 `json:"rewrite_applied"`
-		Strategy               string               `json:"strategy" gorm:"size:20;index"`
-		ReleaseStage           string               `json:"release_stage" gorm:"size:32;index"`
-		ReleaseReason          string               `json:"release_reason" gorm:"size:255"`
-		Routes                 string               `json:"routes" gorm:"size:200"`
-		Collection             string               `json:"collection" gorm:"size:200"`
-		RetrieverVersion       string               `json:"retriever_version" gorm:"size:50"`
-		EmptyReason            string               `json:"empty_reason" gorm:"size:64;index"`
-		ParentChildEnabled     bool                 `json:"parent_child_enabled"`
-		ParentFillStrategy     string               `json:"parent_fill_strategy" gorm:"size:64"`
-		ParentFillCount        int                  `json:"parent_fill_count"`
-		ParentFillFallback     int                  `json:"parent_fill_fallback"`
-		ParentFillTokens       int                  `json:"parent_fill_tokens"`
-		TopKDecisionReason     string               `json:"topk_decision_reason" gorm:"size:255"`
-		EvidenceGateResult     string               `json:"evidence_gate_result" gorm:"size:32;index"`
-		RefusalReason          string               `json:"refusal_reason" gorm:"size:64;index"`
-		CitationSupported      bool                 `json:"citation_supported"`
-		CitationSupportScore   float64              `json:"citation_support_score"`
-		RewriteGainBucket      string               `json:"rewrite_gain_bucket" gorm:"size:64;index"`
-		UnsupportedClaimCount  int                  `json:"unsupported_claim_count"`
-		CitationCheckVersion   string               `json:"citation_check_version" gorm:"size:64"`
-		CitationCheckLatencyMs int64                `json:"citation_check_latency_ms"`
-		EvidenceGateError      string               `json:"evidence_gate_error" gorm:"size:500"`
-		CitationCheckError     string               `json:"citation_check_error" gorm:"size:500"`
-		FinalCount             int                  `json:"final_count"`
-		TruncatedCount         int                  `json:"truncated_count"`
-		DenseHits              int                  `json:"dense_hits"`
-		SparseHits             int                  `json:"sparse_hits"`
-		DenseContribution      int                  `json:"dense_contribution"`
-		SparseContribution     int                  `json:"sparse_contribution"`
-		ResultStatus           RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
-		ErrorCode              string               `json:"error_code" gorm:"size:64"`
-		ErrorMsg               string               `json:"error_msg" gorm:"size:1000"`
-		EmbeddingMs            int64                `json:"embedding_ms"`
-		SearchMs               int64                `json:"search_ms"`
-		PostprocessMs          int64                `json:"postprocess_ms"`
-		RerankMs               int64                `json:"rerank_ms"`
-		RerankModel            string               `json:"rerank_model" gorm:"size:128"`
-		DurationMs             int64                `json:"duration_ms"`
-		TimeoutMs              int64                `json:"timeout_ms"`
-		DebugTrace             string               `json:"-" gorm:"type:longtext"`
-		TenantID               uint64               `json:"tenant_id" gorm:"index"`
-		AppID                  string               `json:"app_id" gorm:"index;size:64"`
-		APIKeyID               uint64               `json:"api_key_id" gorm:"index"`
-		AuthType               string               `json:"auth_type" gorm:"index;size:32"`
-		SourceAPI              string               `json:"source_api" gorm:"size:32"`
-		PermissionResult       string               `json:"permission_result" gorm:"index;size:32"`
-		IsLegacy               bool                 `json:"is_legacy"`
-		CreatedAt              time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
+		ID                      uint64               `json:"id" gorm:"primaryKey;autoIncrement"`
+		RequestID               string               `json:"request_id" gorm:"uniqueIndex;size:64;not null"`
+		ExperimentID            string               `json:"experiment_id" gorm:"size:128;index"`
+		ExperimentGroup         string               `json:"experiment_group" gorm:"size:32;index"`
+		StrategyVersion         string               `json:"strategy_version" gorm:"size:128;index"`
+		IndexVersion            string               `json:"index_version" gorm:"size:128"`
+		CollectionVersion       string               `json:"collection_version" gorm:"size:128"`
+		CostTraceID             string               `json:"cost_trace_id" gorm:"size:128;index"`
+		AuditTraceID            string               `json:"audit_trace_id" gorm:"size:128;index"`
+		ReleaseID               string               `json:"release_id" gorm:"size:128;index"`
+		UserID                  uint                 `json:"user_id" gorm:"index;not null"`
+		KBIDs                   string               `json:"kb_ids" gorm:"size:500"`
+		Query                   string               `json:"query" gorm:"size:2000;not null"`
+		FinalQuery              string               `json:"final_query" gorm:"size:2000"`
+		Expr                    string               `json:"expr" gorm:"size:2000"`
+		TopK                    int                  `json:"top_k"`
+		CandidateTopK           int                  `json:"candidate_topk"`
+		FinalTopK               int                  `json:"final_topk"`
+		TokenBudget             int                  `json:"token_budget"`
+		ContextTokens           int                  `json:"context_tokens"`
+		QueryType               string               `json:"query_type" gorm:"size:64;index"`
+		TruncateReason          string               `json:"truncate_reason" gorm:"size:64"`
+		Rewrite                 string               `json:"rewrite" gorm:"size:1000"`
+		RewriteStrategy         string               `json:"rewrite_strategy" gorm:"size:255"`
+		RewriteApplied          bool                 `json:"rewrite_applied"`
+		Strategy                string               `json:"strategy" gorm:"size:20;index"`
+		ReleaseStage            string               `json:"release_stage" gorm:"size:32;index"`
+		ReleaseReason           string               `json:"release_reason" gorm:"size:255"`
+		Routes                  string               `json:"routes" gorm:"size:200"`
+		Collection              string               `json:"collection" gorm:"size:200"`
+		RetrieverVersion        string               `json:"retriever_version" gorm:"size:50"`
+		EmptyReason             string               `json:"empty_reason" gorm:"size:64;index"`
+		ParentChildEnabled      bool                 `json:"parent_child_enabled"`
+		ParentFillStrategy      string               `json:"parent_fill_strategy" gorm:"size:64"`
+		ParentFillCount         int                  `json:"parent_fill_count"`
+		ParentFillFallback      int                  `json:"parent_fill_fallback"`
+		ParentFillTokens        int                  `json:"parent_fill_tokens"`
+		TopKDecisionReason      string               `json:"topk_decision_reason" gorm:"size:255"`
+		EvidenceGateResult      string               `json:"evidence_gate_result" gorm:"size:32;index"`
+		RefusalReason           string               `json:"refusal_reason" gorm:"size:64;index"`
+		CitationSupported       bool                 `json:"citation_supported"`
+		CitationSupportScore    float64              `json:"citation_support_score"`
+		RewriteGainBucket       string               `json:"rewrite_gain_bucket" gorm:"size:64;index"`
+		UnsupportedClaimCount   int                  `json:"unsupported_claim_count"`
+		CitationCheckVersion    string               `json:"citation_check_version" gorm:"size:64"`
+		CitationCheckLatencyMs  int64                `json:"citation_check_latency_ms"`
+		EvidenceGateError       string               `json:"evidence_gate_error" gorm:"size:500"`
+		CitationCheckError      string               `json:"citation_check_error" gorm:"size:500"`
+		SemanticCacheEnabled    bool                 `json:"semantic_cache_enabled"`
+		SemanticCacheHit        bool                 `json:"semantic_cache_hit"`
+		SemanticCacheLookupMs   int64                `json:"semantic_cache_lookup_ms"`
+		SemanticCacheSimilarity float64              `json:"semantic_cache_similarity"`
+		SemanticCacheEntryID    string               `json:"semantic_cache_entry_id" gorm:"size:128"`
+		SemanticCacheReason     string               `json:"semantic_cache_reason" gorm:"size:64;index"`
+		FinalCount              int                  `json:"final_count"`
+		TruncatedCount          int                  `json:"truncated_count"`
+		DenseHits               int                  `json:"dense_hits"`
+		SparseHits              int                  `json:"sparse_hits"`
+		DenseContribution       int                  `json:"dense_contribution"`
+		SparseContribution      int                  `json:"sparse_contribution"`
+		ResultStatus            RetrieveResultStatus `json:"result_status" gorm:"size:20;not null;default:'success';index"`
+		ErrorCode               string               `json:"error_code" gorm:"size:64"`
+		ErrorMsg                string               `json:"error_msg" gorm:"size:1000"`
+		EmbeddingMs             int64                `json:"embedding_ms"`
+		SearchMs                int64                `json:"search_ms"`
+		PostprocessMs           int64                `json:"postprocess_ms"`
+		RerankMs                int64                `json:"rerank_ms"`
+		RerankModel             string               `json:"rerank_model" gorm:"size:128"`
+		DurationMs              int64                `json:"duration_ms"`
+		TimeoutMs               int64                `json:"timeout_ms"`
+		DebugTrace              string               `json:"-" gorm:"type:longtext"`
+		TenantID                uint64               `json:"tenant_id" gorm:"index"`
+		AppID                   string               `json:"app_id" gorm:"index;size:64"`
+		APIKeyID                uint64               `json:"api_key_id" gorm:"index"`
+		AuthType                string               `json:"auth_type" gorm:"index;size:32"`
+		SourceAPI               string               `json:"source_api" gorm:"size:32"`
+		PermissionResult        string               `json:"permission_result" gorm:"index;size:32"`
+		IsLegacy                bool                 `json:"is_legacy"`
+		CreatedAt               time.Time            `json:"created_at" gorm:"autoCreateTime:milli;index"`
 	}
 )
 

@@ -94,3 +94,32 @@ func TestBuildCostTimeseriesResponseBucketsQueries(t *testing.T) {
 		t.Fatalf("AvgCandidateCount = %v, want 15", items[1].AvgCandidateCount)
 	}
 }
+
+func TestBuildRetrieveCostTraceMarksSemanticCacheSavings(t *testing.T) {
+	logEntry := &model.KBRetrieveLog{
+		RequestID:           "req-cache",
+		KBIDs:               "7",
+		UserID:              3,
+		CandidateTopK:       8,
+		FinalTopK:           4,
+		FinalCount:          4,
+		DenseHits:           4,
+		SparseHits:          2,
+		ContextTokens:       200,
+		SemanticCacheHit:    true,
+		SemanticCacheReason: "hit",
+		StrategyVersion:     "phase4",
+		QueryType:           "general",
+	}
+
+	trace := buildRetrieveCostTrace(logEntry)
+	if trace == nil {
+		t.Fatal("buildRetrieveCostTrace() = nil")
+	}
+	if trace.RetrievalCost != 0 || trace.RerankCost != 0 {
+		t.Fatalf("expected actual retrieval/rerank cost to be zero on cache hit, got retrieval=%v rerank=%v", trace.RetrievalCost, trace.RerankCost)
+	}
+	if trace.CacheSavedRetrievalCost <= 0 || trace.CacheSavedRerankCost <= 0 {
+		t.Fatalf("expected saved cost to be recorded, got %+v", trace)
+	}
+}

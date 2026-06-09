@@ -15,18 +15,23 @@ import (
 var (
 	registerOnce sync.Once
 
-	retrieveRequestsTotal *prometheus.CounterVec
-	retrieveDuration      *prometheus.HistogramVec
-	retrieveResultCount   prometheus.Histogram
-	retrieveRouteRequests *prometheus.CounterVec
-	retrieveRouteDuration *prometheus.HistogramVec
-	retrieveRouteHits     *prometheus.HistogramVec
-	retrieveStrategyTotal *prometheus.CounterVec
-	retrieveEmptyReason   *prometheus.CounterVec
-	retrieveRewriteTotal  *prometheus.CounterVec
-	retrieveRerankLatency *prometheus.HistogramVec
-	retrieveRouteContrib  *prometheus.CounterVec
-	releaseRollbackTotal  *prometheus.CounterVec
+	retrieveRequestsTotal           *prometheus.CounterVec
+	retrieveDuration                *prometheus.HistogramVec
+	retrieveResultCount             prometheus.Histogram
+	retrieveRouteRequests           *prometheus.CounterVec
+	retrieveRouteDuration           *prometheus.HistogramVec
+	retrieveRouteHits               *prometheus.HistogramVec
+	retrieveStrategyTotal           *prometheus.CounterVec
+	retrieveEmptyReason             *prometheus.CounterVec
+	retrieveRewriteTotal            *prometheus.CounterVec
+	retrieveRerankLatency           *prometheus.HistogramVec
+	retrieveRouteContrib            *prometheus.CounterVec
+	releaseRollbackTotal            *prometheus.CounterVec
+	semanticCacheRequests           *prometheus.CounterVec
+	semanticCacheLookup             *prometheus.HistogramVec
+	semanticCacheSimilarity         prometheus.Histogram
+	semanticCacheSavedRetrievalCost prometheus.Counter
+	semanticCacheSavedRerankCost    prometheus.Counter
 
 	ingestJobsTotal *prometheus.CounterVec
 	ingestDuration  *prometheus.HistogramVec
@@ -132,6 +137,40 @@ func registerCollectors() {
 			},
 			[]string{"action", "target_stage"},
 		)
+		semanticCacheRequests = prometheus.NewCounterVec(
+			prometheus.CounterOpts{
+				Name: "rag_semantic_cache_requests_total",
+				Help: "Semantic cache lookup outcomes by enabled status, hit status and reason.",
+			},
+			[]string{"enabled", "hit", "reason"},
+		)
+		semanticCacheLookup = prometheus.NewHistogramVec(
+			prometheus.HistogramOpts{
+				Name:    "rag_semantic_cache_lookup_duration_seconds",
+				Help:    "Semantic cache lookup latency in seconds.",
+				Buckets: []float64{0.0005, 0.001, 0.003, 0.005, 0.01, 0.02, 0.05, 0.1, 0.2},
+			},
+			[]string{"enabled", "hit"},
+		)
+		semanticCacheSimilarity = prometheus.NewHistogram(
+			prometheus.HistogramOpts{
+				Name:    "rag_semantic_cache_similarity",
+				Help:    "Semantic cache similarity distribution for best matched candidates.",
+				Buckets: []float64{0.5, 0.7, 0.8, 0.85, 0.9, 0.93, 0.95, 0.97, 0.99, 1},
+			},
+		)
+		semanticCacheSavedRetrievalCost = prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "rag_semantic_cache_saved_retrieval_cost_total",
+				Help: "Estimated retrieval cost saved by semantic cache hits.",
+			},
+		)
+		semanticCacheSavedRerankCost = prometheus.NewCounter(
+			prometheus.CounterOpts{
+				Name: "rag_semantic_cache_saved_rerank_cost_total",
+				Help: "Estimated rerank cost saved by semantic cache hits.",
+			},
+		)
 		ingestJobsTotal = prometheus.NewCounterVec(
 			prometheus.CounterOpts{
 				Name: "rag_ingest_jobs_total",
@@ -189,6 +228,11 @@ func registerCollectors() {
 			retrieveRerankLatency,
 			retrieveRouteContrib,
 			releaseRollbackTotal,
+			semanticCacheRequests,
+			semanticCacheLookup,
+			semanticCacheSimilarity,
+			semanticCacheSavedRetrievalCost,
+			semanticCacheSavedRerankCost,
 			ingestJobsTotal,
 			ingestDuration,
 			errorTotal,
@@ -288,6 +332,37 @@ func ObserveReleaseRollback(action, targetStage string) {
 		sanitizeLabel(action, "unknown"),
 		sanitizeLabel(targetStage, "unknown"),
 	).Inc()
+}
+
+func ObserveSemanticCacheLookup(enabled, hit bool, reason string, duration time.Duration, similarity float64) {
+	registerCollectors()
+	enabledLabel := "false"
+	if enabled {
+		enabledLabel = "true"
+	}
+	hitLabel := "false"
+	if hit {
+		hitLabel = "true"
+	}
+	semanticCacheRequests.WithLabelValues(
+		enabledLabel,
+		hitLabel,
+		sanitizeLabel(reason, "none"),
+	).Inc()
+	semanticCacheLookup.WithLabelValues(enabledLabel, hitLabel).Observe(duration.Seconds())
+	if similarity > 0 {
+		semanticCacheSimilarity.Observe(similarity)
+	}
+}
+
+func ObserveSemanticCacheSavedCost(retrievalCost, rerankCost float64) {
+	registerCollectors()
+	if retrievalCost > 0 {
+		semanticCacheSavedRetrievalCost.Add(retrievalCost)
+	}
+	if rerankCost > 0 {
+		semanticCacheSavedRerankCost.Add(rerankCost)
+	}
 }
 
 func ObserveIngest(duration time.Duration, status, errorCode string) {

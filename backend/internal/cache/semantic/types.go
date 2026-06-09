@@ -13,6 +13,8 @@ const (
 	ResultPayloadTag = "retrieve_result_only"
 )
 
+// Scope 决定“哪些请求可以共享同一片缓存池”。
+// 这里不是 query 本身，而是缓存的隔离边界。
 type Scope struct {
 	TenantID        uint64
 	KBIDs           []uint64
@@ -20,6 +22,8 @@ type Scope struct {
 	QueryType       string
 }
 
+// Entry 是 Redis 中真正存储的一条语义缓存记录。
+// 你可以把它理解成“一次历史检索结果的快照”。
 type Entry struct {
 	EntryID          string          `json:"entry_id"`
 	TenantID         uint64          `json:"tenant_id"`
@@ -46,6 +50,7 @@ type LookupResult struct {
 }
 
 func (s Scope) Normalize() Scope {
+	// 先排序再去重，是为了让 [1,2] 和 [2,1] 这种等价 scope 生成同一组 key。
 	normalized := Scope{
 		TenantID:        s.TenantID,
 		KBIDs:           append([]uint64(nil), s.KBIDs...),
@@ -107,6 +112,7 @@ func (e *Entry) Validate() error {
 	if e.ResultPayload == "" {
 		e.ResultPayload = ResultPayloadTag
 	}
+	// 当前阶段只允许缓存 retrieve 结果，不缓存最终 LLM answer。
 	if e.ResultPayload != ResultPayloadTag {
 		return fmt.Errorf("unsupported result_payload: %s", e.ResultPayload)
 	}

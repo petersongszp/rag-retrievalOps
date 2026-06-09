@@ -74,7 +74,7 @@ require (
 	github.com/evanphx/json-patch v4.12.0+incompatible // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/getsentry/sentry-go v0.34.0 // indirect
-	github.com/go-sql-driver/mysql v1.9.0 // indirect
+	github.com/go-sql-driver/mysql v1.9.0
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang-jwt/jwt v3.2.2+incompatible // indirect
 	github.com/golang/protobuf v1.5.4 // indirect
@@ -128,3 +128,5 @@ require (
 )
 
 replace github.com/apache/thrift => github.com/apache/thrift v0.13.0
+
+replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20250324211829-b45e905df463

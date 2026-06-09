@@ -15,6 +15,7 @@ type fakeRedis struct {
 	values    map[string]string
 	expiresAt map[string]time.Time
 	zsets     map[string][]redis.Z
+	sets      map[string]map[string]struct{}
 }
 
 func newFakeRedis() *fakeRedis {
@@ -22,6 +23,7 @@ func newFakeRedis() *fakeRedis {
 		values:    make(map[string]string),
 		expiresAt: make(map[string]time.Time),
 		zsets:     make(map[string][]redis.Z),
+		sets:      make(map[string]map[string]struct{}),
 	}
 }
 
@@ -64,6 +66,11 @@ func (f *fakeRedis) Del(ctx context.Context, keys ...string) *redis.IntCmd {
 		}
 		if _, ok := f.zsets[key]; ok {
 			delete(f.zsets, key)
+			delete(f.expiresAt, key)
+			deleted++
+		}
+		if _, ok := f.sets[key]; ok {
+			delete(f.sets, key)
 			delete(f.expiresAt, key)
 			deleted++
 		}
@@ -180,6 +187,79 @@ func (f *fakeRedis) Incr(ctx context.Context, key string) *redis.IntCmd {
 	cmd := redis.NewIntCmd(ctx)
 	cmd.SetVal(1)
 	return cmd
+}
+
+func (f *fakeRedis) SAdd(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	cmd := redis.NewIntCmd(ctx)
+	if _, ok := f.sets[key]; !ok {
+		f.sets[key] = make(map[string]struct{})
+	}
+	var added int64
+	for _, member := range members {
+		token := strings.TrimSpace(memberToString(member))
+		if token == "" {
+			continue
+		}
+		if _, exists := f.sets[key][token]; exists {
+			continue
+		}
+		f.sets[key][token] = struct{}{}
+		added++
+	}
+	cmd.SetVal(added)
+	return cmd
+}
+
+func (f *fakeRedis) SMembers(ctx context.Context, key string) *redis.StringSliceCmd {
+	cmd := redis.NewStringSliceCmd(ctx)
+	set, ok := f.sets[key]
+	if !ok || len(set) == 0 {
+		cmd.SetVal([]string{})
+		return cmd
+	}
+	values := make([]string, 0, len(set))
+	for value := range set {
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	cmd.SetVal(values)
+	return cmd
+}
+
+func (f *fakeRedis) SRem(ctx context.Context, key string, members ...interface{}) *redis.IntCmd {
+	cmd := redis.NewIntCmd(ctx)
+	set, ok := f.sets[key]
+	if !ok || len(set) == 0 {
+		cmd.SetVal(0)
+		return cmd
+	}
+	var removed int64
+	for _, member := range members {
+		token := strings.TrimSpace(memberToString(member))
+		if token == "" {
+			continue
+		}
+		if _, exists := set[token]; exists {
+			delete(set, token)
+			removed++
+		}
+	}
+	if len(set) == 0 {
+		delete(f.sets, key)
+	}
+	cmd.SetVal(removed)
+	return cmd
+}
+
+func memberToString(value interface{}) string {
+	switch v := value.(type) {
+	case string:
+		return v
+	case []byte:
+		return string(v)
+	default:
+		return ""
+	}
 }
 
 func TestScopeKeyNormalizesScope(t *testing.T) {
@@ -359,5 +439,75 @@ func TestStorePutEvictsOldestEntriesWhenScopeIsFull(t *testing.T) {
 	}
 	if result.Candidates[0].Query != "query-C" || result.Candidates[1].Query != "query-B" {
 		t.Fatalf("unexpected candidate order after eviction: %+v", []string{result.Candidates[0].Query, result.Candidates[1].Query})
+	}
+}
+
+func TestStoreDeleteByKnowledgeBaseInvalidatesAllRelatedScopes(t *testing.T) {
+	fake := newFakeRedis()
+	store := NewStore(fake)
+	store.now = func() time.Time {
+		return time.Date(2026, 6, 8, 10, 0, 0, 0, time.UTC)
+	}
+
+	scopeA := Scope{
+		TenantID:        12,
+		KBIDs:           []uint64{1, 2},
+		StrategyVersion: "phase4-semantic-v1",
+		QueryType:       "general",
+	}
+	scopeB := Scope{
+		TenantID:        12,
+		KBIDs:           []uint64{2},
+		StrategyVersion: "phase4-semantic-v1",
+		QueryType:       "general",
+	}
+	entryA := &Entry{
+		TenantID:         12,
+		KBIDs:            []uint64{1, 2},
+		StrategyVersion:  "phase4-semantic-v1",
+		RetrieverVersion: "phase1-dense-v1",
+		QueryType:        "general",
+		Query:            "cache for kb 1+2",
+		QueryEmbedding:   []float32{0.1, 0.2},
+		ResponsePayload:  json.RawMessage(`{"items":[{"content":"doc-a"}]}`),
+		ResultPayload:    ResultPayloadTag,
+		TopK:             5,
+	}
+	entryB := &Entry{
+		TenantID:         12,
+		KBIDs:            []uint64{2},
+		StrategyVersion:  "phase4-semantic-v1",
+		RetrieverVersion: "phase1-dense-v1",
+		QueryType:        "general",
+		Query:            "cache for kb 2",
+		QueryEmbedding:   []float32{0.3, 0.4},
+		ResponsePayload:  json.RawMessage(`{"items":[{"content":"doc-b"}]}`),
+		ResultPayload:    ResultPayloadTag,
+		TopK:             5,
+	}
+	if err := store.Put(context.Background(), scopeA, entryA, 15*time.Minute, 10); err != nil {
+		t.Fatalf("Put scopeA failed: %v", err)
+	}
+	if err := store.Put(context.Background(), scopeB, entryB, 15*time.Minute, 10); err != nil {
+		t.Fatalf("Put scopeB failed: %v", err)
+	}
+
+	if err := store.DeleteByKnowledgeBase(context.Background(), 12, 2); err != nil {
+		t.Fatalf("DeleteByKnowledgeBase failed: %v", err)
+	}
+
+	lookupA, err := store.GetCandidates(context.Background(), scopeA, 5)
+	if err != nil {
+		t.Fatalf("GetCandidates scopeA failed: %v", err)
+	}
+	if lookupA.CandidateCount != 0 {
+		t.Fatalf("scopeA should be empty after KB invalidation, got %d", lookupA.CandidateCount)
+	}
+	lookupB, err := store.GetCandidates(context.Background(), scopeB, 5)
+	if err != nil {
+		t.Fatalf("GetCandidates scopeB failed: %v", err)
+	}
+	if lookupB.CandidateCount != 0 {
+		t.Fatalf("scopeB should be empty after KB invalidation, got %d", lookupB.CandidateCount)
 	}
 }

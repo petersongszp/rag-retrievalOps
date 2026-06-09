@@ -30,6 +30,7 @@ type retrievalDebugTraceResponse struct {
 	FilterResults     retrievalDebugFilterResponse        `json:"filter_results,omitempty"`
 	ParentChild       retrievalDebugParentChildResponse   `json:"parent_child"`
 	TopKDecision      retrievalDebugTopKDecisionResponse  `json:"topk_decision"`
+	SemanticCache     retrievalDebugSemanticCacheResponse `json:"semantic_cache"`
 	EvidenceGate      retrievalDebugEvidenceGateResponse  `json:"evidence_gate"`
 	CitationCheck     retrievalDebugCitationCheckResponse `json:"citation_check"`
 	FinalResults      []retrieveItem                      `json:"final_results,omitempty"`
@@ -96,6 +97,18 @@ type retrievalDebugTopKDecisionResponse struct {
 	TokenBudget          int     `json:"token_budget"`
 	TokenBudgetRemaining int     `json:"token_budget_remaining"`
 	TopKDecisionReason   string  `json:"topk_decision_reason,omitempty"`
+}
+
+type retrievalDebugSemanticCacheResponse struct {
+	Enabled           bool    `json:"enabled"`
+	Hit               bool    `json:"hit"`
+	Reason            string  `json:"reason,omitempty"`
+	EntryID           string  `json:"entry_id,omitempty"`
+	Similarity        float64 `json:"similarity,omitempty"`
+	Threshold         float64 `json:"threshold,omitempty"`
+	CandidateCount    int     `json:"candidate_count"`
+	HighestSimilarity float64 `json:"highest_similarity,omitempty"`
+	LookupMs          int64   `json:"lookup_ms,omitempty"`
 }
 
 type retrievalDebugEvidenceGateResponse struct {
@@ -171,6 +184,49 @@ func buildRetrievalDebugTraceResponse(
 			TokenBudget:          searchMetrics.TokenBudget,
 			TokenBudgetRemaining: searchMetrics.TokenBudgetRemain,
 			TopKDecisionReason:   firstNonEmptyString(searchMetrics.TopKDecisionReason, logTopKReason(logEntry)),
+		},
+		SemanticCache: retrievalDebugSemanticCacheResponse{
+			Enabled: boolValue(
+				searchMetrics.SemanticCacheEnabled,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.SemanticCacheEnabled
+					}
+					return false
+				}(),
+			),
+			Hit: boolValue(
+				searchMetrics.SemanticCacheHit,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.SemanticCacheHit
+					}
+					return false
+				}(),
+			),
+			Reason: firstNonEmptyString(
+				searchMetrics.SemanticCacheReason,
+				func() string {
+					if logEntry != nil {
+						return strings.TrimSpace(logEntry.SemanticCacheReason)
+					}
+					return ""
+				}(),
+			),
+			EntryID: firstNonEmptyString(
+				searchMetrics.SemanticCacheEntryID,
+				func() string {
+					if logEntry != nil {
+						return strings.TrimSpace(logEntry.SemanticCacheEntryID)
+					}
+					return ""
+				}(),
+			),
+			Similarity:        firstNonEmptyFloat(searchMetrics.SemanticCacheSimilarity, logSemanticCacheSimilarity(logEntry)),
+			Threshold:         firstNonEmptyFloat(searchMetrics.SemanticCacheThreshold, config.Global.RAG.SemanticCache.SimilarityThreshold),
+			CandidateCount:    searchMetrics.SemanticCacheCandidateCount,
+			HighestSimilarity: maxFloat64(searchMetrics.SemanticCacheHighestSimilarity, searchMetrics.SemanticCacheSimilarity),
+			LookupMs:          maxInt64(searchMetrics.SemanticCacheLookupMs, logSemanticCacheLookupMs(logEntry)),
 		},
 		EvidenceGate: retrievalDebugEvidenceGateResponse{
 			EvidenceGateResult: searchMetrics.EvidenceGateResult,
@@ -389,6 +445,27 @@ func logRefusalReason(logEntry *model.KBRetrieveLog) string {
 		return ""
 	}
 	return logEntry.RefusalReason
+}
+
+func logSemanticCacheSimilarity(logEntry *model.KBRetrieveLog) float64 {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.SemanticCacheSimilarity
+}
+
+func logSemanticCacheLookupMs(logEntry *model.KBRetrieveLog) int64 {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.SemanticCacheLookupMs
+}
+
+func boolValue(primary bool, fallback bool) bool {
+	if primary {
+		return true
+	}
+	return fallback
 }
 
 func logParentFillStrategy(logEntry *model.KBRetrieveLog) string {
