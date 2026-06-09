@@ -17,6 +17,9 @@ import (
 type costSummaryResponse struct {
 	Range              string    `json:"range"`
 	TotalEstimatedCost *float64  `json:"total_estimated_cost,omitempty"`
+	TotalTokens        *int      `json:"total_tokens,omitempty"`
+	TokensPer1KQueries *float64  `json:"tokens_per_1k_queries,omitempty"`
+	AvgTokensPerQuery  *float64  `json:"avg_tokens_per_query,omitempty"`
 	Currency           string    `json:"currency,omitempty"`
 	CostPer1KQueries   *float64  `json:"cost_per_1k_queries,omitempty"`
 	EmbeddingCost      *float64  `json:"embedding_cost,omitempty"`
@@ -34,6 +37,9 @@ type costSummaryResponse struct {
 type costTimeseriesPointResponse struct {
 	Bucket             time.Time `json:"bucket"`
 	TotalEstimatedCost float64   `json:"total_estimated_cost"`
+	TotalTokens        int       `json:"total_tokens"`
+	TokensPer1KQueries float64   `json:"tokens_per_1k_queries"`
+	AvgTokensPerQuery  float64   `json:"avg_tokens_per_query"`
 	CostPer1KQueries   float64   `json:"cost_per_1k_queries"`
 	EmbeddingCost      float64   `json:"embedding_cost"`
 	LLMCost            float64   `json:"llm_cost"`
@@ -95,6 +101,8 @@ type costQueryFilter struct {
 	modelName       string
 	queryType       string
 }
+
+const defaultCostTimezone = "Asia/Shanghai"
 
 func GetCostSummary(ctx context.Context, c *app.RequestContext) {
 	if !requireAdmin(ctx, c) {
@@ -306,6 +314,7 @@ func buildCostSummaryResponse(rangeName string, traces []*model.KBCostTrace) cos
 	}
 
 	var totalCost float64
+	var totalTokens int
 	var embeddingCost float64
 	var llmCost float64
 	var rerankCost float64
@@ -319,6 +328,7 @@ func buildCostSummaryResponse(rangeName string, traces []*model.KBCostTrace) cos
 			continue
 		}
 		totalCost += trace.TotalCost
+		totalTokens += totalTokensForTrace(trace)
 		embeddingCost += trace.EmbeddingCost
 		llmCost += trace.LLMCost
 		rerankCost += trace.RerankCost
@@ -337,10 +347,15 @@ func buildCostSummaryResponse(rangeName string, traces []*model.KBCostTrace) cos
 	}
 
 	costPer1K := totalCost / float64(count) * 1000
+	tokensPer1K := float64(totalTokens) / float64(count) * 1000
+	avgTokensPerQuery := float64(totalTokens) / float64(count)
 	avgContextTokens := float64(contextTokens) / float64(count)
 	avgCandidateCount := float64(candidateCount) / float64(count)
 
 	resp.TotalEstimatedCost = float64Ptr(totalCost)
+	resp.TotalTokens = intPtr(totalTokens)
+	resp.TokensPer1KQueries = float64Ptr(tokensPer1K)
+	resp.AvgTokensPerQuery = float64Ptr(avgTokensPerQuery)
 	resp.CostPer1KQueries = float64Ptr(costPer1K)
 	resp.EmbeddingCost = float64Ptr(embeddingCost)
 	resp.LLMCost = float64Ptr(llmCost)
@@ -369,6 +384,7 @@ func buildCostTimeseriesResponse(
 
 	type aggregate struct {
 		totalCost         float64
+		totalTokens       int
 		embeddingCost     float64
 		llmCost           float64
 		rerankCost        float64
@@ -388,6 +404,7 @@ func buildCostTimeseriesResponse(
 			continue
 		}
 		aggregates[index].totalCost += trace.TotalCost
+		aggregates[index].totalTokens += totalTokensForTrace(trace)
 		aggregates[index].embeddingCost += trace.EmbeddingCost
 		aggregates[index].llmCost += trace.LLMCost
 		aggregates[index].rerankCost += trace.RerankCost
@@ -402,12 +419,15 @@ func buildCostTimeseriesResponse(
 		item := costTimeseriesPointResponse{
 			Bucket:             startInclusive.Add(time.Duration(i) * bucketSize),
 			TotalEstimatedCost: aggregates[i].totalCost,
+			TotalTokens:        aggregates[i].totalTokens,
 			EmbeddingCost:      aggregates[i].embeddingCost,
 			LLMCost:            aggregates[i].llmCost,
 			RerankCost:         aggregates[i].rerankCost,
 			VectorStorageCost:  aggregates[i].vectorStorageCost,
 		}
 		if aggregates[i].queries > 0 {
+			item.TokensPer1KQueries = float64(aggregates[i].totalTokens) / float64(aggregates[i].queries) * 1000
+			item.AvgTokensPerQuery = float64(aggregates[i].totalTokens) / float64(aggregates[i].queries)
 			item.CostPer1KQueries = aggregates[i].totalCost / float64(aggregates[i].queries) * 1000
 			item.AvgContextTokens = float64(aggregates[i].contextTokens) / float64(aggregates[i].queries)
 			item.AvgCandidateCount = float64(aggregates[i].candidateCount) / float64(aggregates[i].queries)
@@ -472,6 +492,10 @@ func buildCostBreakdownItems(
 }
 
 func resolveCostWindow(c *app.RequestContext) (string, time.Time, time.Time, time.Duration, string, error) {
+	if hasExplicitCostWindowParams(c) {
+		return resolveExplicitCostWindow(c)
+	}
+
 	rangeName := strings.TrimSpace(string(c.Query("range")))
 	if rangeName == "" {
 		rangeName = "24h"
@@ -519,6 +543,106 @@ func resolveCostWindow(c *app.RequestContext) (string, time.Time, time.Time, tim
 	startInclusive := endExclusive.Add(-window)
 	queryEnd := endExclusive.Add(-time.Nanosecond)
 	return rangeName, startInclusive, queryEnd, bucketSize, bucketLabel, nil
+}
+
+func hasExplicitCostWindowParams(c *app.RequestContext) bool {
+	startTimeRaw := strings.TrimSpace(string(c.Query("start_time")))
+	endTimeRaw := strings.TrimSpace(string(c.Query("end_time")))
+	bucketLabel := strings.TrimSpace(string(c.Query("bucket")))
+	return startTimeRaw != "" || endTimeRaw != "" || bucketLabel != ""
+}
+
+func resolveExplicitCostWindow(c *app.RequestContext) (string, time.Time, time.Time, time.Duration, string, error) {
+	startTimeRaw := strings.TrimSpace(string(c.Query("start_time")))
+	endTimeRaw := strings.TrimSpace(string(c.Query("end_time")))
+	bucketLabel := strings.TrimSpace(string(c.Query("bucket")))
+	timezoneName := strings.TrimSpace(string(c.Query("tz")))
+
+	if startTimeRaw == "" || endTimeRaw == "" || bucketLabel == "" {
+		return "", time.Time{}, time.Time{}, 0, "", myerrors.NewValidationError(
+			"start_time, end_time and bucket must be provided together",
+		)
+	}
+
+	location, err := loadCostLocation(timezoneName)
+	if err != nil {
+		return "", time.Time{}, time.Time{}, 0, "", err
+	}
+
+	bucketSize, err := parseCostBucket(bucketLabel)
+	if err != nil {
+		return "", time.Time{}, time.Time{}, 0, "", err
+	}
+
+	startInclusive, err := parseCostWindowTime(startTimeRaw, location)
+	if err != nil {
+		return "", time.Time{}, time.Time{}, 0, "", myerrors.NewValidationError("start_time must be a valid timestamp")
+	}
+
+	queryEnd, err := parseCostWindowTime(endTimeRaw, location)
+	if err != nil {
+		return "", time.Time{}, time.Time{}, 0, "", myerrors.NewValidationError("end_time must be a valid timestamp")
+	}
+
+	if queryEnd.Before(startInclusive) {
+		return "", time.Time{}, time.Time{}, 0, "", myerrors.NewValidationError("end_time must be greater than or equal to start_time")
+	}
+
+	return "custom", startInclusive, queryEnd, bucketSize, bucketLabel, nil
+}
+
+func loadCostLocation(timezoneName string) (*time.Location, error) {
+	if timezoneName == "" {
+		timezoneName = defaultCostTimezone
+	}
+
+	location, err := time.LoadLocation(timezoneName)
+	if err != nil {
+		return nil, myerrors.NewValidationError("tz must be a valid IANA timezone")
+	}
+	return location, nil
+}
+
+func parseCostBucket(bucketLabel string) (time.Duration, error) {
+	switch bucketLabel {
+	case "5m":
+		return 5 * time.Minute, nil
+	case "1h":
+		return time.Hour, nil
+	case "6h":
+		return 6 * time.Hour, nil
+	case "1d":
+		return 24 * time.Hour, nil
+	default:
+		return 0, myerrors.NewValidationError("bucket must be one of 5m, 1h, 6h, 1d")
+	}
+}
+
+func parseCostWindowTime(raw string, location *time.Location) (time.Time, error) {
+	layouts := []string{
+		time.RFC3339Nano,
+		time.RFC3339,
+		"2006-01-02T15:04:05.999999999",
+		"2006-01-02T15:04:05",
+		"2006-01-02",
+	}
+
+	for _, layout := range layouts {
+		var (
+			parsed time.Time
+			err    error
+		)
+		if layout == time.RFC3339Nano || layout == time.RFC3339 {
+			parsed, err = time.Parse(layout, raw)
+		} else {
+			parsed, err = time.ParseInLocation(layout, raw, location)
+		}
+		if err == nil {
+			return parsed, nil
+		}
+	}
+
+	return time.Time{}, myerrors.NewValidationError("invalid timestamp")
 }
 
 func parseCostQueryFilter(c *app.RequestContext) (costQueryFilter, error) {
@@ -579,6 +703,13 @@ func candidateCountForTrace(trace *model.KBCostTrace) int {
 		return trace.RerankCandidateCount
 	}
 	return trace.RetrievalCandidateCount
+}
+
+func totalTokensForTrace(trace *model.KBCostTrace) int {
+	if trace == nil {
+		return 0
+	}
+	return trace.EmbeddingTokens + trace.ContextTokens + trace.CompletionTokens
 }
 
 func nonNilCostTraces(items []*model.KBCostTrace) []*model.KBCostTrace {
