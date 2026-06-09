@@ -60,32 +60,47 @@ func (r *Runner) Run(ctx context.Context, dataset []DatasetCase, profiles []Stra
 			}
 			refusalExpected := expectsRefusal(item)
 			queryMetrics = append(queryMetrics, QueryMetrics{
-				QueryID:              item.ID,
-				Query:                item.Query,
-				QueryType:            item.QueryType,
-				Tags:                 item.Tags,
-				TopK:                 topK,
-				Latency:              latency,
-				RecallAtK:            computeRecallAtK(item.RelevantIDs, resultIDs, topK),
-				MRR:                  computeMRR(item.RelevantIDs, resultIDs, topK),
-				NDCG:                 computeNDCG(item.RelevantIDs, resultIDs, topK),
-				CitationAccuracy:     computeCitationAccuracy(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
-				CitationPrecision:    computeCitationPrecision(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
-				CitationRecall:       computeCitationRecall(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
-				LongDocCompleteness:  computeLongDocCompleteness(outcome.Items, topK),
-				Refused:              outcome.Refused,
-				RefusalReason:        outcome.RefusalReason,
-				RefusalExpected:      refusalExpected,
-				RefusalCorrect:       outcome.Refused == refusalExpected,
-				RefusalFalsePositive: outcome.Refused && !refusalExpected,
-				ParentFillCount:      outcome.ParentFillCount,
-				RewriteApplied:       outcome.RewriteApplied,
-				ModelRewriteApplied:  outcome.ModelRewriteApplied,
-				DenseContribution:    outcome.DenseContribution,
-				SparseContribution:   outcome.SparseContribution,
-				ResultIDs:            resultIDs,
-				RelevantIDs:          item.RelevantIDs,
-				CitationTargets:      item.CitationTargets,
+				QueryID:                     item.ID,
+				Query:                       item.Query,
+				QueryType:                   item.QueryType,
+				Tags:                        item.Tags,
+				TopK:                        topK,
+				Latency:                     latency,
+				RecallAtK:                   computeRecallAtK(item.RelevantIDs, resultIDs, topK),
+				MRR:                         computeMRR(item.RelevantIDs, resultIDs, topK),
+				NDCG:                        computeNDCG(item.RelevantIDs, resultIDs, topK),
+				CitationAccuracy:            computeCitationAccuracy(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
+				CitationPrecision:           computeCitationPrecision(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
+				CitationRecall:              computeCitationRecall(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
+				LongDocCompleteness:         computeLongDocCompleteness(outcome.Items, topK),
+				Refused:                     outcome.Refused,
+				RefusalReason:               outcome.RefusalReason,
+				RefusalExpected:             refusalExpected,
+				RefusalCorrect:              outcome.Refused == refusalExpected,
+				RefusalFalsePositive:        outcome.Refused && !refusalExpected,
+				ParentFillCount:             outcome.ParentFillCount,
+				RewriteApplied:              outcome.RewriteApplied,
+				ModelRewriteApplied:         outcome.ModelRewriteApplied,
+				ExpectedPrimaryRoute:        item.ExpectedPrimaryRoute,
+				ExpectedParticipatingRoutes: append([]string(nil), item.ExpectedParticipatingRoutes...),
+				MustContainTerms:            append([]string(nil), item.MustContainTerms...),
+				DenseHits:                   outcome.DenseHits,
+				SparseHits:                  outcome.SparseHits,
+				DenseParticipation:          outcome.DenseParticipation,
+				SparseParticipation:         outcome.SparseParticipation,
+				PrimaryDenseCount:           outcome.PrimaryDenseCount,
+				PrimarySparseCount:          outcome.PrimarySparseCount,
+				DualRouteFinalCount:         outcome.DualRouteFinalCount,
+				PrimaryRoute:                resolvePrimaryRoute(outcome),
+				EmptyResult:                 len(resultIDs) == 0,
+				EmptyReason:                 outcome.EmptyReason,
+				DenseContribution:           outcome.DenseContribution,
+				SparseContribution:          outcome.SparseContribution,
+				SparseCandidateBefore:       outcome.SparseCandidateBefore,
+				SparseCandidateAfter:        outcome.SparseCandidateAfter,
+				ResultIDs:                   resultIDs,
+				RelevantIDs:                 item.RelevantIDs,
+				CitationTargets:             item.CitationTargets,
 			})
 			latencies = append(latencies, latency)
 			totalLatency += latency
@@ -108,13 +123,14 @@ func (r *Runner) Run(ctx context.Context, dataset []DatasetCase, profiles []Stra
 	}
 
 	report := &Report{
-		DatasetSize:  len(dataset),
-		GeneratedAt:  time.Now(),
-		Results:      results,
-		Contribution: buildContribution(results),
-		Comparison:   buildComparison(*baseline, *candidate),
-		Baseline:     baseline.Strategy.Name,
-		Candidate:    candidate.Strategy.Name,
+		DatasetSize:    len(dataset),
+		GeneratedAt:    time.Now(),
+		FusionStrategy: resolveReportFusionStrategy(*baseline, *candidate),
+		Results:        results,
+		Contribution:   buildContribution(results),
+		Comparison:     buildComparison(*baseline, *candidate),
+		Baseline:       baseline.Strategy.Name,
+		Candidate:      candidate.Strategy.Name,
 	}
 	report.Gate = EvaluateGate(report.Comparison, thresholds)
 	return report, nil
@@ -130,7 +146,9 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 		prev := results[i-1]
 		deltas = append(deltas, StrategyDelta{
 			Strategy:                  current.Strategy.Name,
+			FusionStrategy:            current.Strategy.FusionStrategy,
 			ComparedTo:                prev.Strategy.Name,
+			ComparedToFusionStrategy:  prev.Strategy.FusionStrategy,
 			RecallDelta:               current.Metrics.RecallAtK - prev.Metrics.RecallAtK,
 			MRRDelta:                  current.Metrics.MRR - prev.Metrics.MRR,
 			NDCGDelta:                 current.Metrics.NDCG - prev.Metrics.NDCG,
@@ -140,6 +158,13 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 			LongDocCompletenessDelta:  current.Metrics.LongDocCompleteness - prev.Metrics.LongDocCompleteness,
 			ParentFillGainDelta:       current.Metrics.ParentFillGain - prev.Metrics.ParentFillGain,
 			RefusalFalsePositiveDelta: current.Metrics.RefusalFalsePositiveRate - prev.Metrics.RefusalFalsePositiveRate,
+			DenseHitRateDelta:         current.Metrics.DenseHitRate - prev.Metrics.DenseHitRate,
+			SparseHitRateDelta:        current.Metrics.SparseHitRate - prev.Metrics.SparseHitRate,
+			DenseParticipationDelta:   current.Metrics.DenseParticipationRate - prev.Metrics.DenseParticipationRate,
+			SparseParticipationDelta:  current.Metrics.SparseParticipationRate - prev.Metrics.SparseParticipationRate,
+			PrimaryDenseRateDelta:     current.Metrics.PrimaryDenseRate - prev.Metrics.PrimaryDenseRate,
+			PrimarySparseRateDelta:    current.Metrics.PrimarySparseRate - prev.Metrics.PrimarySparseRate,
+			EmptyRateDelta:            current.Metrics.EmptyRate - prev.Metrics.EmptyRate,
 			P95LatencyDeltaMS:         current.Metrics.P95LatencyMS - prev.Metrics.P95LatencyMS,
 		})
 	}
@@ -154,6 +179,8 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 	return ComparisonSummary{
 		Baseline:                     baseline.Strategy.Name,
 		Candidate:                    candidate.Strategy.Name,
+		BaselineFusionStrategy:       baseline.Strategy.FusionStrategy,
+		CandidateFusionStrategy:      candidate.Strategy.FusionStrategy,
 		RecallDelta:                  candidate.Metrics.RecallAtK - baseline.Metrics.RecallAtK,
 		MRRDelta:                     candidate.Metrics.MRR - baseline.Metrics.MRR,
 		NDCGDelta:                    candidate.Metrics.NDCG - baseline.Metrics.NDCG,
@@ -167,10 +194,24 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 		RewriteGainDelta:             computeRewriteGainDelta(baseline, candidate),
 		DenseRouteContributionDelta:  candidate.Metrics.DenseRouteContribution - baseline.Metrics.DenseRouteContribution,
 		SparseRouteContributionDelta: candidate.Metrics.SparseRouteContribution - baseline.Metrics.SparseRouteContribution,
+		DenseHitRateDelta:            candidate.Metrics.DenseHitRate - baseline.Metrics.DenseHitRate,
+		SparseHitRateDelta:           candidate.Metrics.SparseHitRate - baseline.Metrics.SparseHitRate,
+		DenseParticipationRateDelta:  candidate.Metrics.DenseParticipationRate - baseline.Metrics.DenseParticipationRate,
+		SparseParticipationRateDelta: candidate.Metrics.SparseParticipationRate - baseline.Metrics.SparseParticipationRate,
+		PrimaryDenseRateDelta:        candidate.Metrics.PrimaryDenseRate - baseline.Metrics.PrimaryDenseRate,
+		PrimarySparseRateDelta:       candidate.Metrics.PrimarySparseRate - baseline.Metrics.PrimarySparseRate,
+		EmptyRateDelta:               candidate.Metrics.EmptyRate - baseline.Metrics.EmptyRate,
 		P95LatencyDeltaMS:            candidate.Metrics.P95LatencyMS - baseline.Metrics.P95LatencyMS,
 		P95LatencyDeltaRatio:         ratio,
 		CandidateModelRewrite:        candidate.Strategy.EnableModelAssistedRewrite,
 	}
+}
+
+func resolveReportFusionStrategy(baseline, candidate StrategyResult) string {
+	if candidate.Strategy.FusionStrategy != "" {
+		return candidate.Strategy.FusionStrategy
+	}
+	return baseline.Strategy.FusionStrategy
 }
 
 func expectsRefusal(item DatasetCase) bool {
@@ -208,6 +249,19 @@ func computeRewriteGainDelta(baseline, candidate StrategyResult) float64 {
 		return 0
 	}
 	return total / float64(count)
+}
+
+func resolvePrimaryRoute(outcome SearchOutcome) string {
+	switch {
+	case outcome.PrimaryDenseCount > 0 && outcome.PrimarySparseCount > 0:
+		return "mixed"
+	case outcome.PrimaryDenseCount > 0:
+		return "dense"
+	case outcome.PrimarySparseCount > 0:
+		return "sparse"
+	default:
+		return ""
+	}
 }
 
 func resolveStrategyResult(results []StrategyResult, explicitName string, preferBaseline, preferCandidate bool) *StrategyResult {

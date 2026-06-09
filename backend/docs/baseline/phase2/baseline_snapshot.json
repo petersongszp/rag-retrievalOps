@@ -1,27 +1,31 @@
 {
   "config_version": "3fa17f45a51a295d",
   "evaluation_baseline": {
-    "baseline_profile": "phase2_baseline",
-    "candidate_profile": "parent_child+advanced_rewrite",
-    "dataset_path": "scripts/evaluation/dataset.json",
+    "baseline_profile": "phase2_non_rrf_baseline",
+    "candidate_profile": "phase2_non_rrf_candidate",
+    "dataset_path": "scripts/evaluation/dataset.phase2.non_rrf.json",
     "experiment_groups": [
-      "phase2_baseline",
-      "parent_child",
-      "parent_child+strategic_topk",
-      "parent_child+refusal",
-      "parent_child+advanced_rewrite"
+      "phase2_non_rrf_baseline",
+      "phase2_non_rrf_candidate"
     ],
-    "profile_path": "scripts/evaluation/retrieval_strategy_profiles.example.json"
+    "profile_path": "scripts/evaluation/retrieval_strategy_profiles.phase2.non_rrf.json"
   },
   "generated_at": "2026-06-02T15:57:31Z",
   "metrics_snapshot": {
     "citation_precision": null,
     "context_avg_tokens": null,
+    "dense_hit_rate": null,
+    "dense_participation_rate": null,
     "mrr": null,
     "ndcg": null,
-    "notes": "Fill in after the frozen Phase 2 regression run completes.",
+    "notes": "Frozen for non-RRF L0. Fill in after running the dedicated phase2 non-RRF replay dataset.",
+    "primary_dense_rate": null,
     "recall_at_k": null,
-    "retrieval_p95_ms": null
+    "retrieval_p95_ms": null,
+    "sparse_hit_rate": null,
+    "sparse_participation_rate": null,
+    "primary_sparse_rate": null,
+    "empty_rate": null
   },
   "rag": {
     "enabled": true,
