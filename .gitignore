@@ -28,3 +28,5 @@ backend/runtime/eval-reports/*.json
 .gocache/
 backend/.tmp/
 gaoerDocs/
+
+test-repo/
