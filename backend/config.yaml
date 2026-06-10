@@ -47,14 +47,14 @@ rag:
     enable_query_rewrite: true
     enable_dynamic_topk: true
     enable_advanced_rerank: true
-    enable_parent_child_retrieval: true
+    enable_parent_child_retrieval: false
     enable_strategic_topk: false
     enable_evidence_refusal: false
     enable_citation_consistency: false
     enable_domain_terms: false
     enable_route_specific_rewrite: false
     enable_model_assisted_rewrite: false
-    enable_experiment_platform: false
+    enable_experiment_platform: true
     enable_index_lifecycle: false
     enable_cost_dashboard: false
     enable_compliance_audit: false
