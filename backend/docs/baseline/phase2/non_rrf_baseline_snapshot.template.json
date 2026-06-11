@@ -1,0 +1,36 @@
+{
+  "snapshot_type": "phase2_non_rrf_baseline",
+  "generated_at": "2026-06-05T00:00:00Z",
+  "config_version": "replace-with-config-hash",
+  "strategy_digest": "replace-with-strategy-digest",
+  "evaluation_baseline": {
+    "baseline_profile": "phase2_non_rrf_baseline",
+    "candidate_profile": "phase2_non_rrf_candidate",
+    "dataset_path": "scripts/evaluation/non_rrf_dataset.template.json",
+    "profile_path": "scripts/evaluation/non_rrf_profiles.template.json",
+    "experiment_groups": [
+      "phase2_non_rrf_baseline",
+      "phase2_non_rrf_candidate"
+    ]
+  },
+  "metrics_snapshot": {
+    "recall_at_k": null,
+    "mrr": null,
+    "ndcg": null,
+    "citation_accuracy": null,
+    "dense_hit_rate": null,
+    "sparse_hit_rate": null,
+    "dense_participation_rate": null,
+    "sparse_participation_rate": null,
+    "primary_dense_rate": null,
+    "primary_sparse_rate": null,
+    "empty_rate": null,
+    "retrieval_p95_ms": null,
+    "notes": "Fill after the frozen non-RRF baseline regression run completes."
+  },
+  "rollback_contract": {
+    "fusion_strategy": "minmax_v1",
+    "rrf_disabled": true,
+    "rollback_target": "phase2_non_rrf_baseline"
+  }
+}

@@ -10,8 +10,10 @@ import (
 
 // SparseIndexConfig controls the explicit BM25 inverted index.
 type SparseIndexConfig struct {
-	K1 float64
-	B  float64
+	K1       float64
+	B        float64
+	TopK     int
+	MinScore float64
 }
 
 type sparsePosting struct {
@@ -24,6 +26,18 @@ type SparseSearchHit struct {
 	DocID    string
 	Document *schema.Document
 	Score    float64
+	Explain  SparseBM25Explain
+}
+
+type SparseBM25Explain struct {
+	MatchedTerms map[string]SparseTermExplain `json:"matched_terms,omitempty"`
+	BM25Score    float64                      `json:"bm25_score,omitempty"`
+}
+
+type SparseTermExplain struct {
+	TF  int     `json:"tf"`
+	DF  int     `json:"df"`
+	IDF float64 `json:"idf"`
 }
 
 // SparseInvertedIndex stores postings and document statistics for BM25 ranking.
@@ -39,8 +53,10 @@ type SparseInvertedIndex struct {
 // BuildSparseInvertedIndex builds an explicit inverted index from sparse candidates.
 func BuildSparseInvertedIndex(docs []*schema.Document, cfg *SparseIndexConfig) *SparseInvertedIndex {
 	indexCfg := SparseIndexConfig{
-		K1: 1.2,
-		B:  0.75,
+		K1:       1.2,
+		B:        0.75,
+		TopK:     0,
+		MinScore: 0,
 	}
 	if cfg != nil {
 		if cfg.K1 > 0 {
@@ -48,6 +64,12 @@ func BuildSparseInvertedIndex(docs []*schema.Document, cfg *SparseIndexConfig) *
 		}
 		if cfg.B >= 0 && cfg.B <= 1 {
 			indexCfg.B = cfg.B
+		}
+		if cfg.TopK > 0 {
+			indexCfg.TopK = cfg.TopK
+		}
+		if cfg.MinScore > 0 {
+			indexCfg.MinScore = cfg.MinScore
 		}
 	}
 
@@ -117,6 +139,7 @@ func (idx *SparseInvertedIndex) Search(queryTerms []string, topK int) []SparseSe
 	}
 
 	scores := make(map[string]float64, len(idx.documents))
+	explains := make(map[string]SparseBM25Explain, len(idx.documents))
 	seenTerms := make(map[string]struct{}, len(queryTerms))
 	for _, rawTerm := range queryTerms {
 		// 1. 清洗查询词：去空格 + 转小写（大小写不敏感检索）
@@ -152,14 +175,26 @@ func (idx *SparseInvertedIndex) Search(queryTerms []string, topK int) []SparseSe
 			// 长度归一化系数（惩罚过长文档，避免长文本刷分）
 			norm := idx.config.K1 * (1 - idx.config.B + idx.config.B*(docLength/idx.avgDocLength))
 			// BM25核心公式：分数 = IDF * 归一化词频，累加到文档总分
-			scores[posting.docID] += idf * (tf * (idx.config.K1 + 1) / (tf + norm))
+			increment := idf * (tf * (idx.config.K1 + 1) / (tf + norm))
+			scores[posting.docID] += increment
+			explain := explains[posting.docID]
+			if explain.MatchedTerms == nil {
+				explain.MatchedTerms = make(map[string]SparseTermExplain)
+			}
+			explain.MatchedTerms[term] = SparseTermExplain{
+				TF:  posting.tf,
+				DF:  int(df),
+				IDF: idf,
+			}
+			explain.BM25Score = scores[posting.docID]
+			explains[posting.docID] = explain
 		}
 	}
 
 	hits := make([]SparseSearchHit, 0, len(scores))
 	for docID, score := range scores {
 		// 过滤无效分数（分数≤0的文档，无相关性）
-		if score <= 0 {
+		if score <= 0 || score < idx.config.MinScore {
 			continue
 		}
 		// 组装结果对象
@@ -167,6 +202,7 @@ func (idx *SparseInvertedIndex) Search(queryTerms []string, topK int) []SparseSe
 			DocID:    docID,
 			Document: idx.documents[docID],
 			Score:    score,
+			Explain:  explains[docID],
 		})
 	}
 
@@ -179,8 +215,12 @@ func (idx *SparseInvertedIndex) Search(queryTerms []string, topK int) []SparseSe
 		return hits[i].Score > hits[j].Score
 	})
 
-	if topK > 0 && len(hits) > topK {
-		hits = hits[:topK]
+	limit := topK
+	if idx.config.TopK > 0 && (limit <= 0 || idx.config.TopK < limit) {
+		limit = idx.config.TopK
+	}
+	if limit > 0 && len(hits) > limit {
+		hits = hits[:limit]
 	}
 	return hits
 }

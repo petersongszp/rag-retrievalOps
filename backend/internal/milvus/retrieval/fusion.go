@@ -25,8 +25,12 @@ const (
 
 // FusionConfig 控制多路候选的归一化与加权融合行为。
 type FusionConfig struct {
-	DenseWeight  float64
-	SparseWeight float64
+	FusionStrategy  string
+	RRFK            int
+	RRFDenseWeight  float64
+	RRFSparseWeight float64
+	DenseWeight     float64
+	SparseWeight    float64
 }
 
 // RouteContribution 记录单条文档在某一路由上的归一化贡献。
@@ -43,14 +47,28 @@ type FusedDocument struct {
 	Key              string
 	Score            float64
 	PrimaryRoute     string
+	FusionStrategy   string
 	RouteContrib     map[string]float64
 	RouteRawScores   map[string]float64
+	RouteRanks       map[string]int
+	RouteRRFContrib  map[string]float64
 	Contributions    []RouteContribution
 	SourceCollection string
 }
 
 // FuseRouteCandidates 对 dense/sparse 候选做归一化并生成统一主分。
 func FuseRouteCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionConfig) []*FusedDocument {
+	switch strings.TrimSpace(strings.ToLower(cfg.FusionStrategy)) {
+	case "", "minmax_v1":
+		return fuseMinMaxCandidates(denseDocs, sparseDocs, cfg)
+	case "rrf_v1":
+		return fuseRRFCandidates(denseDocs, sparseDocs, cfg)
+	default:
+		return fuseMinMaxCandidates(denseDocs, sparseDocs, cfg)
+	}
+}
+
+func fuseMinMaxCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionConfig) []*FusedDocument {
 	cfg = normalizeFusionConfig(cfg)
 	inputs := []struct {
 		route  string
@@ -82,6 +100,7 @@ func FuseRouteCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionCon
 			if annotatedDoc.MetaData == nil {
 				annotatedDoc.MetaData = make(map[string]interface{})
 			}
+			annotatedDoc.MetaData["fusion_strategy"] = "minmax_v1"
 			annotatedDoc.MetaData["fusion_score"] = weightedScore
 			annotatedDoc.MetaData["score"] = weightedScore
 			annotatedDoc.MetaData["route"] = input.route
@@ -92,18 +111,107 @@ func FuseRouteCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionCon
 				Key:          key,
 				Score:        weightedScore,
 				PrimaryRoute: input.route,
+				FusionStrategy: "minmax_v1",
 				RouteContrib: map[string]float64{
 					input.route: weightedScore,
 				},
 				RouteRawScores: map[string]float64{
 					input.route: rawScore,
 				},
+				RouteRanks: map[string]int{},
+				RouteRRFContrib: map[string]float64{},
 				Contributions: []RouteContribution{
 					{
 						Route:           input.route,
 						RawScore:        rawScore,
 						NormalizedScore: normalizedScore,
 						WeightedScore:   weightedScore,
+					},
+				},
+				SourceCollection: readCollectionFromDoc(doc),
+			})
+		}
+	}
+
+	sort.SliceStable(results, func(i, j int) bool {
+		if nearlyEqual(results[i].Score, results[j].Score) {
+			return results[i].Key < results[j].Key
+		}
+		return results[i].Score > results[j].Score
+	})
+	return results
+}
+
+func fuseRRFCandidates(denseDocs, sparseDocs []*schema.Document, cfg FusionConfig) []*FusedDocument {
+	cfg = normalizeRRFConfig(cfg)
+	inputs := []struct {
+		route  string
+		weight float64
+		docs   []*schema.Document
+	}{
+		{route: routeDense, weight: cfg.RRFDenseWeight, docs: denseDocs},
+		{route: routeSparse, weight: cfg.RRFSparseWeight, docs: sparseDocs},
+	}
+
+	results := make([]*FusedDocument, 0, len(denseDocs)+len(sparseDocs))
+	for _, input := range inputs {
+		rankedDocs := append([]*schema.Document(nil), input.docs...)
+		sort.SliceStable(rankedDocs, func(i, j int) bool {
+			left := readRouteScore(rankedDocs[i], input.route)
+			right := readRouteScore(rankedDocs[j], input.route)
+			if nearlyEqual(left, right) {
+				return buildDedupeKey(rankedDocs[i]) < buildDedupeKey(rankedDocs[j])
+			}
+			return left > right
+		})
+		for idx, doc := range rankedDocs {
+			if doc == nil {
+				continue
+			}
+			key := buildDedupeKey(doc)
+			if key == "" {
+				continue
+			}
+			rawScore := readRouteScore(doc, input.route)
+			routeRank := idx + 1
+			rrfScore := input.weight * (1.0 / float64(cfg.RRFK+routeRank))
+
+			annotatedDoc := cloneDocumentWithMetadata(doc)
+			if annotatedDoc.MetaData == nil {
+				annotatedDoc.MetaData = make(map[string]interface{})
+			}
+			annotatedDoc.MetaData["fusion_strategy"] = "rrf_v1"
+			annotatedDoc.MetaData["rrf_score"] = rrfScore
+			annotatedDoc.MetaData["score"] = rrfScore
+			annotatedDoc.MetaData["route"] = input.route
+			annotatedDoc.MetaData["route_score"] = rawScore
+			annotatedDoc.MetaData["route_rank"] = map[string]interface{}{input.route: routeRank}
+			annotatedDoc.MetaData["route_rrf_contrib"] = map[string]interface{}{input.route: rrfScore}
+
+			results = append(results, &FusedDocument{
+				Doc:          annotatedDoc,
+				Key:          key,
+				Score:        rrfScore,
+				PrimaryRoute: input.route,
+				FusionStrategy: "rrf_v1",
+				RouteContrib: map[string]float64{
+					input.route: rrfScore,
+				},
+				RouteRawScores: map[string]float64{
+					input.route: rawScore,
+				},
+				RouteRanks: map[string]int{
+					input.route: routeRank,
+				},
+				RouteRRFContrib: map[string]float64{
+					input.route: rrfScore,
+				},
+				Contributions: []RouteContribution{
+					{
+						Route:           input.route,
+						RawScore:        rawScore,
+						NormalizedScore: float64(routeRank),
+						WeightedScore:   rrfScore,
 					},
 				},
 				SourceCollection: readCollectionFromDoc(doc),
@@ -133,6 +241,27 @@ func normalizeFusionConfig(cfg FusionConfig) FusionConfig {
 	}
 	cfg.DenseWeight = cfg.DenseWeight / total
 	cfg.SparseWeight = cfg.SparseWeight / total
+	return cfg
+}
+
+func normalizeRRFConfig(cfg FusionConfig) FusionConfig {
+	if cfg.RRFK <= 0 {
+		cfg.RRFK = 60
+	}
+	if cfg.RRFDenseWeight <= 0 {
+		cfg.RRFDenseWeight = cfg.DenseWeight
+	}
+	if cfg.RRFSparseWeight <= 0 {
+		cfg.RRFSparseWeight = cfg.SparseWeight
+	}
+	total := cfg.RRFDenseWeight + cfg.RRFSparseWeight
+	if total <= 0 {
+		cfg.RRFDenseWeight = 0.7
+		cfg.RRFSparseWeight = 0.3
+		return cfg
+	}
+	cfg.RRFDenseWeight = cfg.RRFDenseWeight / total
+	cfg.RRFSparseWeight = cfg.RRFSparseWeight / total
 	return cfg
 }
 

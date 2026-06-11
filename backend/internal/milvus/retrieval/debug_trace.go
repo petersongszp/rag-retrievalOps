@@ -26,17 +26,31 @@ type DebugDocument struct {
 }
 
 type RouteDebugHit struct {
-	Route        string          `json:"route"`
-	Query        string          `json:"query,omitempty"`
-	Hits         []DebugDocument `json:"hits,omitempty"`
-	Contribution int             `json:"contribution"`
-	LatencyMs    int64           `json:"latency_ms,omitempty"`
-	Error        string          `json:"error,omitempty"`
+	Route                  string         `json:"route"`
+	Query                  string         `json:"query,omitempty"`
+	Hits                   []DebugDocument `json:"hits,omitempty"`
+	HitsCount              int            `json:"hits_count,omitempty"`
+	ParticipationCount     int            `json:"participation_count,omitempty"`
+	PrimaryCount           int            `json:"primary_count,omitempty"`
+	Contribution           int            `json:"contribution"`
+	SparseTerms            []string       `json:"sparse_terms,omitempty"`
+	FallbackReason         string         `json:"fallback_reason,omitempty"`
+	TermSources            map[string]string `json:"term_sources,omitempty"`
+	DroppedTerms           map[string]string `json:"dropped_terms,omitempty"`
+	PerTermCandidateCounts map[string]int `json:"per_term_candidate_counts,omitempty"`
+	CandidateCountBefore   int            `json:"candidate_count_before_bm25,omitempty"`
+	CandidateCountAfter    int            `json:"candidate_count_after_bm25,omitempty"`
+	LatencyMs              int64          `json:"latency_ms,omitempty"`
+	Error                  string         `json:"error,omitempty"`
 }
 
 type FusionDebugInfo struct {
-	Before []DebugDocument `json:"before,omitempty"`
-	After  []DebugDocument `json:"after,omitempty"`
+	Before                   []DebugDocument `json:"before,omitempty"`
+	After                    []DebugDocument `json:"after,omitempty"`
+	DenseParticipationCount  int             `json:"dense_participation_count,omitempty"`
+	SparseParticipationCount int             `json:"sparse_participation_count,omitempty"`
+	DualRouteFinalCount      int             `json:"dual_route_final_count,omitempty"`
+	PrimaryRouteDistribution map[string]int  `json:"primary_route_distribution,omitempty"`
 }
 
 type DedupeDebugInfo struct {
@@ -55,10 +69,11 @@ type RerankDebugInfo struct {
 }
 
 type FilterDebugInfo struct {
-	BeforeCount    int             `json:"before_count"`
-	AfterCount     int             `json:"after_count"`
-	Removed        []DebugDocument `json:"removed,omitempty"`
-	TruncateReason string          `json:"truncate_reason,omitempty"`
+	BeforeCount    int               `json:"before_count"`
+	AfterCount     int               `json:"after_count"`
+	Removed        []DebugDocument   `json:"removed,omitempty"`
+	DropReasons    map[string]int    `json:"drop_reasons,omitempty"`
+	TruncateReason string            `json:"truncate_reason,omitempty"`
 }
 
 type ParentChildDebugInfo struct {
