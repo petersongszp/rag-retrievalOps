@@ -1,0 +1,30 @@
+{
+  "profile_version": "phase2-non-rrf-v1",
+  "description": "Minimal baseline/candidate profiles for the Phase2 non-RRF evaluation lane.",
+  "profiles": [
+    {
+      "name": "phase2_non_rrf_baseline",
+      "label": "Phase 2 Non-RRF Baseline",
+      "family": "phase2-non-rrf",
+      "fusion_strategy": "minmax_v1",
+      "baseline": true,
+      "mode": "hybrid",
+      "candidate_top_k": 10,
+      "dense_weight": 0.7,
+      "sparse_weight": 0.3,
+      "notes": "Frozen non-RRF baseline before route-balance tuning."
+    },
+    {
+      "name": "phase2_non_rrf_candidate",
+      "label": "Phase 2 Non-RRF Candidate",
+      "family": "phase2-non-rrf",
+      "fusion_strategy": "minmax_v1",
+      "candidate": true,
+      "mode": "hybrid",
+      "candidate_top_k": 10,
+      "dense_weight": 0.6,
+      "sparse_weight": 0.4,
+      "notes": "Candidate profile for testing sparse hit/participation and primary-route changes without RRF."
+    }
+  ]
+}

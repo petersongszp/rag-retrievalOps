@@ -24,6 +24,8 @@ type RerankResult struct {
 	Fallback   bool
 	Reason     string
 	CandidateN int
+	PreRanks   map[string]int
+	PostRanks  map[string]int
 }
 
 // Reranker is the configurable rerank interface for hybrid retrieval.
@@ -178,6 +180,12 @@ func (r *JaccardReranker) Rerank(ctx context.Context, query string, docs []*sche
 	}
 
 	scoredDocs := make([]scoredDoc, 0, len(docs))
+	preRanks := make(map[string]int, len(docs))
+	for idx, doc := range docs {
+		if doc != nil {
+			preRanks[doc.ID] = idx + 1
+		}
+	}
 	for _, doc := range docs {
 		if err := ctx.Err(); err != nil {
 			return nil, err
@@ -191,7 +199,7 @@ func (r *JaccardReranker) Rerank(ctx context.Context, query string, docs []*sche
 		}
 
 		finalScore := (originalScore * r.config.OriginalScoreWeight) + (jaccardScore * (1 - r.config.OriginalScoreWeight))
-		annotateRerankMetadata(doc, finalScore, r.config.Version, 0)
+		annotateRerankMetadata(doc, finalScore, r.config.Version, 0, preRanks[doc.ID], 0)
 
 		scoredDocs = append(scoredDocs, scoredDoc{
 			doc:   doc,
@@ -210,8 +218,10 @@ func (r *JaccardReranker) Rerank(ctx context.Context, query string, docs []*sche
 
 	latency := time.Since(start)
 	resultDocs := make([]*schema.Document, 0, resultTopK)
+	postRanks := make(map[string]int, resultTopK)
 	for i := 0; i < resultTopK; i++ {
-		annotateRerankMetadata(scoredDocs[i].doc, scoredDocs[i].score, r.config.Version, latency.Milliseconds())
+		postRanks[scoredDocs[i].doc.ID] = i + 1
+		annotateRerankMetadata(scoredDocs[i].doc, scoredDocs[i].score, r.config.Version, latency.Milliseconds(), preRanks[scoredDocs[i].doc.ID], i+1)
 		resultDocs = append(resultDocs, scoredDocs[i].doc)
 	}
 
@@ -221,10 +231,12 @@ func (r *JaccardReranker) Rerank(ctx context.Context, query string, docs []*sche
 		Version:    r.config.Version,
 		Latency:    latency,
 		CandidateN: len(docs),
+		PreRanks:   preRanks,
+		PostRanks:  postRanks,
 	}, nil
 }
 
-func annotateRerankMetadata(doc *schema.Document, score float64, version string, latencyMS int64) {
+func annotateRerankMetadata(doc *schema.Document, score float64, version string, latencyMS int64, preRank, postRank int) {
 	if doc == nil {
 		return
 	}
@@ -232,9 +244,14 @@ func annotateRerankMetadata(doc *schema.Document, score float64, version string,
 		doc.MetaData = make(map[string]interface{})
 	}
 
+	originalScore := readDocScore(doc)
 	doc.MetaData["rerank_score"] = score
 	doc.MetaData["rerank_version"] = version
 	doc.MetaData["rerank_latency_ms"] = latencyMS
+	doc.MetaData["pre_rerank_rank"] = preRank
+	doc.MetaData["post_rerank_rank"] = postRank
+	doc.MetaData["original_score"] = originalScore
+	doc.MetaData["score_delta"] = score - originalScore
 
 	source := ensureSourceMetadata(doc)
 	source["rerank_score"] = score
@@ -243,6 +260,10 @@ func annotateRerankMetadata(doc *schema.Document, score float64, version string,
 	}
 	source["rerank_version"] = version
 	source["rerank_latency_ms"] = latencyMS
+	source["pre_rerank_rank"] = preRank
+	source["post_rerank_rank"] = postRank
+	source["original_score"] = originalScore
+	source["score_delta"] = score - originalScore
 	doc.MetaData["source"] = source
 	annotateParentChildSource(doc)
 }
