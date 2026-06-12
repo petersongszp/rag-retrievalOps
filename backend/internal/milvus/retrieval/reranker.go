@@ -7,6 +7,8 @@ import (
 	"strings"
 	"time"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -302,6 +304,7 @@ func annotateParentChildSource(doc *schema.Document) {
 	}
 
 	source := ensureSourceMetadata(doc)
+	doc.MetaData = chunkmeta.ApplyDefaults(doc.MetaData, chunkmeta.SplitStrategyLegacyRecursive)
 	copyMetadataFieldsToMap(source, doc.MetaData,
 		"document_id",
 		"chunk_id",
@@ -317,6 +320,13 @@ func annotateParentChildSource(doc *schema.Document) {
 		"parent_build_strategy",
 		"parent_build_version",
 		"parent_token_count",
+		chunkmeta.KeySplitStrategy,
+		chunkmeta.KeySplitVersion,
+		chunkmeta.KeySplitStage,
+		chunkmeta.KeySourceFileType,
+		chunkmeta.KeyEmbeddingBuildStrategy,
+		chunkmeta.KeyContextVersion,
+		chunkmeta.KeySemanticSplitEnabled,
 	)
 
 	parentChildAvailable := false
@@ -328,6 +338,15 @@ func annotateParentChildSource(doc *schema.Document) {
 		doc.MetaData["parent_child_available"] = parentChildAvailable
 	}
 	source["parent_child_available"] = parentChildAvailable
+	if _, exists := source[chunkmeta.KeySplitStrategy]; !exists {
+		source[chunkmeta.KeySplitStrategy] = chunkmeta.SplitStrategyLegacyRecursive
+	}
+	if _, exists := source[chunkmeta.KeyEmbeddingBuildStrategy]; !exists {
+		source[chunkmeta.KeyEmbeddingBuildStrategy] = chunkmeta.EmbeddingBuildStrategyRaw
+	}
+	if _, exists := source[chunkmeta.KeyContextVersion]; !exists {
+		source[chunkmeta.KeyContextVersion] = chunkmeta.ContextVersionRawContent
+	}
 	doc.MetaData["source"] = source
 }
 

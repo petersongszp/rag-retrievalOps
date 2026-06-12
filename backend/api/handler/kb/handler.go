@@ -107,19 +107,25 @@ type citation struct {
 }
 
 type source struct {
-	Route                string  `json:"route"`
-	Collection           string  `json:"collection"`
-	RetrieverVersion     string  `json:"retriever_version"`
-	ParentID             string  `json:"parent_id"`
-	ChildID              string  `json:"child_id"`
-	SectionTitle         string  `json:"section_title"`
-	HierarchyPath        string  `json:"hierarchy_path"`
-	ParentFillStrategy   string  `json:"parent_fill_strategy"`
-	ParentFillTokens     int     `json:"parent_fill_tokens"`
-	CitationSupported    bool    `json:"citation_supported"`
-	CitationSupportScore float64 `json:"citation_support_score"`
-	CitationCheckVersion string  `json:"citation_check_version"`
-	LowSupportCitation   bool    `json:"low_support_citation"`
+	Route                  string  `json:"route"`
+	Collection             string  `json:"collection"`
+	RetrieverVersion       string  `json:"retriever_version"`
+	SplitStrategy          string  `json:"split_strategy"`
+	SplitVersion           string  `json:"split_version"`
+	SourceFileType         string  `json:"source_file_type"`
+	EmbeddingBuildStrategy string  `json:"embedding_build_strategy"`
+	ContextVersion         string  `json:"context_version"`
+	ParentChildAvailable   bool    `json:"parent_child_available"`
+	ParentID               string  `json:"parent_id"`
+	ChildID                string  `json:"child_id"`
+	SectionTitle           string  `json:"section_title"`
+	HierarchyPath          string  `json:"hierarchy_path"`
+	ParentFillStrategy     string  `json:"parent_fill_strategy"`
+	ParentFillTokens       int     `json:"parent_fill_tokens"`
+	CitationSupported      bool    `json:"citation_supported"`
+	CitationSupportScore   float64 `json:"citation_support_score"`
+	CitationCheckVersion   string  `json:"citation_check_version"`
+	LowSupportCitation     bool    `json:"low_support_citation"`
 }
 
 type retrieveItem struct {
@@ -274,34 +280,34 @@ type retrieveDebugCitationView struct {
 }
 
 type retrieveDebugTrace struct {
-	RequestID          string                       `json:"request_id"`
-	Strategy           string                       `json:"strategy,omitempty"`
-	FusionStrategy     string                       `json:"fusion_strategy,omitempty"`
-	RRFK               int                          `json:"rrf_k,omitempty"`
-	ReleaseStage       string                       `json:"release_stage,omitempty"`
-	ReleaseReason      string                       `json:"release_reason,omitempty"`
-	ResultStatus       string                       `json:"result_status,omitempty"`
-	EmptyReason        string                       `json:"empty_reason,omitempty"`
-	FinalCount         int                          `json:"final_count"`
-	Query              retrieveDebugQueryView       `json:"query"`
-	Routes             []retrieveDebugRouteView     `json:"routes"`
-	TopK               retrieveDebugTopKView        `json:"topk"`
-	ParentChild        retrieveDebugParentChildView `json:"parent_child"`
-	Rewrite            retrieveDebugRewriteView     `json:"rewrite"`
-	EvidenceGate       retrieveDebugEvidenceView    `json:"evidence_gate"`
-	CitationCheck      retrieveDebugCitationView    `json:"citation_check"`
-	FinalItems         []retrieveItem               `json:"final_items,omitempty"`
-	Collection         string                       `json:"collection,omitempty"`
-	RetrieverVersion   string                       `json:"retriever_version,omitempty"`
-	DenseHits          int                          `json:"dense_hits"`
-	SparseHits         int                          `json:"sparse_hits"`
-	DenseParticipation int                          `json:"dense_participation"`
-	SparseParticipation int                         `json:"sparse_participation"`
-	PrimaryDenseCount  int                          `json:"primary_dense_count"`
-	PrimarySparseCount int                          `json:"primary_sparse_count"`
-	DualRouteFinalCount int                         `json:"dual_route_final_count"`
-	DenseContribution  int                          `json:"dense_contribution"`
-	SparseContribution int                          `json:"sparse_contribution"`
+	RequestID           string                       `json:"request_id"`
+	Strategy            string                       `json:"strategy,omitempty"`
+	FusionStrategy      string                       `json:"fusion_strategy,omitempty"`
+	RRFK                int                          `json:"rrf_k,omitempty"`
+	ReleaseStage        string                       `json:"release_stage,omitempty"`
+	ReleaseReason       string                       `json:"release_reason,omitempty"`
+	ResultStatus        string                       `json:"result_status,omitempty"`
+	EmptyReason         string                       `json:"empty_reason,omitempty"`
+	FinalCount          int                          `json:"final_count"`
+	Query               retrieveDebugQueryView       `json:"query"`
+	Routes              []retrieveDebugRouteView     `json:"routes"`
+	TopK                retrieveDebugTopKView        `json:"topk"`
+	ParentChild         retrieveDebugParentChildView `json:"parent_child"`
+	Rewrite             retrieveDebugRewriteView     `json:"rewrite"`
+	EvidenceGate        retrieveDebugEvidenceView    `json:"evidence_gate"`
+	CitationCheck       retrieveDebugCitationView    `json:"citation_check"`
+	FinalItems          []retrieveItem               `json:"final_items,omitempty"`
+	Collection          string                       `json:"collection,omitempty"`
+	RetrieverVersion    string                       `json:"retriever_version,omitempty"`
+	DenseHits           int                          `json:"dense_hits"`
+	SparseHits          int                          `json:"sparse_hits"`
+	DenseParticipation  int                          `json:"dense_participation"`
+	SparseParticipation int                          `json:"sparse_participation"`
+	PrimaryDenseCount   int                          `json:"primary_dense_count"`
+	PrimarySparseCount  int                          `json:"primary_sparse_count"`
+	DualRouteFinalCount int                          `json:"dual_route_final_count"`
+	DenseContribution   int                          `json:"dense_contribution"`
+	SparseContribution  int                          `json:"sparse_contribution"`
 }
 
 func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
@@ -1197,19 +1203,25 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 				SnippetOffset: computeSnippetOffset(doc.Content, queryLower),
 			},
 			Source: source{
-				Route:                route,
-				Collection:           firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
-				RetrieverVersion:     firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
-				ParentID:             getStringMetadata(doc.MetaData, "parent_id"),
-				ChildID:              firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),
-				SectionTitle:         getStringMetadata(doc.MetaData, "section_title"),
-				HierarchyPath:        getStringMetadata(doc.MetaData, "hierarchy_path"),
-				ParentFillStrategy:   getStringMetadata(doc.MetaData, "parent_fill_strategy"),
-				ParentFillTokens:     getIntMetadata(doc.MetaData, "parent_fill_tokens"),
-				CitationSupported:    getBoolMetadata(doc.MetaData, "citation_supported"),
-				CitationSupportScore: getFloat64Metadata(doc.MetaData, "citation_support_score"),
-				CitationCheckVersion: getStringMetadata(doc.MetaData, "citation_check_version"),
-				LowSupportCitation:   getBoolMetadata(doc.MetaData, "low_support_citation"),
+				Route:                  route,
+				Collection:             firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
+				RetrieverVersion:       firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
+				SplitStrategy:          getStringMetadata(doc.MetaData, "split_strategy"),
+				SplitVersion:           getStringMetadata(doc.MetaData, "split_version"),
+				SourceFileType:         getStringMetadata(doc.MetaData, "source_file_type"),
+				EmbeddingBuildStrategy: getStringMetadata(doc.MetaData, "embedding_build_strategy"),
+				ContextVersion:         getStringMetadata(doc.MetaData, "context_version"),
+				ParentChildAvailable:   getBoolMetadata(doc.MetaData, "parent_child_available"),
+				ParentID:               getStringMetadata(doc.MetaData, "parent_id"),
+				ChildID:                firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),
+				SectionTitle:           getStringMetadata(doc.MetaData, "section_title"),
+				HierarchyPath:          getStringMetadata(doc.MetaData, "hierarchy_path"),
+				ParentFillStrategy:     getStringMetadata(doc.MetaData, "parent_fill_strategy"),
+				ParentFillTokens:       getIntMetadata(doc.MetaData, "parent_fill_tokens"),
+				CitationSupported:      getBoolMetadata(doc.MetaData, "citation_supported"),
+				CitationSupportScore:   getFloat64Metadata(doc.MetaData, "citation_support_score"),
+				CitationCheckVersion:   getStringMetadata(doc.MetaData, "citation_check_version"),
+				LowSupportCitation:     getBoolMetadata(doc.MetaData, "low_support_citation"),
 			},
 		})
 	}

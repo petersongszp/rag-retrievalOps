@@ -5,6 +5,8 @@ import (
 	"strings"
 	"testing"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino/schema"
 )
@@ -14,8 +16,9 @@ func TestSplitMarkdownDocumentAnnotatesHeadingHierarchy(t *testing.T) {
 	doc := &schema.Document{
 		Content: "# Handbook\n\n## API Layer\nThe API layer handles routing, validation, authentication, throttling, and audit logging for every request.\nIt also normalizes request metadata before dispatch.\n\n## Storage Layer\nThe storage layer persists vectors and metadata for retrieval.\n",
 		MetaData: map[string]interface{}{
-			"document_id": uint64(42),
-			"title":       "Handbook",
+			"document_id":      uint64(42),
+			"title":            "Handbook",
+			"source_file_type": chunkmeta.SourceFileTypeMarkdown,
 		},
 	}
 
@@ -34,6 +37,21 @@ func TestSplitMarkdownDocumentAnnotatesHeadingHierarchy(t *testing.T) {
 		}
 		if chunk.MetaData["document_id"] != uint64(42) {
 			t.Fatalf("expected document_id to be preserved, got %v", chunk.MetaData["document_id"])
+		}
+		if chunk.MetaData[chunkmeta.KeySplitStrategy] != chunkmeta.SplitStrategyMarkdownV1 {
+			t.Fatalf("expected markdown split strategy, got %v", chunk.MetaData[chunkmeta.KeySplitStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeySplitVersion] != "v1" {
+			t.Fatalf("expected split version v1, got %v", chunk.MetaData[chunkmeta.KeySplitVersion])
+		}
+		if chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy] != chunkmeta.EmbeddingBuildStrategyRaw {
+			t.Fatalf("expected raw embedding build strategy, got %v", chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeyContextVersion] != chunkmeta.ContextVersionRawContent {
+			t.Fatalf("expected raw context version, got %v", chunk.MetaData[chunkmeta.KeyContextVersion])
+		}
+		if chunk.MetaData[chunkmeta.KeySourceFileType] != chunkmeta.SourceFileTypeMarkdown {
+			t.Fatalf("expected markdown source file type, got %v", chunk.MetaData[chunkmeta.KeySourceFileType])
 		}
 		if chunk.MetaData["child_id"] == "" || chunk.MetaData["parent_id"] == "" {
 			t.Fatalf("expected child_id/parent_id to be populated, got child=%v parent=%v", chunk.MetaData["child_id"], chunk.MetaData["parent_id"])
@@ -87,6 +105,12 @@ func TestSplitPreservesChildParentOffsets(t *testing.T) {
 
 		if childStart < 0 || childEnd < childStart || childEnd > len(content) {
 			t.Fatalf("invalid child offsets: start=%d end=%d len=%d", childStart, childEnd, len(content))
+		}
+		if chunk.MetaData[chunkmeta.KeySplitStrategy] != chunkmeta.SplitStrategyRecursiveV1 {
+			t.Fatalf("expected recursive split strategy, got %v", chunk.MetaData[chunkmeta.KeySplitStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy] != chunkmeta.EmbeddingBuildStrategyRaw {
+			t.Fatalf("expected raw embedding build strategy, got %v", chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy])
 		}
 		if parentStart > childStart || parentEnd < childEnd {
 			t.Fatalf("expected parent span to contain child span, parent=[%d,%d) child=[%d,%d)", parentStart, parentEnd, childStart, childEnd)

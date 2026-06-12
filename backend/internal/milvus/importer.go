@@ -9,6 +9,8 @@ import (
 	"strings"
 	"time"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -102,6 +104,9 @@ func (mi *MarkdownImporter) ImportFile(ctx context.Context, filePath string, opt
 
 	// 创建元数据
 	metadata := NewDocumentMetadata(filePath, language, category)
+	metadata.SourceFileType = chunkmeta.NormalizeSourceFileType("", filePath)
+	metadata.SplitStrategy = chunkmeta.SplitStrategyMarkdownV1
+	metadata.SplitVersion = chunkmeta.VersionForStrategy(metadata.SplitStrategy)
 	if opts.Source != "" {
 		metadata.Source = opts.Source
 	}
@@ -399,6 +404,9 @@ func (mi *MarkdownImporter) ImportText(ctx context.Context, content string, opts
 	metadata.Source = opts.Source
 	metadata.FilePath = "" // 清空文件路径，因为是纯文本导入
 	metadata.FileName = opts.Title
+	metadata.SourceFileType = chunkmeta.SourceFileTypeMarkdown
+	metadata.SplitStrategy = chunkmeta.SplitStrategyMarkdownV1
+	metadata.SplitVersion = chunkmeta.VersionForStrategy(metadata.SplitStrategy)
 
 	// 尝试从 Markdown 内容中提取标题（如果用户没有提供标题）
 	if opts.Title == "" || opts.Title == "未命名文档" {

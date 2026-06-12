@@ -3,20 +3,27 @@ package retrieval
 import (
 	"testing"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino/schema"
 )
 
 func TestAnnotateParentChildSourceCopiesCitationFields(t *testing.T) {
 	doc := &schema.Document{
 		MetaData: map[string]interface{}{
-			"source":                 "feishu",
-			"document_id":            uint64(9),
-			"chunk_id":               "doc-9-child-000",
-			"child_id":               "doc-9-child-000",
-			"parent_id":              "doc-9-parent-001",
-			"section_title":          "Storage",
-			"hierarchy_path":         "Guide > Storage",
-			"parent_child_available": true,
+			"source":                   "feishu",
+			"document_id":              uint64(9),
+			"chunk_id":                 "doc-9-child-000",
+			"child_id":                 "doc-9-child-000",
+			"parent_id":                "doc-9-parent-001",
+			"section_title":            "Storage",
+			"hierarchy_path":           "Guide > Storage",
+			"parent_child_available":   true,
+			"split_strategy":           chunkmeta.SplitStrategyMarkdownV1,
+			"split_version":            "v1",
+			"source_file_type":         chunkmeta.SourceFileTypeMarkdown,
+			"embedding_build_strategy": chunkmeta.EmbeddingBuildStrategyRaw,
+			"context_version":          chunkmeta.ContextVersionRawContent,
 		},
 	}
 
@@ -44,6 +51,12 @@ func TestAnnotateParentChildSourceCopiesCitationFields(t *testing.T) {
 	if source["parent_child_available"] != true {
 		t.Fatalf("expected parent_child_available=true, got %v", source["parent_child_available"])
 	}
+	if source["split_strategy"] != chunkmeta.SplitStrategyMarkdownV1 {
+		t.Fatalf("expected split_strategy in source, got %v", source["split_strategy"])
+	}
+	if source["embedding_build_strategy"] != chunkmeta.EmbeddingBuildStrategyRaw {
+		t.Fatalf("expected embedding_build_strategy in source, got %v", source["embedding_build_strategy"])
+	}
 }
 
 func TestAnnotateParentChildSourceMarksLegacyChunksUnavailable(t *testing.T) {
@@ -65,6 +78,12 @@ func TestAnnotateParentChildSourceMarksLegacyChunksUnavailable(t *testing.T) {
 	}
 	if doc.MetaData["parent_child_available"] != false {
 		t.Fatalf("expected doc metadata to record parent_child_available=false, got %v", doc.MetaData["parent_child_available"])
+	}
+	if source["split_strategy"] != chunkmeta.SplitStrategyLegacyRecursive {
+		t.Fatalf("expected legacy split strategy fallback, got %v", source["split_strategy"])
+	}
+	if source["embedding_build_strategy"] != chunkmeta.EmbeddingBuildStrategyRaw {
+		t.Fatalf("expected raw embedding fallback, got %v", source["embedding_build_strategy"])
 	}
 }
 

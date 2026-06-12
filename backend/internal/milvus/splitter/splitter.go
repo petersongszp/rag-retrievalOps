@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino/components/document"
 	"github.com/cloudwego/eino/schema"
@@ -65,7 +67,7 @@ func (s *DocumentSplitterService) Split(ctx context.Context, docs []*schema.Docu
 		if err != nil {
 			return nil, fmt.Errorf("failed to split documents: %w", err)
 		}
-		results = append(results, s.annotateSplitChunks(doc, splitResults)...)
+		results = append(results, s.annotateSplitChunks(doc, splitResults, chunkmeta.SplitStrategyRecursiveV1)...)
 	}
 
 	return results, nil

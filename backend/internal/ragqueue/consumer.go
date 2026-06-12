@@ -15,6 +15,7 @@ import (
 
 	"interview-agents/internal/config"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/milvus/chunkmeta"
 	"interview-agents/internal/model"
 	"interview-agents/internal/observability/metrics"
 
@@ -183,12 +184,16 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	}
 
 	baseMeta := milvus.NewKBDocumentMetadata(tenantID, payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
+	sourceFileType := chunkmeta.NormalizeSourceFileType(payload.FileType, docRecord.FileName)
+	baseMeta.SourceFileType = sourceFileType
+	baseMeta.SplitStrategy = chunkmeta.DefaultSplitStrategyForSourceType(sourceFileType)
+	baseMeta.SplitVersion = chunkmeta.VersionForStrategy(baseMeta.SplitStrategy)
 	baseMeta.Extra["collection"] = collection
 	doc := &schema.Document{
 		Content:  rawText,
 		MetaData: baseMeta.ToMap(),
 	}
-	chunks, err := manager.GetSplitterService().Split(ctx, []*schema.Document{doc})
+	chunks, err := splitKnowledgeDocument(ctx, manager.GetSplitterService(), doc, sourceFileType)
 	if err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
 		return 0, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
@@ -221,6 +226,24 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	}
 
 	return totalChunks, nil
+}
+
+type knowledgeDocumentSplitter interface {
+	Split(ctx context.Context, docs []*schema.Document) ([]*schema.Document, error)
+	SplitMarkdownDocument(ctx context.Context, doc *schema.Document) ([]*schema.Document, error)
+}
+
+func splitKnowledgeDocument(ctx context.Context, splitter knowledgeDocumentSplitter, doc *schema.Document, sourceFileType string) ([]*schema.Document, error) {
+	if splitter == nil {
+		return nil, fmt.Errorf("splitter is nil")
+	}
+
+	switch chunkmeta.NormalizeSourceFileType(sourceFileType, "") {
+	case chunkmeta.SourceFileTypeMarkdown:
+		return splitter.SplitMarkdownDocument(ctx, doc)
+	default:
+		return splitter.Split(ctx, []*schema.Document{doc})
+	}
 }
 
 func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr error, startedAt time.Time) {
