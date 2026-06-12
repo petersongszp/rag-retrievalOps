@@ -122,6 +122,7 @@ type source struct {
 	HierarchyPath          string  `json:"hierarchy_path"`
 	ParentFillStrategy     string  `json:"parent_fill_strategy"`
 	ParentFillTokens       int     `json:"parent_fill_tokens"`
+	ParentFillReason       string  `json:"parent_fill_reason"`
 	CitationSupported      bool    `json:"citation_supported"`
 	CitationSupportScore   float64 `json:"citation_support_score"`
 	CitationCheckVersion   string  `json:"citation_check_version"`
@@ -1218,6 +1219,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 				HierarchyPath:          getStringMetadata(doc.MetaData, "hierarchy_path"),
 				ParentFillStrategy:     getStringMetadata(doc.MetaData, "parent_fill_strategy"),
 				ParentFillTokens:       getIntMetadata(doc.MetaData, "parent_fill_tokens"),
+				ParentFillReason:       getStringMetadata(doc.MetaData, "parent_fill_reason"),
 				CitationSupported:      getBoolMetadata(doc.MetaData, "citation_supported"),
 				CitationSupportScore:   getFloat64Metadata(doc.MetaData, "citation_support_score"),
 				CitationCheckVersion:   getStringMetadata(doc.MetaData, "citation_check_version"),

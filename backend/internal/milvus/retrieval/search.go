@@ -87,6 +87,7 @@ type SearchMetrics struct {
 	ParentFillCount        int
 	ParentFillFallback     int
 	ParentFillTokens       int
+	ParentFillReason       string
 	EvidenceGateResult     string
 	RefusalReason          string
 	CitationSupportScore   float64
@@ -247,19 +248,19 @@ func SearchWithExprAndMetrics(
 	return &SearchResult{
 		Documents: documents,
 		Metrics: SearchMetrics{
-			EmbeddingMs:       embeddingMs,
-			SearchMs:          searchMs,
-			PostprocessMs:     postprocessMs,
-			HitCount:          rawHitCount,
-			TruncatedCount:    rawHitCount - len(documents),
-			CandidateTopK:     topK,
-			FinalTopK:         len(documents),
-			Strategy:          "phase1",
-			RetrieverVersion:  DenseRetrieverVersion,
-			DenseHits:         len(documents),
+			EmbeddingMs:        embeddingMs,
+			SearchMs:           searchMs,
+			PostprocessMs:      postprocessMs,
+			HitCount:           rawHitCount,
+			TruncatedCount:     rawHitCount - len(documents),
+			CandidateTopK:      topK,
+			FinalTopK:          len(documents),
+			Strategy:           "phase1",
+			RetrieverVersion:   DenseRetrieverVersion,
+			DenseHits:          len(documents),
 			DenseParticipation: len(documents),
-			PrimaryDenseCount: len(documents),
-			DenseContribution: len(documents),
+			PrimaryDenseCount:  len(documents),
+			DenseContribution:  len(documents),
 		},
 	}, nil
 }

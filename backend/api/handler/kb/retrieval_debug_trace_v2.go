@@ -93,7 +93,9 @@ type retrievalDebugParentChildResponse struct {
 	ParentChildEnabled   bool                      `json:"parent_child_enabled"`
 	ParentFillStrategy   string                    `json:"parent_fill_strategy,omitempty"`
 	ParentFillCount      int                       `json:"parent_fill_count"`
+	ParentFillFallback   int                       `json:"parent_fill_fallback"`
 	ParentFillTokens     int                       `json:"parent_fill_tokens"`
+	ParentFillReason     string                    `json:"parent_fill_reason,omitempty"`
 	ChildHits            []retrieval.DebugDocument `json:"child_hits,omitempty"`
 	ParentContexts       []retrieval.DebugDocument `json:"parent_contexts,omitempty"`
 	ParentChildAvailable bool                      `json:"parent_child_available"`
@@ -223,7 +225,9 @@ func buildRetrievalDebugTraceResponse(
 			ParentChildEnabled:   searchMetrics.ParentChildEnabled,
 			ParentFillStrategy:   firstNonEmptyString(searchMetrics.ParentFillStrategy, logParentFillStrategy(logEntry)),
 			ParentFillCount:      maxInt(searchMetrics.ParentFillCount, logParentFillCount(logEntry)),
+			ParentFillFallback:   maxInt(searchMetrics.ParentFillFallback, logParentFillFallback(logEntry)),
 			ParentFillTokens:     maxInt(searchMetrics.ParentFillTokens, logParentFillTokens(logEntry)),
+			ParentFillReason:     searchMetrics.ParentFillReason,
 			ParentChildAvailable: searchMetrics.ParentChildEnabled,
 		},
 		FinalResults:   items,
@@ -281,6 +285,9 @@ func buildRetrievalDebugTraceResponse(
 		response.ParentChild.ChildHits = append([]retrieval.DebugDocument(nil), debugTrace.ParentChild.ChildHits...)
 		response.ParentChild.ParentContexts = append([]retrieval.DebugDocument(nil), debugTrace.ParentChild.ParentContexts...)
 		response.ParentChild.FallbackReason = debugTrace.ParentChild.FallbackReason
+		if response.ParentChild.ParentFillReason == "" {
+			response.ParentChild.ParentFillReason = debugTrace.ParentChild.FallbackReason
+		}
 		response.Degradation = retrievalDebugDegradationResponse{
 			Enabled:          debugTrace.Degradation.Enabled,
 			Reason:           debugTrace.Degradation.Reason,
@@ -337,23 +344,23 @@ func decodeRetrievalDebugTraceResponse(raw string) (*retrievalDebugTraceResponse
 func buildFallbackRouteHits(metrics retrieval.SearchMetrics) []retrievalDebugRouteHitResponse {
 	return []retrievalDebugRouteHitResponse{
 		{
-			Route:        "dense",
-			Query:        firstNonEmptyString(metrics.DenseQuery, metrics.FinalQuery, metrics.OriginalQuery),
-			HitsCount:    metrics.DenseHits,
+			Route:              "dense",
+			Query:              firstNonEmptyString(metrics.DenseQuery, metrics.FinalQuery, metrics.OriginalQuery),
+			HitsCount:          metrics.DenseHits,
 			ParticipationCount: metrics.DenseParticipation,
-			PrimaryCount: metrics.PrimaryDenseCount,
-			Contribution: metrics.DenseContribution,
-			LatencyMs:    metrics.SearchMs,
+			PrimaryCount:       metrics.PrimaryDenseCount,
+			Contribution:       metrics.DenseContribution,
+			LatencyMs:          metrics.SearchMs,
 		},
 		{
-			Route:        "sparse",
-			Query:        firstNonEmptyString(metrics.SparseQuery, metrics.FinalQuery, metrics.OriginalQuery),
-			HitsCount:    metrics.SparseHits,
-			ParticipationCount: metrics.SparseParticipation,
-			PrimaryCount: metrics.PrimarySparseCount,
-			Contribution: metrics.SparseContribution,
+			Route:                "sparse",
+			Query:                firstNonEmptyString(metrics.SparseQuery, metrics.FinalQuery, metrics.OriginalQuery),
+			HitsCount:            metrics.SparseHits,
+			ParticipationCount:   metrics.SparseParticipation,
+			PrimaryCount:         metrics.PrimarySparseCount,
+			Contribution:         metrics.SparseContribution,
 			CandidateCountBefore: metrics.SparseCandidateBefore,
-			CandidateCountAfter: metrics.SparseCandidateAfter,
+			CandidateCountAfter:  metrics.SparseCandidateAfter,
 		},
 	}
 }
@@ -463,6 +470,13 @@ func logParentFillCount(logEntry *model.KBRetrieveLog) int {
 		return 0
 	}
 	return logEntry.ParentFillCount
+}
+
+func logParentFillFallback(logEntry *model.KBRetrieveLog) int {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.ParentFillFallback
 }
 
 func logParentFillTokens(logEntry *model.KBRetrieveLog) int {

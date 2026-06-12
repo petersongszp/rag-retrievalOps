@@ -64,20 +64,20 @@ type HybridRetriever struct {
 }
 
 type HybridRetrieverConfig struct {
-	CandidateTopK int
-	FusionStrategy string
-	RRFK          int
-	RRFDenseWeight float64
+	CandidateTopK   int
+	FusionStrategy  string
+	RRFK            int
+	RRFDenseWeight  float64
 	RRFSparseWeight float64
-	DenseWeight   float64
-	SparseWeight  float64
-	SparseConfig  *SparseRetrieverConfig
-	RerankerImpl  Reranker
-	QueryRewriter QueryRewriter
-	DynamicTopK   DynamicTopKConfig
-	ParentChild   ParentChildConfig
-	EvidenceGate  EvidenceGateConfig
-	CitationCheck CitationConsistencyConfig
+	DenseWeight     float64
+	SparseWeight    float64
+	SparseConfig    *SparseRetrieverConfig
+	RerankerImpl    Reranker
+	QueryRewriter   QueryRewriter
+	DynamicTopK     DynamicTopKConfig
+	ParentChild     ParentChildConfig
+	EvidenceGate    EvidenceGateConfig
+	CitationCheck   CitationConsistencyConfig
 }
 
 func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConfig) (*HybridRetriever, error) {
@@ -398,11 +398,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 				FinalTopK:             0,
 				TokenBudget:           topKDecision.TokenBudget,
 				TruncateReason:        topKDecision.TruncateReason,
-			Strategy:              "phase2",
-			RetrieverVersion:      HybridRetrieverVersion,
-			FusionStrategy:        h.config.FusionStrategy,
-			RRFK:                  h.config.RRFK,
-			RewriteStrategy:       req.RewriteStrategy,
+				Strategy:              "phase2",
+				RetrieverVersion:      HybridRetrieverVersion,
+				FusionStrategy:        h.config.FusionStrategy,
+				RRFK:                  h.config.RRFK,
+				RewriteStrategy:       req.RewriteStrategy,
 				RewriteApplied:        req.RewriteApplied,
 				OriginalQuery:         req.OriginalQuery,
 				RewriteQuery:          req.RewriteQuery,
@@ -440,11 +440,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	fusionBefore := append(append([]*schema.Document(nil), denseDocs...), sparseDocs...)
 	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
-		FusionStrategy: h.config.FusionStrategy,
-		RRFK:           h.config.RRFK,
-		DenseWeight:    h.config.DenseWeight,
-		SparseWeight:   h.config.SparseWeight,
-		RRFDenseWeight: h.config.RRFDenseWeight,
+		FusionStrategy:  h.config.FusionStrategy,
+		RRFK:            h.config.RRFK,
+		DenseWeight:     h.config.DenseWeight,
+		SparseWeight:    h.config.SparseWeight,
+		RRFDenseWeight:  h.config.RRFDenseWeight,
 		RRFSparseWeight: h.config.RRFSparseWeight,
 	})
 	debugTrace.Fusion = FusionDebugInfo{
@@ -570,7 +570,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		}
 	}
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d parent_fill_reason=%q duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.OriginalQuery,
 		req.RewriteQuery,
@@ -608,6 +608,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		parentFillStats.FilledCount,
 		parentFillStats.FallbackCount,
 		parentFillStats.FilledTokens,
+		parentFillStats.Reason,
 		totalMS,
 		denseMS,
 		sparseMS,
@@ -638,6 +639,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 	result.Metrics.ParentFillCount = parentFillStats.FilledCount
 	result.Metrics.ParentFillFallback = parentFillStats.FallbackCount
 	result.Metrics.ParentFillTokens = parentFillStats.FilledTokens
+	result.Metrics.ParentFillReason = parentFillStats.Reason
 	return result, nil
 }
 

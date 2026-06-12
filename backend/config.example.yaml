@@ -88,7 +88,7 @@ rag:
     enable_query_rewrite: false
     enable_dynamic_topk: false
     enable_advanced_rerank: false
-    enable_parent_child_retrieval: false
+    enable_parent_child_retrieval: true
     enable_strategic_topk: false
     enable_evidence_refusal: false
     enable_citation_consistency: false
