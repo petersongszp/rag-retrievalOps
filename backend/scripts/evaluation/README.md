@@ -147,3 +147,24 @@ python scripts/evaluation/evaluate.py --mode ragas
 产物：
 
 - `scripts/evaluation/evaluation_report.json`
+
+## 6. Chunking Strategy Lane
+
+Chunking-focused regression assets are provided as seed files:
+
+- `scripts/evaluation/chunking_dataset.example.json`
+- `scripts/evaluation/chunking_strategy_profiles.example.json`
+- `scripts/evaluation/chunking_gate_thresholds.example.json`
+
+Run the chunking lane with:
+
+```bash
+go run ./cmd/retrieval-eval \
+  -config ./config.yaml \
+  -dataset ./scripts/evaluation/chunking_dataset.example.json \
+  -profiles ./scripts/evaluation/chunking_strategy_profiles.example.json \
+  -gates ./scripts/evaluation/chunking_gate_thresholds.example.json \
+  -output ./docs/chunking-regression-report
+```
+
+The example dataset uses placeholder chunk ids. Replace them with real ids after ingesting the target corpus before treating the report as a frozen baseline snapshot.

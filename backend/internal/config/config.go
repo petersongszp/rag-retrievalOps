@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"bytes"
@@ -43,17 +43,17 @@ type Config struct {
 	Feishu           FeishuConfig       `yaml:"feishu"`       // 椋炰功閰嶇疆
 	Email            EmailConfig        `yaml:"email"`        // 閭欢閰嶇疆
 	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 闄愭祦閰嶇疆
-	Payment          PaymentConfig      `yaml:"payment"`      
+	Payment          PaymentConfig      `yaml:"payment"`
 	RAGPlatform      RAGPlatformConfig  `yaml:"rag_platform"` // RAG Platform client config
 	ConfigVersion    string             `yaml:"-"`
 }
 
 // RAGPlatformConfig RAG Platform client config
 type RAGPlatformConfig struct {
-	Enabled      bool     `yaml:"enabled"`       // enable RAG Platform calls
-	BaseURL      string   `yaml:"base_url"`      // RAG Platform address
-	APIKey       string   `yaml:"api_key"`       // API Key
-	AppID        string   `yaml:"app_id"`        // client app ID
+	Enabled      bool     `yaml:"enabled"`        // enable RAG Platform calls
+	BaseURL      string   `yaml:"base_url"`       // RAG Platform address
+	APIKey       string   `yaml:"api_key"`        // API Key
+	AppID        string   `yaml:"app_id"`         // client app ID
 	DefaultKBIDs []uint64 `yaml:"default_kb_ids"` // default knowledge base IDs
 }
 
@@ -488,6 +488,9 @@ func LoadConfig(configPath string) (*Config, error) {
 		return nil, err
 	}
 	if err := cfg.writePhase3BaselineSnapshot(configPath); err != nil {
+		return nil, err
+	}
+	if err := cfg.writePhase3ChunkingBaselineSnapshot(configPath); err != nil {
 		return nil, err
 	}
 
@@ -1639,6 +1642,96 @@ func (c *Config) writePhase3BaselineSnapshot(configPath string) error {
 		return fmt.Errorf("failed to write phase3 baseline snapshot: %w", err)
 	}
 	log.Printf("[RAG:L0] phase3 baseline snapshot created: %s", snapshotPath)
+	return nil
+}
+
+func (c *Config) writePhase3ChunkingBaselineSnapshot(configPath string) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	baseDir := filepath.Dir(configPath)
+	snapshotDir := filepath.Join(baseDir, "docs", "baseline", "phase3")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		return fmt.Errorf("failed to create phase3 chunking baseline dir: %w", err)
+	}
+	snapshotPath := filepath.Join(snapshotDir, "chunking_baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check phase3 chunking baseline snapshot: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"snapshot_type":   "phase3_chunking_l0_baseline",
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"config_version":  c.ConfigVersion,
+		"strategy_digest": c.buildRAGStrategyDigest(),
+		"document_splitter": map[string]interface{}{
+			"chunk_size":    c.DocumentSplitter.ChunkSize,
+			"overlap_size":  c.DocumentSplitter.OverlapSize,
+			"separators":    c.DocumentSplitter.Separators,
+			"keep_type":     c.DocumentSplitter.KeepType,
+			"source":        "DocumentSplitter",
+			"roadmap_stage": "L0",
+		},
+		"retrieval_baseline": map[string]interface{}{
+			"enable_parent_child_retrieval": c.RAG.FeatureFlags.EnableParentChildRetrieval,
+			"parent_child_fill_strategy":    c.RAG.Phase3.ParentChildFillStrategy,
+			"parent_child_window_size":      c.RAG.Phase3.ParentChildWindowSize,
+			"parent_child_max_tokens":       c.RAG.Phase3.ParentChildMaxTokens,
+			"milvus_topk":                   c.Milvus.TopK,
+		},
+		"evaluation_baseline": map[string]interface{}{
+			"dataset_path":      "scripts/evaluation/chunking_dataset.example.json",
+			"profile_path":      "scripts/evaluation/chunking_strategy_profiles.example.json",
+			"gate_path":         "scripts/evaluation/chunking_gate_thresholds.example.json",
+			"baseline_profile":  "baseline_recursive",
+			"candidate_profile": "parent_child_enabled",
+			"experiment_groups": []string{
+				"baseline_recursive",
+				"markdown_structure",
+				"contextual_embedding",
+				"parent_child_enabled",
+				"semantic_resplit",
+				"agentic_shadow",
+			},
+		},
+		"metrics_snapshot": map[string]interface{}{
+			"recall_at_k":               nil,
+			"mrr":                       nil,
+			"ndcg":                      nil,
+			"citation_precision":        nil,
+			"parent_fill_gain":          nil,
+			"contextual_recall_gain":    nil,
+			"chunk_purity":              nil,
+			"chunk_self_contained_rate": nil,
+			"ingest_p95_ms":             nil,
+			"avg_embedding_text_length": nil,
+			"p95_embedding_text_length": nil,
+			"avg_chunks_per_document":   nil,
+			"p95_chunks_per_document":   nil,
+			"notes":                     "Fill in after the frozen chunking regression run completes.",
+		},
+		"rollback_contract": map[string]interface{}{
+			"independent_switches_required": true,
+			"rollback_order": []string{
+				"AgenticChunkingEnabled",
+				"SemanticSecondarySplitEnabled",
+				"ContextualEmbeddingEnabled",
+				"enable_parent_child_retrieval",
+				"markdown_structure_route",
+			},
+			"safe_fallback": "recursive splitter + raw content embedding",
+		},
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase3 chunking baseline snapshot: %w", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write phase3 chunking baseline snapshot: %w", err)
+	}
+	log.Printf("[RAG:L0] phase3 chunking baseline snapshot created: %s", snapshotPath)
 	return nil
 }
 

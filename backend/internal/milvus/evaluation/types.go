@@ -46,6 +46,16 @@ type StrategyProfile struct {
 	Name                        string  `json:"name"`
 	Label                       string  `json:"label,omitempty"`
 	Family                      string  `json:"family,omitempty"`
+	SplitStrategy               string  `json:"split_strategy,omitempty"`
+	SplitVersion                string  `json:"split_version,omitempty"`
+	EmbeddingBuildStrategy      string  `json:"embedding_build_strategy,omitempty"`
+	ContextVersion              string  `json:"context_version,omitempty"`
+	ContextualEmbeddingEnabled  bool    `json:"contextual_embedding_enabled,omitempty"`
+	ContextualEmbeddingStrategy string  `json:"contextual_embedding_strategy,omitempty"`
+	SemanticSecondarySplit      bool    `json:"semantic_secondary_split_enabled,omitempty"`
+	SemanticBreakpointMethod    string  `json:"semantic_breakpoint_method,omitempty"`
+	AgenticChunkingEnabled      bool    `json:"agentic_chunking_enabled,omitempty"`
+	AgenticChunkingMode         string  `json:"agentic_chunking_mode,omitempty"`
 	FusionStrategy              string  `json:"fusion_strategy,omitempty"`
 	RRFK                        int     `json:"rrf_k,omitempty"`
 	RRFDenseWeight              float64 `json:"rrf_dense_weight,omitempty"`
@@ -104,6 +114,12 @@ type SearchOutcome struct {
 	Refused               bool
 	RefusalReason         string
 	CitationSupportScore  float64
+	ContextualRecallGain  float64
+	ChunkPurity           float64
+	ChunkSelfContained    float64
+	IngestLatencyMS       float64
+	EmbeddingTextLength   int
+	ChunksPerDocument     int
 	ParentFillCount       int
 	RewriteApplied        bool
 	ModelRewriteApplied   bool
@@ -135,6 +151,12 @@ type QueryMetrics struct {
 	CitationPrecision           float64          `json:"citation_precision"`
 	CitationRecall              float64          `json:"citation_recall"`
 	LongDocCompleteness         float64          `json:"long_doc_completeness"`
+	ContextualRecallGain        float64          `json:"contextual_recall_gain"`
+	ChunkPurity                 float64          `json:"chunk_purity"`
+	ChunkSelfContainedRate      float64          `json:"chunk_self_contained_rate"`
+	IngestLatencyMS             float64          `json:"ingest_latency_ms"`
+	EmbeddingTextLength         int              `json:"embedding_text_length"`
+	ChunksPerDocument           int              `json:"chunks_per_document"`
 	Refused                     bool             `json:"refused"`
 	RefusalReason               string           `json:"refusal_reason,omitempty"`
 	RefusalExpected             bool             `json:"refusal_expected"`
@@ -173,6 +195,9 @@ type AggregateMetrics struct {
 	CitationPrecision        float64       `json:"citation_precision"`
 	CitationRecall           float64       `json:"citation_recall"`
 	LongDocCompleteness      float64       `json:"long_doc_completeness"`
+	ContextualRecallGain     float64       `json:"contextual_recall_gain"`
+	ChunkPurity              float64       `json:"chunk_purity"`
+	ChunkSelfContainedRate   float64       `json:"chunk_self_contained_rate"`
 	EvidenceRefusalRate      float64       `json:"evidence_refusal_rate"`
 	RefusalFalsePositiveRate float64       `json:"refusal_false_positive_rate"`
 	ParentFillGain           float64       `json:"parent_fill_gain"`
@@ -188,6 +213,11 @@ type AggregateMetrics struct {
 	EmptyRate                float64       `json:"empty_rate"`
 	DenseRouteContribution   float64       `json:"dense_route_contribution"`
 	SparseRouteContribution  float64       `json:"sparse_route_contribution"`
+	IngestP95MS              float64       `json:"ingest_p95_ms"`
+	AvgEmbeddingTextLength   float64       `json:"avg_embedding_text_length"`
+	P95EmbeddingTextLength   float64       `json:"p95_embedding_text_length"`
+	AvgChunksPerDocument     float64       `json:"avg_chunks_per_document"`
+	P95ChunksPerDocument     float64       `json:"p95_chunks_per_document"`
 	P50LatencyMS             float64       `json:"p50_latency_ms"`
 	P95LatencyMS             float64       `json:"p95_latency_ms"`
 	AvgLatencyMS             float64       `json:"avg_latency_ms"`
@@ -212,6 +242,9 @@ type StrategyDelta struct {
 	CitationPrecisionDelta    float64 `json:"citation_precision_delta"`
 	CitationRecallDelta       float64 `json:"citation_recall_delta"`
 	LongDocCompletenessDelta  float64 `json:"long_doc_completeness_delta"`
+	ContextualRecallGainDelta float64 `json:"contextual_recall_gain_delta"`
+	ChunkPurityDelta          float64 `json:"chunk_purity_delta"`
+	ChunkSelfContainedDelta   float64 `json:"chunk_self_contained_rate_delta"`
 	ParentFillGainDelta       float64 `json:"parent_fill_gain_delta"`
 	RefusalFalsePositiveDelta float64 `json:"refusal_false_positive_delta"`
 	DenseHitRateDelta         float64 `json:"dense_hit_rate_delta"`
@@ -221,6 +254,12 @@ type StrategyDelta struct {
 	PrimaryDenseRateDelta     float64 `json:"primary_dense_rate_delta"`
 	PrimarySparseRateDelta    float64 `json:"primary_sparse_rate_delta"`
 	EmptyRateDelta            float64 `json:"empty_rate_delta"`
+	IngestP95DeltaMS          float64 `json:"ingest_p95_delta_ms"`
+	IngestP95DeltaRatio       float64 `json:"ingest_p95_delta_ratio"`
+	AvgEmbeddingLengthDelta   float64 `json:"avg_embedding_text_length_delta"`
+	P95EmbeddingLengthDelta   float64 `json:"p95_embedding_text_length_delta"`
+	AvgChunksPerDocDelta      float64 `json:"avg_chunks_per_document_delta"`
+	P95ChunksPerDocDelta      float64 `json:"p95_chunks_per_document_delta"`
 	P95LatencyDeltaMS         float64 `json:"p95_latency_delta_ms"`
 }
 
@@ -236,6 +275,9 @@ type ComparisonSummary struct {
 	CitationPrecisionDelta       float64 `json:"citation_precision_delta"`
 	CitationRecallDelta          float64 `json:"citation_recall_delta"`
 	LongDocCompletenessDelta     float64 `json:"long_doc_completeness_delta"`
+	ContextualRecallGainDelta    float64 `json:"contextual_recall_gain_delta"`
+	ChunkPurityDelta             float64 `json:"chunk_purity_delta"`
+	ChunkSelfContainedDelta      float64 `json:"chunk_self_contained_rate_delta"`
 	ParentFillGainDelta          float64 `json:"parent_fill_gain_delta"`
 	EvidenceRefusalRateDelta     float64 `json:"evidence_refusal_rate_delta"`
 	RefusalFalsePositiveRate     float64 `json:"refusal_false_positive_rate"`
@@ -249,6 +291,12 @@ type ComparisonSummary struct {
 	PrimaryDenseRateDelta        float64 `json:"primary_dense_rate_delta"`
 	PrimarySparseRateDelta       float64 `json:"primary_sparse_rate_delta"`
 	EmptyRateDelta               float64 `json:"empty_rate_delta"`
+	IngestP95DeltaMS             float64 `json:"ingest_p95_delta_ms"`
+	IngestP95DeltaRatio          float64 `json:"ingest_p95_delta_ratio"`
+	AvgEmbeddingLengthDelta      float64 `json:"avg_embedding_text_length_delta"`
+	P95EmbeddingLengthDelta      float64 `json:"p95_embedding_text_length_delta"`
+	AvgChunksPerDocDelta         float64 `json:"avg_chunks_per_document_delta"`
+	P95ChunksPerDocDelta         float64 `json:"p95_chunks_per_document_delta"`
 	P95LatencyDeltaMS            float64 `json:"p95_latency_delta_ms"`
 	P95LatencyDeltaRatio         float64 `json:"p95_latency_delta_ratio"`
 	CandidateModelRewrite        bool    `json:"candidate_model_rewrite"`
@@ -261,8 +309,18 @@ type GateThresholds struct {
 	MinCitationAccuracyDelta     float64 `json:"min_citation_accuracy_delta"`
 	MinCitationPrecisionDelta    float64 `json:"min_citation_precision_delta"`
 	MinCitationRecallDelta       float64 `json:"min_citation_recall_delta"`
+	MinContextualRecallGainDelta float64 `json:"min_contextual_recall_gain_delta"`
+	MinChunkPurityDelta          float64 `json:"min_chunk_purity_delta"`
+	MinChunkSelfContainedDelta   float64 `json:"min_chunk_self_contained_rate_delta"`
+	MinParentFillGainDelta       float64 `json:"min_parent_fill_gain_delta"`
 	MaxP95LatencyRegressionMS    float64 `json:"max_p95_latency_regression_ms"`
 	MaxP95LatencyRegressionRatio float64 `json:"max_p95_latency_regression_ratio"`
+	MaxIngestP95RegressionMS     float64 `json:"max_ingest_p95_regression_ms"`
+	MaxIngestP95RegressionRatio  float64 `json:"max_ingest_p95_regression_ratio"`
+	MaxAvgEmbeddingLengthDelta   float64 `json:"max_avg_embedding_text_length_delta"`
+	MaxP95EmbeddingLengthDelta   float64 `json:"max_p95_embedding_text_length_delta"`
+	MaxAvgChunksPerDocDelta      float64 `json:"max_avg_chunks_per_document_delta"`
+	MaxP95ChunksPerDocDelta      float64 `json:"max_p95_chunks_per_document_delta"`
 	MaxRefusalFalsePositiveRate  float64 `json:"max_refusal_false_positive_rate"`
 	MinRewriteGainDelta          float64 `json:"min_rewrite_gain_delta"`
 }

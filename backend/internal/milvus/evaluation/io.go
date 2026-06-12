@@ -79,7 +79,7 @@ func LoadProfileBundle(path string) (ProfileBundle, error) {
 }
 
 func LoadGateThresholds(path string) (GateThresholds, error) {
-	var thresholds GateThresholds
+	thresholds := DefaultGateThresholds()
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return thresholds, err
@@ -120,25 +120,38 @@ func RenderMarkdownReport(report *Report) string {
 	}
 
 	buf.WriteString("## Metrics\n\n")
-	buf.WriteString("| Strategy | Fusion | Recall@K | MRR | nDCG | Citation Acc | Dense Hit | Sparse Hit | Dense Part. | Sparse Part. | Primary Sparse | Empty Rate | P50(ms) | P95(ms) |\n")
-	buf.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
+	buf.WriteString("| Strategy | Fusion | Recall@K | MRR | nDCG | Citation Acc | Chunk Purity | Self-contained | Parent Fill | Context Gain | P50(ms) | P95(ms) |\n")
+	buf.WriteString("| --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |\n")
 	for _, result := range report.Results {
 		buf.WriteString(fmt.Sprintf(
-			"| %s | %s | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
+			"| %s | %s | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.4f | %.2f | %.2f |\n",
 			result.Strategy.Name,
 			formatFusionStrategy(result.Strategy),
 			result.Metrics.RecallAtK,
 			result.Metrics.MRR,
 			result.Metrics.NDCG,
 			result.Metrics.CitationAccuracy,
-			result.Metrics.DenseHitRate,
-			result.Metrics.SparseHitRate,
-			result.Metrics.DenseParticipationRate,
-			result.Metrics.SparseParticipationRate,
-			result.Metrics.PrimarySparseRate,
-			result.Metrics.EmptyRate,
+			result.Metrics.ChunkPurity,
+			result.Metrics.ChunkSelfContainedRate,
+			result.Metrics.ParentFillGain,
+			result.Metrics.ContextualRecallGain,
 			result.Metrics.P50LatencyMS,
 			result.Metrics.P95LatencyMS,
+		))
+	}
+
+	buf.WriteString("\n## Chunking Stats\n\n")
+	buf.WriteString("| Strategy | Avg Embedding Len | P95 Embedding Len | Avg Chunks/Doc | P95 Chunks/Doc | Ingest P95(ms) |\n")
+	buf.WriteString("| --- | ---: | ---: | ---: | ---: | ---: |\n")
+	for _, result := range report.Results {
+		buf.WriteString(fmt.Sprintf(
+			"| %s | %.2f | %.2f | %.2f | %.2f | %.2f |\n",
+			result.Strategy.Name,
+			result.Metrics.AvgEmbeddingTextLength,
+			result.Metrics.P95EmbeddingTextLength,
+			result.Metrics.AvgChunksPerDocument,
+			result.Metrics.P95ChunksPerDocument,
+			result.Metrics.IngestP95MS,
 		))
 	}
 
@@ -153,6 +166,9 @@ func RenderMarkdownReport(report *Report) string {
 	buf.WriteString(fmt.Sprintf("- Citation Precision Delta: `%.4f`\n", report.Comparison.CitationPrecisionDelta))
 	buf.WriteString(fmt.Sprintf("- Citation Recall Delta: `%.4f`\n", report.Comparison.CitationRecallDelta))
 	buf.WriteString(fmt.Sprintf("- Parent Fill Gain Delta: `%.4f`\n", report.Comparison.ParentFillGainDelta))
+	buf.WriteString(fmt.Sprintf("- Contextual Recall Gain Delta: `%.4f`\n", report.Comparison.ContextualRecallGainDelta))
+	buf.WriteString(fmt.Sprintf("- Chunk Purity Delta: `%.4f`\n", report.Comparison.ChunkPurityDelta))
+	buf.WriteString(fmt.Sprintf("- Chunk Self-contained Rate Delta: `%.4f`\n", report.Comparison.ChunkSelfContainedDelta))
 	buf.WriteString(fmt.Sprintf("- Rewrite Gain Delta: `%.4f`\n", report.Comparison.RewriteGainDelta))
 	buf.WriteString(fmt.Sprintf("- Dense Hit Rate Delta: `%.4f`\n", report.Comparison.DenseHitRateDelta))
 	buf.WriteString(fmt.Sprintf("- Sparse Hit Rate Delta: `%.4f`\n", report.Comparison.SparseHitRateDelta))
@@ -164,6 +180,11 @@ func RenderMarkdownReport(report *Report) string {
 	buf.WriteString(fmt.Sprintf("- Dense Route Contribution Delta: `%.4f`\n", report.Comparison.DenseRouteContributionDelta))
 	buf.WriteString(fmt.Sprintf("- Sparse Route Contribution Delta: `%.4f`\n", report.Comparison.SparseRouteContributionDelta))
 	buf.WriteString(fmt.Sprintf("- Refusal False Positive Rate: `%.4f`\n", report.Comparison.RefusalFalsePositiveRate))
+	buf.WriteString(fmt.Sprintf("- Ingest P95 Delta: `%.2f ms` (`%.2f%%`)\n", report.Comparison.IngestP95DeltaMS, report.Comparison.IngestP95DeltaRatio*100))
+	buf.WriteString(fmt.Sprintf("- Avg Embedding Text Length Delta: `%.2f`\n", report.Comparison.AvgEmbeddingLengthDelta))
+	buf.WriteString(fmt.Sprintf("- P95 Embedding Text Length Delta: `%.2f`\n", report.Comparison.P95EmbeddingLengthDelta))
+	buf.WriteString(fmt.Sprintf("- Avg Chunks Per Document Delta: `%.2f`\n", report.Comparison.AvgChunksPerDocDelta))
+	buf.WriteString(fmt.Sprintf("- P95 Chunks Per Document Delta: `%.2f`\n", report.Comparison.P95ChunksPerDocDelta))
 	buf.WriteString(fmt.Sprintf("- P95 Latency Delta: `%.2f ms` (`%.2f%%`)\n\n", report.Comparison.P95LatencyDeltaMS, report.Comparison.P95LatencyDeltaRatio*100))
 
 	buf.WriteString("## Contribution\n\n")
@@ -172,7 +193,7 @@ func RenderMarkdownReport(report *Report) string {
 	} else {
 		for _, delta := range report.Contribution {
 			buf.WriteString(fmt.Sprintf(
-				"- `%s` (%s) vs `%s` (%s): Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Dense/Sparse Hit `%.4f / %.4f`, Dense/Sparse Part. `%.4f / %.4f`, Primary Sparse `%.4f`, Empty `%.4f`, P95 `%.2f ms`\n",
+				"- `%s` (%s) vs `%s` (%s): Recall `%.4f`, MRR `%.4f`, nDCG `%.4f`, Citation Acc `%.4f`, Chunk Purity `%.4f`, Self-contained `%.4f`, Dense/Sparse Hit `%.4f / %.4f`, Dense/Sparse Part. `%.4f / %.4f`, Primary Sparse `%.4f`, Empty `%.4f`, Ingest P95 `%.2f ms`, Query P95 `%.2f ms`\n",
 				delta.Strategy,
 				blankAsNA(delta.FusionStrategy),
 				delta.ComparedTo,
@@ -181,12 +202,15 @@ func RenderMarkdownReport(report *Report) string {
 				delta.MRRDelta,
 				delta.NDCGDelta,
 				delta.CitationAccuracyDelta,
+				delta.ChunkPurityDelta,
+				delta.ChunkSelfContainedDelta,
 				delta.DenseHitRateDelta,
 				delta.SparseHitRateDelta,
 				delta.DenseParticipationDelta,
 				delta.SparseParticipationDelta,
 				delta.PrimarySparseRateDelta,
 				delta.EmptyRateDelta,
+				delta.IngestP95DeltaMS,
 				delta.P95LatencyDeltaMS,
 			))
 		}

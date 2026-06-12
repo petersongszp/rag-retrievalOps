@@ -1,0 +1,125 @@
+{
+  "dataset_version": "chunking-l0-v1",
+  "description": "Chunking-focused regression seed dataset. Replace placeholder chunk ids after ingesting the target corpus.",
+  "cases": [
+    {
+      "id": "markdown-heading-hierarchy",
+      "query": "What does the deployment checklist say about rollback order?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-markdown-heading-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-markdown-heading-001"
+        }
+      ],
+      "query_type": "heading_dependent",
+      "scenario": "markdown_structure",
+      "expected_behavior": "prefer section-aware chunk with heading hierarchy",
+      "tags": ["markdown", "heading_hierarchy", "structure_aware"]
+    },
+    {
+      "id": "title-dependent-short-chunk",
+      "query": "What is the retention rule in that incident response subsection?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-title-dependent-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-title-dependent-001"
+        }
+      ],
+      "query_type": "title_dependent",
+      "scenario": "contextual_embedding",
+      "expected_behavior": "contextual prefix should disambiguate short child chunk",
+      "tags": ["markdown", "short_chunk", "contextual_embedding"]
+    },
+    {
+      "id": "long-paragraph",
+      "query": "Which three failure modes are listed in the long operations paragraph?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-long-paragraph-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-long-paragraph-001"
+        }
+      ],
+      "query_type": "long_paragraph",
+      "scenario": "semantic_resplit",
+      "expected_behavior": "oversized block should be split without losing local coherence",
+      "tags": ["txt", "long_paragraph", "semantic_split_candidate"]
+    },
+    {
+      "id": "multi-topic-section",
+      "query": "Where does the document discuss quota exhaustion rather than retry policy?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-multi-topic-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-multi-topic-001"
+        }
+      ],
+      "query_type": "multi_topic",
+      "scenario": "semantic_resplit",
+      "expected_behavior": "multi-topic section should avoid mixed-topic chunk contamination",
+      "tags": ["markdown", "multi_topic", "chunk_purity"]
+    },
+    {
+      "id": "pdf-weak-structure",
+      "query": "What does the extracted PDF text say about cost controls?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-pdf-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-pdf-001"
+        }
+      ],
+      "query_type": "weak_structure",
+      "scenario": "baseline_recursive",
+      "expected_behavior": "weakly structured text should still be retrievable without parser regressions",
+      "tags": ["pdf", "weak_structure", "baseline"]
+    },
+    {
+      "id": "txt-plain-text",
+      "query": "Which paragraph explains the plain text fallback mode?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-txt-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-txt-001"
+        }
+      ],
+      "query_type": "plain_text",
+      "scenario": "baseline_recursive",
+      "expected_behavior": "txt ingest should remain on the generic splitter path",
+      "tags": ["txt", "plain_text", "generic_splitter"]
+    },
+    {
+      "id": "markdown-table-list",
+      "query": "Which bullet describes the alert escalation policy?",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-after-ingest-markdown-list-001"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-after-ingest-markdown-list-001"
+        }
+      ],
+      "query_type": "list_table",
+      "scenario": "parent_child_enabled",
+      "expected_behavior": "list-heavy markdown should retain enough neighborhood context for citation",
+      "tags": ["markdown", "list", "table", "parent_child"]
+    }
+  ]
+}

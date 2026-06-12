@@ -192,6 +192,9 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 	citationPrecision := 0.0
 	citationRecall := 0.0
 	longDocCompleteness := 0.0
+	contextualRecallGain := 0.0
+	chunkPurity := 0.0
+	chunkSelfContainedRate := 0.0
 	refusalCount := 0.0
 	refusalFalsePositive := 0.0
 	parentFillGain := 0.0
@@ -207,6 +210,9 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 	emptyRate := 0.0
 	denseContribution := 0.0
 	sparseContribution := 0.0
+	ingestLatencies := make([]float64, 0, len(queryMetrics))
+	embeddingTextLengths := make([]int, 0, len(queryMetrics))
+	chunksPerDocument := make([]int, 0, len(queryMetrics))
 	for _, metric := range queryMetrics {
 		recall += metric.RecallAtK
 		mrr += metric.MRR
@@ -215,6 +221,9 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 		citationPrecision += metric.CitationPrecision
 		citationRecall += metric.CitationRecall
 		longDocCompleteness += metric.LongDocCompleteness
+		contextualRecallGain += metric.ContextualRecallGain
+		chunkPurity += metric.ChunkPurity
+		chunkSelfContainedRate += metric.ChunkSelfContainedRate
 		if metric.Refused {
 			refusalCount++
 		}
@@ -259,6 +268,9 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 			denseContribution += float64(metric.DenseContribution) / float64(totalRouteContribution)
 			sparseContribution += float64(metric.SparseContribution) / float64(totalRouteContribution)
 		}
+		ingestLatencies = append(ingestLatencies, metric.IngestLatencyMS)
+		embeddingTextLengths = append(embeddingTextLengths, metric.EmbeddingTextLength)
+		chunksPerDocument = append(chunksPerDocument, metric.ChunksPerDocument)
 	}
 	count := float64(len(queryMetrics))
 	if count == 0 {
@@ -272,6 +284,9 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 		CitationPrecision:        citationPrecision / count,
 		CitationRecall:           citationRecall / count,
 		LongDocCompleteness:      longDocCompleteness / count,
+		ContextualRecallGain:     contextualRecallGain / count,
+		ChunkPurity:              chunkPurity / count,
+		ChunkSelfContainedRate:   chunkSelfContainedRate / count,
 		EvidenceRefusalRate:      refusalCount / count,
 		RefusalFalsePositiveRate: refusalFalsePositive / count,
 		ParentFillGain:           parentFillGain / count,
@@ -287,6 +302,11 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 		EmptyRate:                emptyRate / count,
 		DenseRouteContribution:   denseContribution / count,
 		SparseRouteContribution:  sparseContribution / count,
+		IngestP95MS:              percentileFloat64(ingestLatencies, 95),
+		AvgEmbeddingTextLength:   averageInt(embeddingTextLengths),
+		P95EmbeddingTextLength:   percentileInt(embeddingTextLengths, 95),
+		AvgChunksPerDocument:     averageInt(chunksPerDocument),
+		P95ChunksPerDocument:     percentileInt(chunksPerDocument, 95),
 		P50LatencyMS:             percentileLatency(latencies, 50),
 		P95LatencyMS:             percentileLatency(latencies, 95),
 		AvgLatencyMS:             averageLatency(latencies),
@@ -322,6 +342,51 @@ func averageLatency(latencies []time.Duration) float64 {
 		total += latency
 	}
 	return float64(total.Microseconds()) / 1000.0 / float64(len(latencies))
+}
+
+func percentileFloat64(values []float64, percentile float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := make([]float64, len(values))
+	copy(sorted, values)
+	sort.Float64s(sorted)
+	index := int(math.Ceil((percentile/100.0)*float64(len(sorted)))) - 1
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+	return sorted[index]
+}
+
+func percentileInt(values []int, percentile float64) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	sorted := make([]int, len(values))
+	copy(sorted, values)
+	sort.Ints(sorted)
+	index := int(math.Ceil((percentile/100.0)*float64(len(sorted)))) - 1
+	if index < 0 {
+		index = 0
+	}
+	if index >= len(sorted) {
+		index = len(sorted) - 1
+	}
+	return float64(sorted[index])
+}
+
+func averageInt(values []int) float64 {
+	if len(values) == 0 {
+		return 0
+	}
+	total := 0
+	for _, value := range values {
+		total += value
+	}
+	return float64(total) / float64(len(values))
 }
 
 func normalizeID(id string) string {
