@@ -76,6 +76,7 @@ func (s *DocumentSplitterService) SplitMarkdownDocument(ctx context.Context, doc
 	if err != nil {
 		return nil, fmt.Errorf("failed to split markdown document: %w", err)
 	}
+	results = s.applySemanticSecondarySplit(ctx, results)
 
 	return s.annotateSplitChunks(doc, results, chunkmeta.SplitStrategyMarkdownV1), nil
 }
@@ -136,6 +137,7 @@ func (s *DocumentSplitterService) SplitMarkdownDocuments(ctx context.Context, do
 		if err != nil {
 			return nil, fmt.Errorf("failed to split markdown documents: %w", err)
 		}
+		splitResults = s.applySemanticSecondarySplit(ctx, splitResults)
 		results = append(results, s.annotateSplitChunks(doc, splitResults, chunkmeta.SplitStrategyMarkdownV1)...)
 	}
 

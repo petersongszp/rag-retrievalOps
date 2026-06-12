@@ -98,6 +98,15 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		return nil, fmt.Errorf("failed to initialize document splitter: %w", err)
 	}
 	manager.SplitterService = splitterService
+	manager.SplitterService.ConfigureSemanticSplit(splitter.SemanticSplitConfig{
+		Enabled:              cfg.DocumentSplitter.SemanticSecondarySplitEnabled,
+		MinBlockSize:         cfg.DocumentSplitter.SemanticMinBlockSize,
+		TargetChunkSize:      cfg.DocumentSplitter.SemanticTargetChunkSize,
+		MaxChunkSize:         cfg.DocumentSplitter.SemanticMaxChunkSize,
+		BreakpointPercentile: cfg.DocumentSplitter.SemanticBreakpointPercentile,
+		MinSentencesPerChunk: cfg.DocumentSplitter.SemanticMinSentencesPerChunk,
+		Embedder:             embeddingService.GetEmbedder(),
+	})
 	log.Printf("Document Splitter initialized: ChunkSize=%d, OverlapSize=%d",
 		cfg.DocumentSplitter.ChunkSize, cfg.DocumentSplitter.OverlapSize)
 

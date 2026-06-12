@@ -8,6 +8,7 @@ import (
 
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino/components/document"
+	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -15,8 +16,19 @@ import (
 
 // DocumentSplitterService 封装文档分割器服务
 type DocumentSplitterService struct {
-	config   *recursive.Config
-	splitter document.Transformer
+	config         *recursive.Config
+	splitter       document.Transformer
+	semanticConfig SemanticSplitConfig
+}
+
+type SemanticSplitConfig struct {
+	Enabled              bool
+	MinBlockSize         int
+	TargetChunkSize      int
+	MaxChunkSize         int
+	BreakpointPercentile int
+	MinSentencesPerChunk int
+	Embedder             embedding.Embedder
 }
 
 // NewDocumentSplitterService 创建新的文档分割器服务
@@ -52,6 +64,28 @@ func NewDocumentSplitterService(ctx context.Context, config *recursive.Config) (
 	}, nil
 }
 
+func (s *DocumentSplitterService) ConfigureSemanticSplit(cfg SemanticSplitConfig) {
+	if s == nil {
+		return
+	}
+	if cfg.MinBlockSize <= 0 {
+		cfg.MinBlockSize = 1200
+	}
+	if cfg.TargetChunkSize <= 0 {
+		cfg.TargetChunkSize = 1000
+	}
+	if cfg.MaxChunkSize <= 0 {
+		cfg.MaxChunkSize = 1400
+	}
+	if cfg.BreakpointPercentile <= 0 {
+		cfg.BreakpointPercentile = 20
+	}
+	if cfg.MinSentencesPerChunk <= 0 {
+		cfg.MinSentencesPerChunk = 2
+	}
+	s.semanticConfig = cfg
+}
+
 // Split 分割文档
 func (s *DocumentSplitterService) Split(ctx context.Context, docs []*schema.Document) ([]*schema.Document, error) {
 	if len(docs) == 0 {
@@ -67,6 +101,7 @@ func (s *DocumentSplitterService) Split(ctx context.Context, docs []*schema.Docu
 		if err != nil {
 			return nil, fmt.Errorf("failed to split documents: %w", err)
 		}
+		splitResults = s.applySemanticSecondarySplit(ctx, splitResults)
 		results = append(results, s.annotateSplitChunks(doc, splitResults, chunkmeta.SplitStrategyRecursiveV1)...)
 	}
 

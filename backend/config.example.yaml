@@ -202,6 +202,12 @@ DocumentSplitter:
   ContextualEmbeddingMaxContentChars: 3000
   SaveEmbeddingContentForDebug: false
   EmbeddingContentMaxLength: 1200
+  SemanticSecondarySplitEnabled: false
+  SemanticMinBlockSize: 1200
+  SemanticTargetChunkSize: 1000
+  SemanticMaxChunkSize: 1400
+  SemanticBreakpointPercentile: 20
+  SemanticMinSentencesPerChunk: 2
 
 # 微信配置
 wechat:

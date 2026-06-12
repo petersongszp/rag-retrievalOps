@@ -327,6 +327,9 @@ func annotateParentChildSource(doc *schema.Document) {
 		chunkmeta.KeyEmbeddingBuildStrategy,
 		chunkmeta.KeyContextVersion,
 		chunkmeta.KeySemanticSplitEnabled,
+		chunkmeta.KeySemanticSplitScore,
+		chunkmeta.KeySemanticParentSection,
+		chunkmeta.KeySemanticBreakpointMethod,
 	)
 
 	parentChildAvailable := false

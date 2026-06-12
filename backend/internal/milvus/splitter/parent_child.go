@@ -115,6 +115,11 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 			mergedMeta["parent_end_offset"] = parentEnd
 			mergedMeta["parent_token_count"] = parentTokenCount
 		}
+		if semanticEnabled, ok := mergedMeta[chunkmeta.KeySemanticSplitEnabled].(bool); ok && semanticEnabled {
+			if _, exists := mergedMeta[chunkmeta.KeySemanticParentSection]; !exists {
+				mergedMeta[chunkmeta.KeySemanticParentSection] = firstNonEmptyString(parentID, hierarchyPath, sectionTitle)
+			}
+		}
 
 		chunk.MetaData = mergedMeta
 		if strings.TrimSpace(chunk.ID) == "" {

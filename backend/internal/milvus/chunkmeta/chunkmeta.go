@@ -7,15 +7,16 @@ import (
 )
 
 const (
-	KeySplitStrategy          = "split_strategy"
-	KeySplitVersion           = "split_version"
-	KeySplitStage             = "split_stage"
-	KeySourceFileType         = "source_file_type"
-	KeySemanticSplitEnabled   = "semantic_split_enabled"
-	KeySemanticSplitScore     = "semantic_split_score"
-	KeySemanticParentSection  = "semantic_parent_section_id"
-	KeyEmbeddingBuildStrategy = "embedding_build_strategy"
-	KeyContextVersion         = "context_version"
+	KeySplitStrategy            = "split_strategy"
+	KeySplitVersion             = "split_version"
+	KeySplitStage               = "split_stage"
+	KeySourceFileType           = "source_file_type"
+	KeySemanticSplitEnabled     = "semantic_split_enabled"
+	KeySemanticSplitScore       = "semantic_split_score"
+	KeySemanticParentSection    = "semantic_parent_section_id"
+	KeySemanticBreakpointMethod = "semantic_breakpoint_method"
+	KeyEmbeddingBuildStrategy   = "embedding_build_strategy"
+	KeyContextVersion           = "context_version"
 
 	SplitStrategyRecursiveV1      = "recursive_v1"
 	SplitStrategyMarkdownV1       = "markdown_structure_v1"
@@ -23,6 +24,7 @@ const (
 	SplitStagePrimary             = "primary"
 	EmbeddingBuildStrategyRaw     = "raw_content_embedding"
 	ContextVersionRawContent      = "raw_content_v1"
+	SemanticBreakpointEmbeddingV1 = "embedding_similarity_v1"
 	SourceFileTypeMarkdown        = "markdown"
 	SourceFileTypeTXT             = "txt"
 	SourceFileTypePDF             = "pdf"

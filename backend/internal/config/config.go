@@ -851,6 +851,21 @@ func (c *Config) applyRAGDefaults() {
 	if c.DocumentSplitter.EmbeddingContentMaxLength <= 0 {
 		c.DocumentSplitter.EmbeddingContentMaxLength = 1200
 	}
+	if c.DocumentSplitter.SemanticMinBlockSize <= 0 {
+		c.DocumentSplitter.SemanticMinBlockSize = 1200
+	}
+	if c.DocumentSplitter.SemanticTargetChunkSize <= 0 {
+		c.DocumentSplitter.SemanticTargetChunkSize = 1000
+	}
+	if c.DocumentSplitter.SemanticMaxChunkSize <= 0 {
+		c.DocumentSplitter.SemanticMaxChunkSize = 1400
+	}
+	if c.DocumentSplitter.SemanticBreakpointPercentile <= 0 {
+		c.DocumentSplitter.SemanticBreakpointPercentile = 20
+	}
+	if c.DocumentSplitter.SemanticMinSentencesPerChunk <= 0 {
+		c.DocumentSplitter.SemanticMinSentencesPerChunk = 2
+	}
 }
 
 func (c *Config) applyRAGEnvOverrides() error {
@@ -1924,6 +1939,12 @@ type SplitterConfig struct {
 	ContextualEmbeddingMaxContentChars int      `yaml:"ContextualEmbeddingMaxContentChars"`
 	SaveEmbeddingContentForDebug       bool     `yaml:"SaveEmbeddingContentForDebug"`
 	EmbeddingContentMaxLength          int      `yaml:"EmbeddingContentMaxLength"`
+	SemanticSecondarySplitEnabled      bool     `yaml:"SemanticSecondarySplitEnabled"`
+	SemanticMinBlockSize               int      `yaml:"SemanticMinBlockSize"`
+	SemanticTargetChunkSize            int      `yaml:"SemanticTargetChunkSize"`
+	SemanticMaxChunkSize               int      `yaml:"SemanticMaxChunkSize"`
+	SemanticBreakpointPercentile       int      `yaml:"SemanticBreakpointPercentile"`
+	SemanticMinSentencesPerChunk       int      `yaml:"SemanticMinSentencesPerChunk"`
 }
 
 // ExpandEnv 灞曞紑閰嶇疆涓殑鐜鍙橀噺寮曠敤

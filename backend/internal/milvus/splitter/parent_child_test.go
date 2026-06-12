@@ -8,6 +8,7 @@ import (
 	"interview-agents/internal/milvus/chunkmeta"
 
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
+	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -161,6 +162,48 @@ func TestLongHeadingSectionUsesTruncatedParentWindow(t *testing.T) {
 	}
 }
 
+func TestSemanticSecondarySplitMarksLongBlocks(t *testing.T) {
+	service := mustNewTestSplitter(t, 500, 20)
+	service.ConfigureSemanticSplit(SemanticSplitConfig{
+		Enabled:              true,
+		MinBlockSize:         80,
+		TargetChunkSize:      60,
+		MaxChunkSize:         90,
+		BreakpointPercentile: 50,
+		MinSentencesPerChunk: 2,
+		Embedder:             &fakeSemanticEmbedder{},
+	})
+
+	doc := &schema.Document{
+		Content: "Alpha topic introduces the incident and the first mitigation. Alpha topic continues with more operational detail. Beta topic switches to cost controls and exception handling. Beta topic adds alerts and escalation steps.",
+		MetaData: map[string]interface{}{
+			"document_id": uint64(501),
+			"title":       "Semantic Guide",
+		},
+	}
+
+	chunks, err := service.Split(context.Background(), []*schema.Document{doc})
+	if err != nil {
+		t.Fatalf("Split failed: %v", err)
+	}
+	if len(chunks) < 2 {
+		t.Fatalf("expected semantic split to produce multiple chunks, got %d", len(chunks))
+	}
+
+	foundSemanticChunk := false
+	for _, chunk := range chunks {
+		if chunk.MetaData[chunkmeta.KeySemanticSplitEnabled] == true {
+			foundSemanticChunk = true
+			if chunk.MetaData[chunkmeta.KeySemanticBreakpointMethod] != chunkmeta.SemanticBreakpointEmbeddingV1 {
+				t.Fatalf("expected semantic breakpoint method, got %v", chunk.MetaData[chunkmeta.KeySemanticBreakpointMethod])
+			}
+		}
+	}
+	if !foundSemanticChunk {
+		t.Fatalf("expected at least one chunk to record semantic split metadata")
+	}
+}
+
 func mustNewTestSplitter(t *testing.T, chunkSize, overlap int) *DocumentSplitterService {
 	t.Helper()
 
@@ -173,6 +216,21 @@ func mustNewTestSplitter(t *testing.T, chunkSize, overlap int) *DocumentSplitter
 		t.Fatalf("NewDocumentSplitterService failed: %v", err)
 	}
 	return service
+}
+
+type fakeSemanticEmbedder struct{}
+
+func (f *fakeSemanticEmbedder) EmbedStrings(_ context.Context, texts []string, _ ...embedding.Option) ([][]float64, error) {
+	vectors := make([][]float64, 0, len(texts))
+	for idx := range texts {
+		switch {
+		case idx < 2:
+			vectors = append(vectors, []float64{1, 0})
+		default:
+			vectors = append(vectors, []float64{0, 1})
+		}
+	}
+	return vectors, nil
 }
 
 func asString(t *testing.T, value interface{}) string {
