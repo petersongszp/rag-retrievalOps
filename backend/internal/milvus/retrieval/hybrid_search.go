@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sort"
 	"strings"
 	"sync"
 	"time"
@@ -569,8 +570,12 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 			ErrorCode:        "evidence_gate_degraded",
 		}
 	}
+	splitStrategySummary := summarizeMetadataValues(merged, "split_strategy")
+	embeddingStrategySummary := summarizeMetadataValues(merged, "embedding_build_strategy")
+	contextVersionSummary := summarizeMetadataValues(merged, "context_version")
+	semanticSplitEnabled := anyMetadataBool(merged, "semantic_split_enabled")
 	log.Printf(
-		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d parent_fill_reason=%q duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
+		"[RAG:L2] request_id=%s query=%q rewrite=%q final_query=%q rewrite_strategy=%q rewrite_applied=%t expr=%q candidate_topk=%d final_topk=%d token_budget=%d token_budget_remaining=%d context_tokens=%d truncate_reason=%q topk_policy_version=%q score_distribution=%q rerank_gap=%.4f evidence_density=%.4f topk_decision_reason=%q evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q split_strategy=%q embedding_build_strategy=%q context_version=%q semantic_split_enabled=%t routes=%s route_hits={dense:%d,sparse:%d} final_count=%d truncated_count=%d empty_reason=%s parent_fill_strategy=%q parent_fill_count=%d parent_fill_fallback=%d parent_fill_tokens=%d parent_fill_reason=%q duration_ms=%d dense_ms=%d sparse_ms=%d rerank_ms=%d rerank_model=%q rerank_version=%q rerank_fallback=%t rerank_reason=%q dense_error=%q sparse_error=%q",
 		req.RequestID,
 		req.OriginalQuery,
 		req.RewriteQuery,
@@ -598,6 +603,10 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		citationOutcome.Latency.Milliseconds(),
 		citationOutcome.Error,
 		evidenceOutcome.Error,
+		splitStrategySummary,
+		embeddingStrategySummary,
+		contextVersionSummary,
+		semanticSplitEnabled,
 		"dense+sparse",
 		len(denseDocs),
 		len(sparseDocs),
@@ -791,6 +800,42 @@ func summarizeFinalRouteStats(docs []*schema.Document) finalRouteStats {
 		}
 	}
 	return stats
+}
+
+func summarizeMetadataValues(docs []*schema.Document, key string) string {
+	if len(docs) == 0 {
+		return ""
+	}
+	seen := make(map[string]struct{})
+	values := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		value := getStringMetadata(doc.MetaData, key)
+		if value == "" {
+			continue
+		}
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		values = append(values, value)
+	}
+	sort.Strings(values)
+	return strings.Join(values, ",")
+}
+
+func anyMetadataBool(docs []*schema.Document, key string) bool {
+	for _, doc := range docs {
+		if doc == nil || doc.MetaData == nil {
+			continue
+		}
+		if debugBoolMetadata(doc.MetaData, key) {
+			return true
+		}
+	}
+	return false
 }
 
 func getRouteContrib(metadata map[string]interface{}) map[string]float64 {

@@ -115,6 +115,10 @@ type source struct {
 	SourceFileType         string  `json:"source_file_type"`
 	EmbeddingBuildStrategy string  `json:"embedding_build_strategy"`
 	ContextVersion         string  `json:"context_version"`
+	EmbeddingContentHash   string  `json:"embedding_content_hash"`
+	ContextPrefixHash      string  `json:"context_prefix_hash"`
+	SemanticSplitEnabled   bool    `json:"semantic_split_enabled"`
+	SemanticBreakpoint     string  `json:"semantic_breakpoint_method"`
 	ParentChildAvailable   bool    `json:"parent_child_available"`
 	ParentID               string  `json:"parent_id"`
 	ChildID                string  `json:"child_id"`
@@ -1212,6 +1216,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 				SourceFileType:         getStringMetadata(doc.MetaData, "source_file_type"),
 				EmbeddingBuildStrategy: getStringMetadata(doc.MetaData, "embedding_build_strategy"),
 				ContextVersion:         getStringMetadata(doc.MetaData, "context_version"),
+				EmbeddingContentHash:   getStringMetadata(doc.MetaData, "embedding_content_hash"),
+				ContextPrefixHash:      getStringMetadata(doc.MetaData, "context_prefix_hash"),
+				SemanticSplitEnabled:   getBoolMetadata(doc.MetaData, "semantic_split_enabled"),
+				SemanticBreakpoint:     getStringMetadata(doc.MetaData, "semantic_breakpoint_method"),
 				ParentChildAvailable:   getBoolMetadata(doc.MetaData, "parent_child_available"),
 				ParentID:               getStringMetadata(doc.MetaData, "parent_id"),
 				ChildID:                firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),

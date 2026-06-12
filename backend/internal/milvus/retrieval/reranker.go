@@ -326,6 +326,8 @@ func annotateParentChildSource(doc *schema.Document) {
 		chunkmeta.KeySourceFileType,
 		chunkmeta.KeyEmbeddingBuildStrategy,
 		chunkmeta.KeyContextVersion,
+		chunkmeta.KeyEmbeddingContentHash,
+		chunkmeta.KeyContextPrefixHash,
 		chunkmeta.KeySemanticSplitEnabled,
 		chunkmeta.KeySemanticSplitScore,
 		chunkmeta.KeySemanticParentSection,

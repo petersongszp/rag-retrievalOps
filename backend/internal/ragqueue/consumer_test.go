@@ -4,6 +4,8 @@ import (
 	"context"
 	"testing"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -53,5 +55,38 @@ func TestSplitKnowledgeDocumentRoutesTXTAndPDFToGenericSplitter(t *testing.T) {
 		if splitter.splitMarkdownCalls != 0 {
 			t.Fatalf("expected markdown splitter to remain unused for %s, got %d", fileType, splitter.splitMarkdownCalls)
 		}
+	}
+}
+
+func TestSummarizeKnowledgeChunksCapturesChunkingStats(t *testing.T) {
+	stats := summarizeKnowledgeChunks([]*schema.Document{
+		{
+			Content: "alpha chunk",
+			MetaData: map[string]interface{}{
+				chunkmeta.KeyEmbeddingContent:     "prefix alpha chunk",
+				chunkmeta.KeySemanticSplitEnabled: true,
+				chunkmeta.KeySplitStrategy:        chunkmeta.SplitStrategyMarkdownV1,
+			},
+		},
+		{
+			Content: "beta chunk with more text",
+			MetaData: map[string]interface{}{
+				chunkmeta.KeyEmbeddingContent: "prefix beta chunk with more text",
+				chunkmeta.KeySplitStrategy:    chunkmeta.SplitStrategyRecursiveV1,
+			},
+		},
+	})
+
+	if stats.P95ChunkChars == 0 {
+		t.Fatalf("expected p95 chunk chars to be populated")
+	}
+	if stats.AvgEmbeddingChars == 0 {
+		t.Fatalf("expected average embedding chars to be populated")
+	}
+	if stats.SemanticResplitCount != 1 {
+		t.Fatalf("expected semantic resplit count 1, got %d", stats.SemanticResplitCount)
+	}
+	if stats.MarkdownStructureChunkCount != 1 {
+		t.Fatalf("expected markdown structure chunk count 1, got %d", stats.MarkdownStructureChunkCount)
 	}
 }
