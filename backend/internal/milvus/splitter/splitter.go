@@ -19,6 +19,7 @@ type DocumentSplitterService struct {
 	config         *recursive.Config
 	splitter       document.Transformer
 	semanticConfig SemanticSplitConfig
+	agenticConfig  AgenticShadowConfig
 }
 
 type SemanticSplitConfig struct {
@@ -29,6 +30,13 @@ type SemanticSplitConfig struct {
 	BreakpointPercentile int
 	MinSentencesPerChunk int
 	Embedder             embedding.Embedder
+}
+
+type AgenticShadowConfig struct {
+	Enabled          bool
+	Mode             string
+	MaxDocumentChars int
+	AllowedKBIDs     map[uint64]struct{}
 }
 
 // NewDocumentSplitterService 创建新的文档分割器服务
@@ -84,6 +92,27 @@ func (s *DocumentSplitterService) ConfigureSemanticSplit(cfg SemanticSplitConfig
 		cfg.MinSentencesPerChunk = 2
 	}
 	s.semanticConfig = cfg
+}
+
+func (s *DocumentSplitterService) ConfigureAgenticShadow(enabled bool, mode string, maxDocumentChars int, allowedKBIDs []uint64) {
+	if s == nil {
+		return
+	}
+	if maxDocumentChars <= 0 {
+		maxDocumentChars = 30000
+	}
+	allowed := make(map[uint64]struct{}, len(allowedKBIDs))
+	for _, kbID := range allowedKBIDs {
+		if kbID > 0 {
+			allowed[kbID] = struct{}{}
+		}
+	}
+	s.agenticConfig = AgenticShadowConfig{
+		Enabled:          enabled,
+		Mode:             mode,
+		MaxDocumentChars: maxDocumentChars,
+		AllowedKBIDs:     allowed,
+	}
 }
 
 // Split 分割文档

@@ -208,6 +208,10 @@ DocumentSplitter:
   SemanticMaxChunkSize: 1400
   SemanticBreakpointPercentile: 20
   SemanticMinSentencesPerChunk: 2
+  AgenticChunkingEnabled: false
+  AgenticChunkingMode: "shadow"
+  AgenticChunkingMaxDocumentChars: 30000
+  AgenticChunkingAllowedKBIDs: []
 
 # 微信配置
 wechat:

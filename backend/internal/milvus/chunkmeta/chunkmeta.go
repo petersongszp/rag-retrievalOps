@@ -15,6 +15,9 @@ const (
 	KeySemanticSplitScore       = "semantic_split_score"
 	KeySemanticParentSection    = "semantic_parent_section_id"
 	KeySemanticBreakpointMethod = "semantic_breakpoint_method"
+	KeyAgenticChunkingMode      = "agentic_chunking_mode"
+	KeyAgenticShadowGenerated   = "agentic_shadow_generated"
+	KeyAgenticShadowCandidates  = "agentic_shadow_candidate_count"
 	KeyEmbeddingBuildStrategy   = "embedding_build_strategy"
 	KeyContextVersion           = "context_version"
 
@@ -25,6 +28,7 @@ const (
 	EmbeddingBuildStrategyRaw     = "raw_content_embedding"
 	ContextVersionRawContent      = "raw_content_v1"
 	SemanticBreakpointEmbeddingV1 = "embedding_similarity_v1"
+	AgenticChunkingModeShadow     = "shadow"
 	SourceFileTypeMarkdown        = "markdown"
 	SourceFileTypeTXT             = "txt"
 	SourceFileTypePDF             = "pdf"

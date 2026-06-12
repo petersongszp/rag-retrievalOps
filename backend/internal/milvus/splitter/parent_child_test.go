@@ -204,6 +204,36 @@ func TestSemanticSecondarySplitMarksLongBlocks(t *testing.T) {
 	}
 }
 
+func TestAgenticShadowOnlyAnnotatesMetadata(t *testing.T) {
+	service := mustNewTestSplitter(t, 120, 10)
+	service.ConfigureAgenticShadow(true, chunkmeta.AgenticChunkingModeShadow, 1000, []uint64{88})
+
+	doc := &schema.Document{
+		Content: "# Shadow\n\nThis document keeps the default chunking path but records agentic shadow metadata.",
+		MetaData: map[string]interface{}{
+			"kb_id":       uint64(88),
+			"document_id": uint64(700),
+			"title":       "Shadow",
+		},
+	}
+
+	chunks, err := service.SplitMarkdownDocument(context.Background(), doc)
+	if err != nil {
+		t.Fatalf("SplitMarkdownDocument failed: %v", err)
+	}
+	if len(chunks) == 0 {
+		t.Fatalf("expected chunks")
+	}
+	for _, chunk := range chunks {
+		if chunk.MetaData[chunkmeta.KeyAgenticChunkingMode] != chunkmeta.AgenticChunkingModeShadow {
+			t.Fatalf("expected agentic shadow mode metadata, got %v", chunk.MetaData[chunkmeta.KeyAgenticChunkingMode])
+		}
+		if chunk.MetaData[chunkmeta.KeyAgenticShadowGenerated] != true {
+			t.Fatalf("expected agentic shadow generated flag, got %v", chunk.MetaData[chunkmeta.KeyAgenticShadowGenerated])
+		}
+	}
+}
+
 func mustNewTestSplitter(t *testing.T, chunkSize, overlap int) *DocumentSplitterService {
 	t.Helper()
 

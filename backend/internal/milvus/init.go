@@ -107,6 +107,12 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		MinSentencesPerChunk: cfg.DocumentSplitter.SemanticMinSentencesPerChunk,
 		Embedder:             embeddingService.GetEmbedder(),
 	})
+	manager.SplitterService.ConfigureAgenticShadow(
+		cfg.DocumentSplitter.AgenticChunkingEnabled,
+		cfg.DocumentSplitter.AgenticChunkingMode,
+		cfg.DocumentSplitter.AgenticChunkingMaxDocumentChars,
+		cfg.DocumentSplitter.AgenticChunkingAllowedKBIDs,
+	)
 	log.Printf("Document Splitter initialized: ChunkSize=%d, OverlapSize=%d",
 		cfg.DocumentSplitter.ChunkSize, cfg.DocumentSplitter.OverlapSize)
 

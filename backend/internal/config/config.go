@@ -866,6 +866,12 @@ func (c *Config) applyRAGDefaults() {
 	if c.DocumentSplitter.SemanticMinSentencesPerChunk <= 0 {
 		c.DocumentSplitter.SemanticMinSentencesPerChunk = 2
 	}
+	if strings.TrimSpace(c.DocumentSplitter.AgenticChunkingMode) == "" {
+		c.DocumentSplitter.AgenticChunkingMode = "shadow"
+	}
+	if c.DocumentSplitter.AgenticChunkingMaxDocumentChars <= 0 {
+		c.DocumentSplitter.AgenticChunkingMaxDocumentChars = 30000
+	}
 }
 
 func (c *Config) applyRAGEnvOverrides() error {
@@ -1945,6 +1951,10 @@ type SplitterConfig struct {
 	SemanticMaxChunkSize               int      `yaml:"SemanticMaxChunkSize"`
 	SemanticBreakpointPercentile       int      `yaml:"SemanticBreakpointPercentile"`
 	SemanticMinSentencesPerChunk       int      `yaml:"SemanticMinSentencesPerChunk"`
+	AgenticChunkingEnabled             bool     `yaml:"AgenticChunkingEnabled"`
+	AgenticChunkingMode                string   `yaml:"AgenticChunkingMode"`
+	AgenticChunkingMaxDocumentChars    int      `yaml:"AgenticChunkingMaxDocumentChars"`
+	AgenticChunkingAllowedKBIDs        []uint64 `yaml:"AgenticChunkingAllowedKBIDs"`
 }
 
 // ExpandEnv 灞曞紑閰嶇疆涓殑鐜鍙橀噺寮曠敤

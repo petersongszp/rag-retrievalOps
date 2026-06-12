@@ -60,6 +60,7 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 	chunkSpans := locateChunkOffsets(originalContent, chunks, s.config)
 	blocks := buildParentBlocks(originalContent, baseMeta, chunkSpans, s.config)
 	documentKey := resolveDocumentKey(baseMeta, originalContent)
+	agenticShadowEnabled := s.shouldGenerateAgenticShadow(original)
 
 	for i, chunk := range chunks {
 		if chunk == nil {
@@ -119,6 +120,11 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 			if _, exists := mergedMeta[chunkmeta.KeySemanticParentSection]; !exists {
 				mergedMeta[chunkmeta.KeySemanticParentSection] = firstNonEmptyString(parentID, hierarchyPath, sectionTitle)
 			}
+		}
+		if agenticShadowEnabled {
+			mergedMeta[chunkmeta.KeyAgenticChunkingMode] = chunkmeta.AgenticChunkingModeShadow
+			mergedMeta[chunkmeta.KeyAgenticShadowGenerated] = true
+			mergedMeta[chunkmeta.KeyAgenticShadowCandidates] = len(chunks)
 		}
 
 		chunk.MetaData = mergedMeta
