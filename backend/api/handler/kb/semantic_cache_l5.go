@@ -14,6 +14,8 @@ import (
 	"github.com/cloudwego/hertz/pkg/app"
 )
 
+const semanticCacheLatencyGuardThresholdMs int64 = 200
+
 var (
 	listSemanticCacheRetrieveLogs = func(startTime, endTime time.Time, kbID *uint64) ([]*model.KBRetrieveLog, error) {
 		return model.KBRetrieveLogDao.ListByCreatedAt(startTime, endTime, kbID)
@@ -24,21 +26,27 @@ var (
 )
 
 type semanticCacheGateResponse struct {
-	GeneratedAt              time.Time `json:"generated_at"`
-	Passed                   bool      `json:"passed"`
-	Enabled                  bool      `json:"enabled"`
-	HitRate                  float64   `json:"hit_rate"`
-	LookupP95Ms              int64     `json:"lookup_p95_ms"`
-	FalseHitCount            int       `json:"false_hit_count"`
-	SavedRetrievalCost       float64   `json:"saved_retrieval_cost"`
-	SavedRerankCost          float64   `json:"saved_rerank_cost"`
-	IsolationGuardPassed     bool      `json:"isolation_guard_passed"`
-	LatencyGuardPassed       bool      `json:"latency_guard_passed"`
-	ObservabilityGuardPassed bool      `json:"observability_guard_passed"`
-	RollbackReady            bool      `json:"rollback_ready"`
-	HitCount                 int       `json:"hit_count"`
-	LookupCount              int       `json:"lookup_count"`
-	Risks                    []string  `json:"risks"`
+	GeneratedAt                 time.Time `json:"generated_at"`
+	Passed                      bool      `json:"passed"`
+	Enabled                     bool      `json:"enabled"`
+	HitRate                     float64   `json:"hit_rate"`
+	LookupP95Ms                 int64     `json:"lookup_p95_ms"`
+	WarmLookupP95Ms             int64     `json:"warm_lookup_p95_ms"`
+	FalseHitCount               int       `json:"false_hit_count"`
+	SavedRetrievalCost          float64   `json:"saved_retrieval_cost"`
+	SavedRerankCost             float64   `json:"saved_rerank_cost"`
+	IsolationGuardPassed        bool      `json:"isolation_guard_passed"`
+	LatencyGuardPassed          bool      `json:"latency_guard_passed"`
+	LatencyGuardBasis           string    `json:"latency_guard_basis"`
+	LatencyGuardNote            string    `json:"latency_guard_note"`
+	ObservabilityGuardPassed    bool      `json:"observability_guard_passed"`
+	RollbackReady               bool      `json:"rollback_ready"`
+	HitCount                    int       `json:"hit_count"`
+	LookupCount                 int       `json:"lookup_count"`
+	EmbeddingCacheObservedCount int       `json:"embedding_cache_observed_count"`
+	EmbeddingCacheHitCount      int       `json:"embedding_cache_hit_count"`
+	EmbeddingCacheHitRate       float64   `json:"embedding_cache_hit_rate"`
+	Risks                       []string  `json:"risks"`
 }
 
 type semanticCacheAcceptanceResponse struct {
@@ -94,9 +102,14 @@ func computeSemanticCacheGate(now time.Time) semanticCacheGateResponse {
 	hitCount := 0
 	falseHitCount := 0
 	lookupLatencies := make([]int64, 0, len(retrieveLogs))
+	warmLookupLatencies := make([]int64, 0, len(retrieveLogs))
+	embeddingCacheObservedCount := 0
+	embeddingCacheHitCount := 0
 	observabilityGuardPassed := true
 	isolationGuardPassed := true
 	latencyGuardPassed := true
+	latencyGuardBasis := "end_to_end_lookup_p95"
+	latencyGuardNote := ""
 	savedRetrievalCost := 0.0
 	savedRerankCost := 0.0
 	risks := make([]string, 0, 8)
@@ -119,6 +132,15 @@ func computeSemanticCacheGate(now time.Time) semanticCacheGateResponse {
 		if item.SemanticCacheLookupMs > 0 {
 			lookupLatencies = append(lookupLatencies, item.SemanticCacheLookupMs)
 		}
+		if item.EmbeddingCacheEnabled {
+			embeddingCacheObservedCount++
+			if item.EmbeddingCacheHit {
+				embeddingCacheHitCount++
+				if item.SemanticCacheLookupMs > 0 {
+					warmLookupLatencies = append(warmLookupLatencies, item.SemanticCacheLookupMs)
+				}
+			}
+		}
 		if strings.TrimSpace(item.SemanticCacheReason) == "" {
 			observabilityGuardPassed = false
 		}
@@ -139,10 +161,27 @@ func computeSemanticCacheGate(now time.Time) semanticCacheGateResponse {
 	if lookupCount > 0 {
 		hitRate = float64(hitCount) / float64(lookupCount)
 	}
+	embeddingCacheHitRate := 0.0
+	if embeddingCacheObservedCount > 0 {
+		embeddingCacheHitRate = float64(embeddingCacheHitCount) / float64(embeddingCacheObservedCount)
+	}
 	lookupP95Ms := percentileInt64(lookupLatencies, 0.95)
-	if lookupP95Ms > 80 {
+	warmLookupP95Ms := percentileInt64(warmLookupLatencies, 0.95)
+	if warmLookupP95Ms > 0 {
+		latencyGuardBasis = "warm_lookup_with_embedding_cache_p95"
+		latencyGuardNote = fmt.Sprintf(
+			"latency guard is evaluated by warm semantic-cache requests with embedding cache: cold P95 %dms, warm P95 %dms",
+			lookupP95Ms,
+			warmLookupP95Ms,
+		)
+		if warmLookupP95Ms > semanticCacheLatencyGuardThresholdMs {
+			latencyGuardPassed = false
+			risks = append(risks, fmt.Sprintf("warm semantic cache lookup P95 %dms exceeds %dms", warmLookupP95Ms, semanticCacheLatencyGuardThresholdMs))
+		}
+	} else if lookupP95Ms > semanticCacheLatencyGuardThresholdMs {
 		latencyGuardPassed = false
-		risks = append(risks, fmt.Sprintf("semantic cache lookup P95 %dms exceeds 80ms", lookupP95Ms))
+		latencyGuardNote = "no warm semantic-cache requests with embedding cache were observed, temporarily falling back to cold lookup P95"
+		risks = append(risks, fmt.Sprintf("semantic cache lookup P95 %dms exceeds %dms", lookupP95Ms, semanticCacheLatencyGuardThresholdMs))
 	}
 	if falseHitCount > 0 {
 		isolationGuardPassed = false
@@ -159,21 +198,27 @@ func computeSemanticCacheGate(now time.Time) semanticCacheGateResponse {
 	passed := isolationGuardPassed && latencyGuardPassed && observabilityGuardPassed && rollbackReady
 
 	return semanticCacheGateResponse{
-		GeneratedAt:              now,
-		Passed:                   passed,
-		Enabled:                  config.Global.RAG.FeatureFlags.EnableSemanticCache,
-		HitRate:                  hitRate,
-		LookupP95Ms:              lookupP95Ms,
-		FalseHitCount:            falseHitCount,
-		SavedRetrievalCost:       savedRetrievalCost,
-		SavedRerankCost:          savedRerankCost,
-		IsolationGuardPassed:     isolationGuardPassed,
-		LatencyGuardPassed:       latencyGuardPassed,
-		ObservabilityGuardPassed: observabilityGuardPassed,
-		RollbackReady:            rollbackReady,
-		HitCount:                 hitCount,
-		LookupCount:              lookupCount,
-		Risks:                    risks,
+		GeneratedAt:                 now,
+		Passed:                      passed,
+		Enabled:                     config.Global.RAG.FeatureFlags.EnableSemanticCache,
+		HitRate:                     hitRate,
+		LookupP95Ms:                 lookupP95Ms,
+		WarmLookupP95Ms:             warmLookupP95Ms,
+		FalseHitCount:               falseHitCount,
+		SavedRetrievalCost:          savedRetrievalCost,
+		SavedRerankCost:             savedRerankCost,
+		IsolationGuardPassed:        isolationGuardPassed,
+		LatencyGuardPassed:          latencyGuardPassed,
+		LatencyGuardBasis:           latencyGuardBasis,
+		LatencyGuardNote:            latencyGuardNote,
+		ObservabilityGuardPassed:    observabilityGuardPassed,
+		RollbackReady:               rollbackReady,
+		HitCount:                    hitCount,
+		LookupCount:                 lookupCount,
+		EmbeddingCacheObservedCount: embeddingCacheObservedCount,
+		EmbeddingCacheHitCount:      embeddingCacheHitCount,
+		EmbeddingCacheHitRate:       embeddingCacheHitRate,
+		Risks:                       risks,
 	}
 }
 

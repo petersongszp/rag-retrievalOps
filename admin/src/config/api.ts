@@ -135,4 +135,8 @@ export const KB_ADMIN_API = {
 
   SEMANTIC_CACHE_GATE: `${API_BASE_URL}/admin/kb/semantic-cache/gate`,
   SEMANTIC_CACHE_ACCEPTANCE: `${API_BASE_URL}/admin/kb/semantic-cache/acceptance`,
+  SEMANTIC_CACHE_REPORT: `${API_BASE_URL}/admin/kb/semantic-cache/report`,
+  EMBEDDING_CACHE_GATE: `${API_BASE_URL}/admin/kb/embedding-cache/gate`,
+  EMBEDDING_CACHE_ACCEPTANCE: `${API_BASE_URL}/admin/kb/embedding-cache/acceptance`,
+  EMBEDDING_CACHE_REPORT: `${API_BASE_URL}/admin/kb/embedding-cache/report`,
 };

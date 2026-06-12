@@ -122,6 +122,9 @@ Embedding:
   Dimensions: 2048
   BatchSize: 10
   User: ""
+  EnableCache: true
+  CacheTTLSeconds: 1800
+  CacheMaxEntries: 2000
 
 Milvus:
   Address: "${MILVUS_ADDRESS}"

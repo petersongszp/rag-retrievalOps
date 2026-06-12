@@ -541,6 +541,14 @@ func (c *Config) ValidateRAGPrerequisites() error {
 	if c.Embedding.Dimensions <= 0 {
 		return fmt.Errorf("rag enabled but Embedding.Dimensions must be > 0")
 	}
+	if c.Embedding.EnableCache {
+		if c.Embedding.CacheTTLSeconds <= 0 {
+			return fmt.Errorf("rag enabled but Embedding.CacheTTLSeconds must be > 0 when Embedding.EnableCache=true")
+		}
+		if c.Embedding.CacheMaxEntries <= 0 {
+			return fmt.Errorf("rag enabled but Embedding.CacheMaxEntries must be > 0 when Embedding.EnableCache=true")
+		}
+	}
 
 	if c.RAG.FeatureFlags.EnableProdGuard {
 		if c.RAG.Thresholds.MaxRetryCount <= 0 {
@@ -705,6 +713,14 @@ func (c *Config) ValidateRAGPrerequisites() error {
 func (c *Config) applyRAGDefaults() {
 	if c == nil {
 		return
+	}
+	if c.Embedding.EnableCache {
+		if c.Embedding.CacheTTLSeconds == 0 {
+			c.Embedding.CacheTTLSeconds = 1800
+		}
+		if c.Embedding.CacheMaxEntries == 0 {
+			c.Embedding.CacheMaxEntries = 2000
+		}
 	}
 	if strings.TrimSpace(c.RAG.Environment) == "" {
 		c.RAG.Environment = "dev"
@@ -995,6 +1011,21 @@ func (c *Config) applyRAGEnvOverrides() error {
 		return err
 	} else if ok {
 		c.RAG.SemanticCache.MaxEntriesPerScope = value
+	}
+	if value, ok, err := readEnvBool("EMBEDDING_ENABLE_CACHE"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.EnableCache = value
+	}
+	if value, ok, err := readEnvInt("EMBEDDING_CACHE_TTL_SECONDS"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.CacheTTLSeconds = value
+	}
+	if value, ok, err := readEnvInt("EMBEDDING_CACHE_MAX_ENTRIES"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.CacheMaxEntries = value
 	}
 	if value, ok, err := readEnvFloat64("RAG_HYBRID_DENSE_WEIGHT"); err != nil {
 		return err
@@ -1413,10 +1444,15 @@ func (c *Config) buildRAGStrategyDigest() string {
 		return "unknown"
 	}
 	payload := map[string]interface{}{
-		"enabled":        c.RAG.Enabled,
-		"env":            c.RAG.Environment,
-		"flags":          c.RAG.FeatureFlags,
-		"thresholds":     c.RAG.Thresholds,
+		"enabled":    c.RAG.Enabled,
+		"env":        c.RAG.Environment,
+		"flags":      c.RAG.FeatureFlags,
+		"thresholds": c.RAG.Thresholds,
+		"embedding_cache": map[string]interface{}{
+			"enabled":     c.Embedding.EnableCache,
+			"ttl_seconds": c.Embedding.CacheTTLSeconds,
+			"max_entries": c.Embedding.CacheMaxEntries,
+		},
 		"semantic_cache": c.RAG.SemanticCache,
 		"phase2":         c.RAG.Phase2,
 		"phase3":         c.RAG.Phase3,
@@ -1750,6 +1786,9 @@ func expandEnvInBytes(data []byte) []byte {
 
 // EmbeddingConfig Embedding鏈嶅姟閰嶇疆
 type EmbeddingConfig struct {
+	EnableCache     bool `yaml:"EnableCache"`     // query embedding process-local cache switch
+	CacheTTLSeconds int  `yaml:"CacheTTLSeconds"` // query embedding cache TTL in seconds
+	CacheMaxEntries int  `yaml:"CacheMaxEntries"` // max query embedding cache entries per process
 	// 认证配置（二选一）
 	APIKey    string `yaml:"APIKey"`    // 使用 API Key 认证
 	AccessKey string `yaml:"AccessKey"` // 使用 AK 认证 (ark 专用)

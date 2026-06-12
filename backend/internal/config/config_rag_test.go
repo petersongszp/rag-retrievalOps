@@ -211,6 +211,52 @@ func TestValidateRAGPrerequisites_SemanticCacheValid(t *testing.T) {
 	}
 }
 
+func TestValidateRAGPrerequisites_EmbeddingCacheDisabledAllowsZeroValueConfig(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = false
+	cfg.Embedding.CacheTTLSeconds = 0
+	cfg.Embedding.CacheMaxEntries = 0
+	if err := cfg.ValidateRAGPrerequisites(); err != nil {
+		t.Fatalf("expected embedding cache zero values to be ignored when feature is disabled, got: %v", err)
+	}
+}
+
+func TestValidateRAGPrerequisites_EmbeddingCacheTTLInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = -1
+	cfg.Embedding.CacheMaxEntries = 1000
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when embedding cache ttl is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_EmbeddingCacheMaxEntriesInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = 1800
+	cfg.Embedding.CacheMaxEntries = -1
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when embedding cache max entries is invalid")
+	}
+}
+
+func TestApplyRAGDefaults_EmbeddingCacheDefaultsWhenEnabled(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = 0
+	cfg.Embedding.CacheMaxEntries = 0
+
+	cfg.applyRAGDefaults()
+
+	if cfg.Embedding.CacheTTLSeconds != 1800 {
+		t.Fatalf("expected embedding cache ttl default to 1800, got %d", cfg.Embedding.CacheTTLSeconds)
+	}
+	if cfg.Embedding.CacheMaxEntries != 2000 {
+		t.Fatalf("expected embedding cache max entries default to 2000, got %d", cfg.Embedding.CacheMaxEntries)
+	}
+}
+
 func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	basePath := filepath.Join(tempDir, "config.yaml")
@@ -358,6 +404,46 @@ Embedding:
 
 	if cfg.Embedding.Provider != "openai" {
 		t.Fatalf("expected embedding provider to expand to openai, got %q", cfg.Embedding.Provider)
+	}
+}
+
+func TestLoadConfig_EmbeddingCacheEnvOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	baseConfig := `
+rag:
+  enabled: false
+  environment: dev
+Embedding:
+  APIKey: "test-key"
+  Model: "bge-m3"
+  BaseURL: "https://example.com/v1"
+  Dimensions: 1024
+  EnableCache: false
+  CacheTTLSeconds: 300
+  CacheMaxEntries: 50
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("EMBEDDING_ENABLE_CACHE", "true")
+	t.Setenv("EMBEDDING_CACHE_TTL_SECONDS", "2400")
+	t.Setenv("EMBEDDING_CACHE_MAX_ENTRIES", "1500")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !cfg.Embedding.EnableCache {
+		t.Fatalf("expected embedding cache flag to be enabled from env override")
+	}
+	if cfg.Embedding.CacheTTLSeconds != 2400 {
+		t.Fatalf("expected embedding cache ttl override to apply, got %d", cfg.Embedding.CacheTTLSeconds)
+	}
+	if cfg.Embedding.CacheMaxEntries != 1500 {
+		t.Fatalf("expected embedding cache max entries override to apply, got %d", cfg.Embedding.CacheMaxEntries)
 	}
 }
 

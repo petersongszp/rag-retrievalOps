@@ -17,8 +17,9 @@ import (
 
 // EmbeddingService Embedding服务包装，支持多种向量模型提供商
 type EmbeddingService struct {
-	embedder embedding.Embedder
-	model    string
+	embedder      embedding.Embedder
+	queryEmbedder embedding.Embedder
+	model         string
 }
 
 type batchingEmbedder struct {
@@ -63,9 +64,19 @@ func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*Emb
 		}
 	}
 
+	queryEmbedder := embedder
+	if cfg.EnableCache {
+		queryEmbedder = newCachedQueryEmbedder(
+			embedder,
+			time.Duration(cfg.CacheTTLSeconds)*time.Second,
+			cfg.CacheMaxEntries,
+		)
+	}
+
 	return &EmbeddingService{
-		embedder: embedder,
-		model:    cfg.Model,
+		embedder:      embedder,
+		queryEmbedder: queryEmbedder,
+		model:         cfg.Model,
 	}, nil
 }
 
@@ -176,7 +187,11 @@ func (s *EmbeddingService) EmbedBatch(ctx context.Context, texts []string) ([][]
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("texts is empty")
 	}
-	vectors, err := s.embedder.EmbedStrings(ctx, texts)
+	embedder := s.embedder
+	if s != nil && s.queryEmbedder != nil {
+		embedder = s.queryEmbedder
+	}
+	vectors, err := embedder.EmbedStrings(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed texts: %w", err)
 	}
@@ -191,6 +206,14 @@ func (s *EmbeddingService) GetModel() string {
 // GetEmbedder 获取底层的 Embedder 实例（用于 Retriever 等组件）
 func (s *EmbeddingService) GetEmbedder() embedding.Embedder {
 	return s.embedder
+}
+
+// GetQueryEmbedder 获取查询链路使用的 Embedder 实例（可带进程内缓存）
+func (s *EmbeddingService) GetQueryEmbedder() embedding.Embedder {
+	if s == nil || s.queryEmbedder == nil {
+		return nil
+	}
+	return s.queryEmbedder
 }
 
 // Close 关闭服务

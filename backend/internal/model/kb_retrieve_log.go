@@ -89,6 +89,10 @@ type (
 		SemanticCacheSimilarity float64              `json:"semantic_cache_similarity"`
 		SemanticCacheEntryID    string               `json:"semantic_cache_entry_id" gorm:"size:128"`
 		SemanticCacheReason     string               `json:"semantic_cache_reason" gorm:"size:64;index"`
+		EmbeddingCacheEnabled   bool                 `json:"embedding_cache_enabled"`
+		EmbeddingCacheHit       bool                 `json:"embedding_cache_hit"`
+		EmbeddingCacheLookupMs  int64                `json:"embedding_cache_lookup_ms"`
+		EmbeddingCacheReason    string               `json:"embedding_cache_reason" gorm:"size:64;index"`
 		FinalCount              int                  `json:"final_count"`
 		TruncatedCount          int                  `json:"truncated_count"`
 		DenseHits               int                  `json:"dense_hits"`

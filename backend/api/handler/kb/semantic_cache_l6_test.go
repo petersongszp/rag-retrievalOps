@@ -81,6 +81,9 @@ func TestBuildSemanticCacheReport(t *testing.T) {
 	if report.BenefitSummary.TotalSavedCost != 0.28 {
 		t.Fatalf("TotalSavedCost = %v, want 0.28", report.BenefitSummary.TotalSavedCost)
 	}
+	if report.BenefitSummary.WarmLookupP95Ms != 0 {
+		t.Fatalf("WarmLookupP95Ms = %d, want 0", report.BenefitSummary.WarmLookupP95Ms)
+	}
 	if len(report.ImplementationSummary) != 7 {
 		t.Fatalf("ImplementationSummary len = %d, want 7", len(report.ImplementationSummary))
 	}

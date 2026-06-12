@@ -9,6 +9,8 @@ import (
 	"github.com/cloudwego/eino/schema"
 	milvusClient "github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	"interview-agents/internal/milvus/storage"
 )
 
 const DenseRetrieverVersion = "phase1-dense-v1"
@@ -94,6 +96,10 @@ type SearchMetrics struct {
 	SemanticCacheCandidateCount    int
 	SemanticCacheThreshold         float64
 	SemanticCacheHighestSimilarity float64
+	EmbeddingCacheEnabled          bool
+	EmbeddingCacheHit              bool
+	EmbeddingCacheLookupMs         int64
+	EmbeddingCacheReason           string
 }
 
 // SearchResult bundles documents with observable metrics.
@@ -131,14 +137,32 @@ func SearchWithExprAndMetrics(
 		return nil, fmt.Errorf("embedding is nil")
 	}
 
+	traceCtx := storage.WithEmbeddingCacheTrace(ctx)
 	embedStart := time.Now()
-	vectors, err := embedder.EmbedStrings(ctx, []string{query})
+	vectors, err := embedder.EmbedStrings(traceCtx, []string{query})
 	embeddingMs := time.Since(embedStart).Milliseconds()
+	embeddingCacheTrace := storage.ConsumeEmbeddingCacheTrace(traceCtx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to embed query: %w", err)
+		return &SearchResult{
+			Metrics: SearchMetrics{
+				EmbeddingMs:            embeddingMs,
+				EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+				EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+				EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+				EmbeddingCacheReason:   embeddingCacheTrace.Reason,
+			},
+		}, fmt.Errorf("failed to embed query: %w", err)
 	}
 	if len(vectors) == 0 {
-		return nil, fmt.Errorf("empty embedding result")
+		return &SearchResult{
+			Metrics: SearchMetrics{
+				EmbeddingMs:            embeddingMs,
+				EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+				EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+				EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+				EmbeddingCacheReason:   firstNonEmptyString(embeddingCacheTrace.Reason, "embed_empty"),
+			},
+		}, fmt.Errorf("empty embedding result")
 	}
 
 	queryVector := make([]float32, len(vectors[0]))
@@ -243,17 +267,21 @@ func SearchWithExprAndMetrics(
 	return &SearchResult{
 		Documents: documents,
 		Metrics: SearchMetrics{
-			EmbeddingMs:       embeddingMs,
-			SearchMs:          searchMs,
-			PostprocessMs:     postprocessMs,
-			HitCount:          rawHitCount,
-			TruncatedCount:    rawHitCount - len(documents),
-			CandidateTopK:     topK,
-			FinalTopK:         len(documents),
-			Strategy:          "phase1",
-			RetrieverVersion:  DenseRetrieverVersion,
-			DenseHits:         len(documents),
-			DenseContribution: len(documents),
+			EmbeddingMs:            embeddingMs,
+			SearchMs:               searchMs,
+			PostprocessMs:          postprocessMs,
+			HitCount:               rawHitCount,
+			TruncatedCount:         rawHitCount - len(documents),
+			CandidateTopK:          topK,
+			FinalTopK:              len(documents),
+			Strategy:               "phase1",
+			RetrieverVersion:       DenseRetrieverVersion,
+			DenseHits:              len(documents),
+			DenseContribution:      len(documents),
+			EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+			EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+			EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+			EmbeddingCacheReason:   embeddingCacheTrace.Reason,
 		},
 	}, nil
 }

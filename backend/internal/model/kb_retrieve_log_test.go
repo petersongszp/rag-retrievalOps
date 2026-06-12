@@ -133,6 +133,10 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 		SemanticCacheSimilarity: 0.97,
 		SemanticCacheEntryID:    "entry-1",
 		SemanticCacheReason:     "hit",
+		EmbeddingCacheEnabled:   true,
+		EmbeddingCacheHit:       true,
+		EmbeddingCacheLookupMs:  2,
+		EmbeddingCacheReason:    "hit",
 		FinalCount:              3,
 		TruncatedCount:          0,
 		ResultStatus:            RetrieveResultStatusSuccess,
@@ -181,6 +185,12 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	}
 	if log.SemanticCacheLookupMs != 9 || log.SemanticCacheEntryID != "entry-1" {
 		t.Errorf("unexpected semantic cache trace fields: %+v", log)
+	}
+	if !log.EmbeddingCacheEnabled || !log.EmbeddingCacheHit {
+		t.Errorf("unexpected embedding cache flags: enabled=%v hit=%v", log.EmbeddingCacheEnabled, log.EmbeddingCacheHit)
+	}
+	if log.EmbeddingCacheLookupMs != 2 || log.EmbeddingCacheReason != "hit" {
+		t.Errorf("unexpected embedding cache trace fields: %+v", log)
 	}
 	if log.EmbeddingMs != 50 {
 		t.Errorf("EmbeddingMs = %d, want 50", log.EmbeddingMs)

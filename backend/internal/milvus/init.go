@@ -125,7 +125,7 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		OutputFields: []string{"id", "content", "metadata"},
 		MetricType:   entity.MetricType(cfg.Milvus.MetricType),
 		TopK:         cfg.Milvus.TopK,
-		Embedding:    embeddingService.GetEmbedder(),
+		Embedding:    embeddingService.GetQueryEmbedder(),
 	}
 	retrieverService, err := retrieval.NewRetrieverService(ctx, retrieverConfig)
 	if err != nil {

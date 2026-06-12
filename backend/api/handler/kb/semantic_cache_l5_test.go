@@ -84,8 +84,170 @@ func TestComputeSemanticCacheGate(t *testing.T) {
 	if gate.LookupP95Ms != 12 {
 		t.Fatalf("LookupP95Ms = %d, want 12", gate.LookupP95Ms)
 	}
+	if gate.WarmLookupP95Ms != 0 {
+		t.Fatalf("WarmLookupP95Ms = %d, want 0", gate.WarmLookupP95Ms)
+	}
+	if gate.EmbeddingCacheObservedCount != 0 {
+		t.Fatalf("EmbeddingCacheObservedCount = %d, want 0", gate.EmbeddingCacheObservedCount)
+	}
 	if gate.SavedRetrievalCost != 0.12 || gate.SavedRerankCost != 0.08 {
 		t.Fatalf("unexpected saved cost: %+v", gate)
+	}
+}
+
+func TestComputeSemanticCacheGatePassesWithEmbeddingCacheWarmLatency(t *testing.T) {
+	originalConfig := config.Global
+	originalListLogs := listSemanticCacheRetrieveLogs
+	originalListCosts := listSemanticCacheCostTraces
+	t.Cleanup(func() {
+		config.Global = originalConfig
+		listSemanticCacheRetrieveLogs = originalListLogs
+		listSemanticCacheCostTraces = originalListCosts
+	})
+
+	config.Global.RAG.FeatureFlags.EnableSemanticCache = true
+
+	now := time.Now().UTC()
+	listSemanticCacheRetrieveLogs = func(startTime, endTime time.Time, kbID *uint64) ([]*model.KBRetrieveLog, error) {
+		return []*model.KBRetrieveLog{
+			{
+				RequestID:             "req-cold-1",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      true,
+				SemanticCacheLookupMs: 406,
+				SemanticCacheReason:   "hit",
+				SemanticCacheEntryID:  "entry-cold-1",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     false,
+				EmbeddingCacheReason:  "miss",
+				Routes:                "semantic_cache",
+				FinalCount:            1,
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+			{
+				RequestID:             "req-cold-2",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      false,
+				SemanticCacheLookupMs: 390,
+				SemanticCacheReason:   "miss",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     false,
+				EmbeddingCacheReason:  "miss",
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+			{
+				RequestID:             "req-warm-1",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      true,
+				SemanticCacheLookupMs: 14,
+				SemanticCacheReason:   "hit",
+				SemanticCacheEntryID:  "entry-warm-1",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     true,
+				EmbeddingCacheReason:  "hit",
+				Routes:                "semantic_cache",
+				FinalCount:            1,
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+			{
+				RequestID:             "req-warm-2",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      false,
+				SemanticCacheLookupMs: 16,
+				SemanticCacheReason:   "miss",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     true,
+				EmbeddingCacheReason:  "hit",
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+		}, nil
+	}
+	listSemanticCacheCostTraces = func(startTime, endTime time.Time, kbID *uint64) ([]*model.KBCostTrace, error) {
+		return nil, nil
+	}
+
+	gate := computeSemanticCacheGate(now)
+	if !gate.Passed {
+		t.Fatalf("gate.Passed = false, want true, risks=%v", gate.Risks)
+	}
+	if gate.LookupP95Ms <= semanticCacheLatencyGuardThresholdMs {
+		t.Fatalf("LookupP95Ms = %d, want > %d for cold path", gate.LookupP95Ms, semanticCacheLatencyGuardThresholdMs)
+	}
+	if gate.WarmLookupP95Ms != 14 {
+		t.Fatalf("WarmLookupP95Ms = %d, want 14", gate.WarmLookupP95Ms)
+	}
+	if gate.LatencyGuardBasis != "warm_lookup_with_embedding_cache_p95" {
+		t.Fatalf("LatencyGuardBasis = %q, want warm_lookup_with_embedding_cache_p95", gate.LatencyGuardBasis)
+	}
+	if gate.EmbeddingCacheHitCount != 2 {
+		t.Fatalf("EmbeddingCacheHitCount = %d, want 2", gate.EmbeddingCacheHitCount)
+	}
+	if gate.EmbeddingCacheObservedCount != 4 {
+		t.Fatalf("EmbeddingCacheObservedCount = %d, want 4", gate.EmbeddingCacheObservedCount)
+	}
+}
+
+func TestComputeSemanticCacheGateFailsWhenWarmLatencyExceedsThreshold(t *testing.T) {
+	originalConfig := config.Global
+	originalListLogs := listSemanticCacheRetrieveLogs
+	originalListCosts := listSemanticCacheCostTraces
+	t.Cleanup(func() {
+		config.Global = originalConfig
+		listSemanticCacheRetrieveLogs = originalListLogs
+		listSemanticCacheCostTraces = originalListCosts
+	})
+
+	config.Global.RAG.FeatureFlags.EnableSemanticCache = true
+
+	now := time.Now().UTC()
+	listSemanticCacheRetrieveLogs = func(startTime, endTime time.Time, kbID *uint64) ([]*model.KBRetrieveLog, error) {
+		return []*model.KBRetrieveLog{
+			{
+				RequestID:             "req-cold",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      false,
+				SemanticCacheLookupMs: 120,
+				SemanticCacheReason:   "miss",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     false,
+				EmbeddingCacheReason:  "miss",
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+			{
+				RequestID:             "req-warm",
+				SemanticCacheEnabled:  true,
+				SemanticCacheHit:      true,
+				SemanticCacheLookupMs: 260,
+				SemanticCacheReason:   "hit",
+				SemanticCacheEntryID:  "entry-warm",
+				EmbeddingCacheEnabled: true,
+				EmbeddingCacheHit:     true,
+				EmbeddingCacheReason:  "hit",
+				Routes:                "semantic_cache",
+				FinalCount:            1,
+				ResultStatus:          model.RetrieveResultStatusSuccess,
+				CreatedAt:             now,
+			},
+		}, nil
+	}
+	listSemanticCacheCostTraces = func(startTime, endTime time.Time, kbID *uint64) ([]*model.KBCostTrace, error) {
+		return nil, nil
+	}
+
+	gate := computeSemanticCacheGate(now)
+	if gate.Passed {
+		t.Fatalf("gate.Passed = true, want false when warm latency exceeds threshold: %+v", gate)
+	}
+	if gate.LatencyGuardBasis != "warm_lookup_with_embedding_cache_p95" {
+		t.Fatalf("LatencyGuardBasis = %q, want warm_lookup_with_embedding_cache_p95", gate.LatencyGuardBasis)
+	}
+	if gate.WarmLookupP95Ms <= semanticCacheLatencyGuardThresholdMs {
+		t.Fatalf("WarmLookupP95Ms = %d, want > %d", gate.WarmLookupP95Ms, semanticCacheLatencyGuardThresholdMs)
 	}
 }
 

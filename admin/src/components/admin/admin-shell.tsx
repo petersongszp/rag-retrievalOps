@@ -150,6 +150,12 @@ const navItems: NavItem[] = [
     href: '/semantic-cache',
     icon: <SafetyCertificateOutlined />,
   },
+  {
+    key: '/embedding-cache',
+    label: 'Embedding 缓存',
+    href: '/embedding-cache',
+    icon: <DatabaseOutlined />,
+  },
 ];
 
 function getSelectedNavKey(pathname: string): string {
@@ -199,7 +205,10 @@ function getSelectedNavKey(pathname: string): string {
     return '/reports/weekly';
   }
   if (pathname.startsWith('/semantic-cache')) {
-    return '/semantic-cache';
+    return '/semantic-cache/overview';
+  }
+  if (pathname.startsWith('/embedding-cache')) {
+    return '/embedding-cache';
   }
   if (pathname.startsWith('/quality-monitor')) {
     return '/quality-monitor';
@@ -237,6 +246,9 @@ function getOpenKeys(pathname: string): string[] {
   }
   if (pathname.startsWith('/reports')) {
     return ['/reports'];
+  }
+  if (pathname.startsWith('/semantic-cache') || pathname.startsWith('/embedding-cache')) {
+    return ['/semantic-cache'];
   }
   return [];
 }
@@ -281,7 +293,24 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
   const menuItems = useMemo<MenuProps['items']>(() => {
     const role = user?.role;
-    const filteredNavItems = navItems
+    const normalizedNavItems = navItems
+      .filter((item) => item.key !== '/embedding-cache')
+      .map((item) => {
+        if (item.key === '/semantic-cache') {
+          return {
+            ...item,
+            href: undefined,
+            children: [
+              { key: '/semantic-cache/overview', label: '语义缓存', href: '/semantic-cache' },
+              { key: '/embedding-cache', label: 'Embedding 缓存', href: '/embedding-cache' },
+            ],
+          };
+        }
+
+        return item;
+      });
+
+    const filteredNavItems = normalizedNavItems
       .map((item) => {
         if (item.key === '/api-keys' && !canManageAPIKey(role)) {
           return null;
@@ -435,10 +464,25 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
       return [{ title: <Link href="/dashboard">概览</Link> }, { title: '告警中心' }];
     }
     if (pathname.startsWith('/reports/weekly')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '报告' }, { title: '周报' }];
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '报告' },
+        { title: '周报' },
+      ];
     }
     if (pathname.startsWith('/semantic-cache')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '语义缓存' }];
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '语义缓存' },
+        { title: '语义缓存总览' },
+      ];
+    }
+    if (pathname.startsWith('/embedding-cache')) {
+      return [
+        { title: <Link href="/dashboard">概览</Link> },
+        { title: '语义缓存' },
+        { title: 'Embedding 缓存' },
+      ];
     }
 
     return [{ title: '概览' }];
@@ -514,7 +558,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
 
           <div className="border-t border-slate-200 px-5 py-4">
             <Text type="secondary">
-              当前控制台已接入 Phase 4 认证闭环，后续会继续补齐 API Key、租户用量与接入文档能力。
+              当前控制台已接入 Phase 4 管理闭环，后续会继续补齐 API Key、租户用量与接入文档能力。
             </Text>
           </div>
         </div>
@@ -537,7 +581,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
                 options={bases.map((base) => ({ label: base.name, value: base.id }))}
               />
               <Tag color={selectedBase ? 'blue' : 'default'}>
-                {selectedBase ? `当前知识库：${selectedBase.name}` : '未选择知识库'}
+                {selectedBase ? `当前知识库: ${selectedBase.name}` : '未选择知识库'}
               </Tag>
               {user ? (
                 <Space size={6}>

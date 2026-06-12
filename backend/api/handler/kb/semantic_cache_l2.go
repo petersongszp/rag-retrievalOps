@@ -12,6 +12,7 @@ import (
 	semanticcache "interview-agents/internal/cache/semantic"
 	"interview-agents/internal/config"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/milvus/storage"
 	"interview-agents/internal/rag/experiment"
 	"interview-agents/internal/rag/release"
 	"interview-agents/internal/repository"
@@ -69,6 +70,7 @@ type semanticCacheLookupTrace struct {
 	EmbeddingMs       int64
 	LookupMs          int64
 	Threshold         float64
+	EmbeddingCache    storage.EmbeddingCacheTrace
 }
 
 func trySemanticCacheHit(
@@ -105,10 +107,12 @@ func trySemanticCacheHit(
 		return nil, trace, err
 	}
 
+	embedCtx := storage.WithEmbeddingCacheTrace(ctx)
 	embeddingStart := time.Now()
-	vectors, err := embedder.EmbedBatch(ctx, []string{strings.TrimSpace(input.Query)})
+	vectors, err := embedder.EmbedBatch(embedCtx, []string{strings.TrimSpace(input.Query)})
 	embeddingMs := time.Since(embeddingStart).Milliseconds()
 	trace.EmbeddingMs = embeddingMs
+	trace.EmbeddingCache = storage.ConsumeEmbeddingCacheTrace(embedCtx)
 	if err != nil {
 		trace.Reason = "embed_failed"
 		return nil, trace, err
@@ -327,7 +331,7 @@ func resolveSemanticCacheEmbedder(manager *milvus.MilvusManager) semanticCacheEm
 	// 这里额外包一层进程内存缓存：
 	// 同一个 query 的 embedding 向量在短时间内只算一次，
 	// 后续命中同 query 时直接复用，减少 lookup P95。
-	return wrapSemanticCacheEmbedderWithMemoryCache(manager.GetEmbeddingService())
+	return manager.GetEmbeddingService()
 }
 
 func float64VectorTo32(values []float64) []float32 {

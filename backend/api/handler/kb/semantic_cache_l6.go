@@ -31,15 +31,17 @@ type semanticCacheTestSummary struct {
 }
 
 type semanticCacheBenefitSummary struct {
-	LookupCount          int     `json:"lookup_count"`
-	HitCount             int     `json:"hit_count"`
-	HitRate              float64 `json:"hit_rate"`
-	LookupP95Ms          int64   `json:"lookup_p95_ms"`
-	FalseHitCount        int     `json:"false_hit_count"`
-	SavedRetrievalCost   float64 `json:"saved_retrieval_cost"`
-	SavedRerankCost      float64 `json:"saved_rerank_cost"`
-	TotalSavedCost       float64 `json:"total_saved_cost"`
-	ObservabilityHealthy bool    `json:"observability_healthy"`
+	LookupCount           int     `json:"lookup_count"`
+	HitCount              int     `json:"hit_count"`
+	HitRate               float64 `json:"hit_rate"`
+	LookupP95Ms           int64   `json:"lookup_p95_ms"`
+	WarmLookupP95Ms       int64   `json:"warm_lookup_p95_ms"`
+	FalseHitCount         int     `json:"false_hit_count"`
+	SavedRetrievalCost    float64 `json:"saved_retrieval_cost"`
+	SavedRerankCost       float64 `json:"saved_rerank_cost"`
+	TotalSavedCost        float64 `json:"total_saved_cost"`
+	EmbeddingCacheHitRate float64 `json:"embedding_cache_hit_rate"`
+	ObservabilityHealthy  bool    `json:"observability_healthy"`
 }
 
 type semanticCacheReportResponse struct {
@@ -96,15 +98,17 @@ func buildSemanticCacheReport(now time.Time) semanticCacheReportResponse {
 		CanaryPlan:            semanticCacheCanaryPlan(),
 		RollbackPlan:          semanticCacheRollbackPlan(),
 		BenefitSummary: semanticCacheBenefitSummary{
-			LookupCount:          gate.LookupCount,
-			HitCount:             gate.HitCount,
-			HitRate:              gate.HitRate,
-			LookupP95Ms:          gate.LookupP95Ms,
-			FalseHitCount:        gate.FalseHitCount,
-			SavedRetrievalCost:   gate.SavedRetrievalCost,
-			SavedRerankCost:      gate.SavedRerankCost,
-			TotalSavedCost:       gate.SavedRetrievalCost + gate.SavedRerankCost,
-			ObservabilityHealthy: gate.ObservabilityGuardPassed,
+			LookupCount:           gate.LookupCount,
+			HitCount:              gate.HitCount,
+			HitRate:               gate.HitRate,
+			LookupP95Ms:           gate.LookupP95Ms,
+			WarmLookupP95Ms:       gate.WarmLookupP95Ms,
+			FalseHitCount:         gate.FalseHitCount,
+			SavedRetrievalCost:    gate.SavedRetrievalCost,
+			SavedRerankCost:       gate.SavedRerankCost,
+			TotalSavedCost:        gate.SavedRetrievalCost + gate.SavedRerankCost,
+			EmbeddingCacheHitRate: gate.EmbeddingCacheHitRate,
+			ObservabilityHealthy:  gate.ObservabilityGuardPassed,
 		},
 		Risks:       risks,
 		NextActions: nextActions,
