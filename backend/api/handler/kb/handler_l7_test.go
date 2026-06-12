@@ -12,6 +12,89 @@ import (
 	"github.com/cloudwego/eino/schema"
 )
 
+func TestMergeKnowledgeBaseSearchResultsRecomputesFinalRouteMetrics(t *testing.T) {
+	densePrimary := &schema.Document{
+		ID: "doc-dense",
+		MetaData: map[string]interface{}{
+			"score": 5.0,
+			"route": "dense",
+			"route_contrib": map[string]interface{}{
+				"dense": 0.9,
+				"sparse": 0.2,
+			},
+		},
+	}
+	sparsePrimary := &schema.Document{
+		ID: "doc-sparse",
+		MetaData: map[string]interface{}{
+			"score": 4.0,
+			"route": "sparse",
+			"route_contrib": map[string]interface{}{
+				"sparse": 0.8,
+			},
+		},
+	}
+	trimmedDense := &schema.Document{
+		ID: "doc-trimmed",
+		MetaData: map[string]interface{}{
+			"score": 3.0,
+			"route": "dense",
+			"route_contrib": map[string]interface{}{
+				"dense": 0.7,
+			},
+		},
+	}
+
+	merged := mergeKnowledgeBaseSearchResults([]*retrieval.SearchResult{
+		{
+			Documents: []*schema.Document{densePrimary, trimmedDense},
+			Metrics: retrieval.SearchMetrics{
+				DenseHits:             2,
+				DenseParticipation:    2,
+				PrimaryDenseCount:     2,
+				DenseContribution:     2,
+				CandidateTopK:         2,
+				FinalTopK:             2,
+				RetrieverVersion:      retrieval.HybridRetrieverVersion,
+			},
+		},
+		{
+			Documents: []*schema.Document{sparsePrimary},
+			Metrics: retrieval.SearchMetrics{
+				SparseHits:            3,
+				SparseParticipation:   1,
+				PrimarySparseCount:    1,
+				SparseContribution:    1,
+				CandidateTopK:         3,
+				FinalTopK:             1,
+				RetrieverVersion:      retrieval.HybridRetrieverVersion,
+			},
+		},
+	}, "multi:kb-a,kb-b", 2, true)
+
+	if got := len(merged.Documents); got != 2 {
+		t.Fatalf("merged documents len = %d, want 2", got)
+	}
+	if merged.Metrics.DenseHits != 2 || merged.Metrics.SparseHits != 3 {
+		t.Fatalf("raw hits should sum across KBs, got dense=%d sparse=%d", merged.Metrics.DenseHits, merged.Metrics.SparseHits)
+	}
+	if merged.Metrics.DenseParticipation != 1 || merged.Metrics.SparseParticipation != 2 {
+		t.Fatalf("participation should be recomputed from final docs, got dense=%d sparse=%d", merged.Metrics.DenseParticipation, merged.Metrics.SparseParticipation)
+	}
+	if merged.Metrics.PrimaryDenseCount != 1 || merged.Metrics.PrimarySparseCount != 1 {
+		t.Fatalf("primary counts should be recomputed from final docs, got dense=%d sparse=%d", merged.Metrics.PrimaryDenseCount, merged.Metrics.PrimarySparseCount)
+	}
+	if merged.Metrics.DualRouteFinalCount != 1 {
+		t.Fatalf("DualRouteFinalCount = %d, want 1", merged.Metrics.DualRouteFinalCount)
+	}
+	if merged.Metrics.DenseContribution != 1 || merged.Metrics.SparseContribution != 1 {
+		t.Fatalf("contribution should follow primary counts after recompute, got dense=%d sparse=%d", merged.Metrics.DenseContribution, merged.Metrics.SparseContribution)
+	}
+	if merged.Metrics.CandidateTopK != 3 || merged.Metrics.FinalTopK != 2 {
+		t.Fatalf("topk metrics = candidate:%d final:%d", merged.Metrics.CandidateTopK, merged.Metrics.FinalTopK)
+	}
+}
+
 func TestClassifyRewriteGainBucket(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -75,6 +158,15 @@ func TestBuildRetrieveDebugTraceIncludesParentFillDiff(t *testing.T) {
 		ParentChildEnabled: true,
 		ParentFillStrategy: "section_window",
 		ParentFillCount:    1,
+		DenseHits:          3,
+		SparseHits:         2,
+		DenseParticipation: 1,
+		SparseParticipation: 1,
+		PrimaryDenseCount:  1,
+		PrimarySparseCount: 0,
+		DualRouteFinalCount: 1,
+		DenseContribution:  1,
+		SparseContribution: 0,
 	}
 	docs := []*schema.Document{
 		{
@@ -111,6 +203,12 @@ func TestBuildRetrieveDebugTraceIncludesParentFillDiff(t *testing.T) {
 	}
 	if decoded == nil || decoded.Rewrite.GainBucket != "gain_candidate" {
 		t.Fatalf("decoded rewrite gain bucket = %#v", decoded)
+	}
+	if decoded.Routes[0].Participation != 1 || decoded.Routes[0].PrimaryCount != 1 {
+		t.Fatalf("decoded dense route counters = %#v", decoded.Routes[0])
+	}
+	if decoded.DenseParticipation != 0 || decoded.PrimaryDenseCount != 0 {
+		t.Fatalf("log-backed counters should stay zero without log fallback, got trace=%#v", decoded)
 	}
 }
 
@@ -149,12 +247,16 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 	}
 	debugTrace := &retrieval.DebugTrace{
 		RouteHits: []retrieval.RouteDebugHit{
-			{Route: "dense", Query: "java lock", Contribution: 2},
-			{Route: "sparse", Query: "java lock aqs", Contribution: 2},
+			{Route: "dense", Query: "java lock", HitsCount: 5, ParticipationCount: 3, PrimaryCount: 2, Contribution: 2},
+			{Route: "sparse", Query: "java lock aqs", HitsCount: 4, ParticipationCount: 2, PrimaryCount: 2, Contribution: 2},
 		},
 		Fusion: retrieval.FusionDebugInfo{
-			Before: []retrieval.DebugDocument{{ChunkID: "c1"}},
-			After:  []retrieval.DebugDocument{{ChunkID: "c2"}},
+			Before:                   []retrieval.DebugDocument{{ChunkID: "c1"}},
+			After:                    []retrieval.DebugDocument{{ChunkID: "c2"}},
+			DenseParticipationCount:  3,
+			SparseParticipationCount: 2,
+			DualRouteFinalCount:      1,
+			PrimaryRouteDistribution: map[string]int{"dense": 2, "sparse": 2},
 		},
 		ParentChild: retrieval.ParentChildDebugInfo{
 			ChildHits:      []retrieval.DebugDocument{{ChunkID: "c3"}},
@@ -172,6 +274,9 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 	if len(trace.RouteHits) != 2 {
 		t.Fatalf("RouteHits len = %d, want 2", len(trace.RouteHits))
 	}
+	if trace.RouteHits[0].HitsCount != 5 || trace.RouteHits[0].ParticipationCount != 3 || trace.RouteHits[0].PrimaryCount != 2 {
+		t.Fatalf("dense route hit counters = %#v", trace.RouteHits[0])
+	}
 	if trace.RewriteStrategy != "rule_based+domain_terms" {
 		t.Fatalf("RewriteStrategy = %q", trace.RewriteStrategy)
 	}
@@ -186,6 +291,9 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 	}
 	if len(trace.ParentChild.ParentContexts) != 1 || trace.ParentChild.ParentContexts[0].ParentID != "p1" {
 		t.Fatalf("ParentContexts = %#v", trace.ParentChild.ParentContexts)
+	}
+	if trace.FusionResults.DenseParticipationCount != 3 || trace.FusionResults.PrimaryRouteDistribution["dense"] != 2 {
+		t.Fatalf("FusionResults = %#v", trace.FusionResults)
 	}
 	if len(trace.ContractGaps) != 0 {
 		t.Fatalf("ContractGaps = %#v, want empty", trace.ContractGaps)
@@ -202,20 +310,31 @@ func TestBuildRetrievalDebugTraceResponseFallbackMarksContractGaps(t *testing.T)
 		KBIDs:              "9",
 	}
 	metrics := retrieval.SearchMetrics{
-		OriginalQuery:        "legacy query",
-		RewriteQuery:         "legacy rewrite",
-		FinalQuery:           "legacy final",
-		DenseQuery:           "legacy query",
-		SparseQuery:          "legacy final",
-		CandidateTopK:        5,
-		FinalTopK:            0,
-		TokenBudget:          300,
-		TokenBudgetRemain:    300,
-		ParentChildEnabled:   false,
-		RewriteApplied:       true,
-		EvidenceGateResult:   retrieval.EvidenceGateResultDisabled,
-		CitationSupported:    false,
+		OriginalQuery:         "legacy query",
+		RewriteQuery:          "legacy rewrite",
+		FinalQuery:            "legacy final",
+		DenseQuery:            "legacy query",
+		SparseQuery:           "legacy final",
+		CandidateTopK:         5,
+		FinalTopK:             0,
+		TokenBudget:           300,
+		TokenBudgetRemain:     300,
+		ParentChildEnabled:    false,
+		RewriteApplied:        true,
+		EvidenceGateResult:    retrieval.EvidenceGateResultDisabled,
+		CitationSupported:     false,
 		CitationSupportScore: 0,
+		DenseHits:             6,
+		SparseHits:            4,
+		DenseParticipation:    2,
+		SparseParticipation:   1,
+		PrimaryDenseCount:     0,
+		PrimarySparseCount:    0,
+		DualRouteFinalCount:   1,
+		DenseContribution:     0,
+		SparseContribution:    0,
+		SparseCandidateBefore: 9,
+		SparseCandidateAfter:  4,
 	}
 
 	trace := buildRetrievalDebugTraceResponse(logEntry, metrics, nil, nil)
@@ -230,6 +349,12 @@ func TestBuildRetrievalDebugTraceResponseFallbackMarksContractGaps(t *testing.T)
 	}
 	if len(trace.RouteHits) != 2 {
 		t.Fatalf("fallback RouteHits len = %d, want 2", len(trace.RouteHits))
+	}
+	if trace.RouteHits[0].HitsCount != 6 || trace.RouteHits[0].ParticipationCount != 2 {
+		t.Fatalf("fallback dense route = %#v", trace.RouteHits[0])
+	}
+	if trace.RouteHits[1].CandidateCountBefore != 9 || trace.RouteHits[1].CandidateCountAfter != 4 {
+		t.Fatalf("fallback sparse route = %#v", trace.RouteHits[1])
 	}
 }
 

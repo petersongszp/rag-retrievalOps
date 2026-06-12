@@ -16,6 +16,8 @@ const standardRefusalTemplateVersion = "phase3-standard-refusal-v1"
 type retrievalDebugTraceResponse struct {
 	RequestID         string                              `json:"request_id"`
 	DebugAvailable    bool                                `json:"debug_available"`
+	FusionStrategy    string                              `json:"fusion_strategy,omitempty"`
+	RRFK              int                                 `json:"rrf_k,omitempty"`
 	KBIDs             []uint64                            `json:"kb_ids,omitempty"`
 	OriginalQuery     string                              `json:"original_query,omitempty"`
 	RewrittenQuery    string                              `json:"rewritten_query,omitempty"`
@@ -40,17 +42,28 @@ type retrievalDebugTraceResponse struct {
 }
 
 type retrievalDebugRouteHitResponse struct {
-	Route        string                    `json:"route"`
-	Query        string                    `json:"query,omitempty"`
-	Hits         []retrieval.DebugDocument `json:"hits,omitempty"`
-	Contribution int                       `json:"contribution"`
-	LatencyMs    int64                     `json:"latency_ms,omitempty"`
-	Error        string                    `json:"error,omitempty"`
+	Route                  string                    `json:"route"`
+	Query                  string                    `json:"query,omitempty"`
+	Hits                   []retrieval.DebugDocument `json:"hits,omitempty"`
+	HitsCount              int                       `json:"hits_count,omitempty"`
+	ParticipationCount     int                       `json:"participation_count,omitempty"`
+	PrimaryCount           int                       `json:"primary_count,omitempty"`
+	Contribution           int                       `json:"contribution"`
+	SparseTerms            []string                  `json:"sparse_terms,omitempty"`
+	PerTermCandidateCounts map[string]int            `json:"per_term_candidate_counts,omitempty"`
+	CandidateCountBefore   int                       `json:"candidate_count_before_bm25,omitempty"`
+	CandidateCountAfter    int                       `json:"candidate_count_after_bm25,omitempty"`
+	LatencyMs              int64                     `json:"latency_ms,omitempty"`
+	Error                  string                    `json:"error,omitempty"`
 }
 
 type retrievalDebugFusionResponse struct {
-	Before []retrieval.DebugDocument `json:"before,omitempty"`
-	After  []retrieval.DebugDocument `json:"after,omitempty"`
+	Before                   []retrieval.DebugDocument `json:"before,omitempty"`
+	After                    []retrieval.DebugDocument `json:"after,omitempty"`
+	DenseParticipationCount  int                       `json:"dense_participation_count,omitempty"`
+	SparseParticipationCount int                       `json:"sparse_participation_count,omitempty"`
+	DualRouteFinalCount      int                       `json:"dual_route_final_count,omitempty"`
+	PrimaryRouteDistribution map[string]int            `json:"primary_route_distribution,omitempty"`
 }
 
 type retrievalDebugDedupeResponse struct {
@@ -72,6 +85,7 @@ type retrievalDebugFilterResponse struct {
 	BeforeCount    int                       `json:"before_count"`
 	AfterCount     int                       `json:"after_count"`
 	Removed        []retrieval.DebugDocument `json:"removed,omitempty"`
+	DropReasons    map[string]int            `json:"drop_reasons,omitempty"`
 	TruncateReason string                    `json:"truncate_reason,omitempty"`
 }
 
@@ -136,6 +150,21 @@ func buildRetrievalDebugTraceResponse(
 	response := retrievalDebugTraceResponse{
 		RequestID:      fallbackRequestID(logEntry),
 		DebugAvailable: debugTrace != nil,
+		FusionStrategy: firstNonEmptyString(searchMetrics.FusionStrategy, func() string {
+			if logEntry != nil {
+				return strings.TrimSpace(logEntry.FusionStrategy)
+			}
+			return ""
+		}()),
+		RRFK: func() int {
+			if searchMetrics.RRFK > 0 {
+				return searchMetrics.RRFK
+			}
+			if logEntry != nil {
+				return logEntry.RRFK
+			}
+			return 0
+		}(),
 		KBIDs:          parseKBIDs(logEntry),
 		OriginalQuery:  firstNonEmptyString(searchMetrics.OriginalQuery, logQuery(logEntry)),
 		RewrittenQuery: firstNonEmptyString(searchMetrics.RewriteQuery, logRewrite(logEntry)),
@@ -206,17 +235,28 @@ func buildRetrievalDebugTraceResponse(
 		response.RouteHits = make([]retrievalDebugRouteHitResponse, 0, len(debugTrace.RouteHits))
 		for _, route := range debugTrace.RouteHits {
 			response.RouteHits = append(response.RouteHits, retrievalDebugRouteHitResponse{
-				Route:        route.Route,
-				Query:        route.Query,
-				Hits:         append([]retrieval.DebugDocument(nil), route.Hits...),
-				Contribution: route.Contribution,
-				LatencyMs:    route.LatencyMs,
-				Error:        route.Error,
+				Route:                  route.Route,
+				Query:                  route.Query,
+				Hits:                   append([]retrieval.DebugDocument(nil), route.Hits...),
+				HitsCount:              route.HitsCount,
+				ParticipationCount:     route.ParticipationCount,
+				PrimaryCount:           route.PrimaryCount,
+				Contribution:           route.Contribution,
+				SparseTerms:            append([]string(nil), route.SparseTerms...),
+				PerTermCandidateCounts: cloneIntMap(route.PerTermCandidateCounts),
+				CandidateCountBefore:   route.CandidateCountBefore,
+				CandidateCountAfter:    route.CandidateCountAfter,
+				LatencyMs:              route.LatencyMs,
+				Error:                  route.Error,
 			})
 		}
 		response.FusionResults = retrievalDebugFusionResponse{
-			Before: append([]retrieval.DebugDocument(nil), debugTrace.Fusion.Before...),
-			After:  append([]retrieval.DebugDocument(nil), debugTrace.Fusion.After...),
+			Before:                   append([]retrieval.DebugDocument(nil), debugTrace.Fusion.Before...),
+			After:                    append([]retrieval.DebugDocument(nil), debugTrace.Fusion.After...),
+			DenseParticipationCount:  debugTrace.Fusion.DenseParticipationCount,
+			SparseParticipationCount: debugTrace.Fusion.SparseParticipationCount,
+			DualRouteFinalCount:      debugTrace.Fusion.DualRouteFinalCount,
+			PrimaryRouteDistribution: cloneIntMap(debugTrace.Fusion.PrimaryRouteDistribution),
 		}
 		response.DedupeResults = retrievalDebugDedupeResponse{
 			BeforeCount: debugTrace.Dedupe.BeforeCount,
@@ -235,6 +275,7 @@ func buildRetrievalDebugTraceResponse(
 			BeforeCount:    debugTrace.Filter.BeforeCount,
 			AfterCount:     debugTrace.Filter.AfterCount,
 			Removed:        append([]retrieval.DebugDocument(nil), debugTrace.Filter.Removed...),
+			DropReasons:    cloneIntMap(debugTrace.Filter.DropReasons),
 			TruncateReason: firstNonEmptyString(debugTrace.Filter.TruncateReason, searchMetrics.TruncateReason),
 		}
 		response.ParentChild.ChildHits = append([]retrieval.DebugDocument(nil), debugTrace.ParentChild.ChildHits...)
@@ -298,15 +339,34 @@ func buildFallbackRouteHits(metrics retrieval.SearchMetrics) []retrievalDebugRou
 		{
 			Route:        "dense",
 			Query:        firstNonEmptyString(metrics.DenseQuery, metrics.FinalQuery, metrics.OriginalQuery),
+			HitsCount:    metrics.DenseHits,
+			ParticipationCount: metrics.DenseParticipation,
+			PrimaryCount: metrics.PrimaryDenseCount,
 			Contribution: metrics.DenseContribution,
 			LatencyMs:    metrics.SearchMs,
 		},
 		{
 			Route:        "sparse",
 			Query:        firstNonEmptyString(metrics.SparseQuery, metrics.FinalQuery, metrics.OriginalQuery),
+			HitsCount:    metrics.SparseHits,
+			ParticipationCount: metrics.SparseParticipation,
+			PrimaryCount: metrics.PrimarySparseCount,
 			Contribution: metrics.SparseContribution,
+			CandidateCountBefore: metrics.SparseCandidateBefore,
+			CandidateCountAfter: metrics.SparseCandidateAfter,
 		},
 	}
+}
+
+func cloneIntMap(source map[string]int) map[string]int {
+	if len(source) == 0 {
+		return nil
+	}
+	cloned := make(map[string]int, len(source))
+	for key, value := range source {
+		cloned[key] = value
+	}
+	return cloned
 }
 
 func buildDebugStageDurations(metrics retrieval.SearchMetrics, debugTrace *retrieval.DebugTrace) map[string]int64 {

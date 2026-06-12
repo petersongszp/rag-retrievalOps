@@ -1,47 +1,55 @@
-# L7 检索离线回归报告模板
+# L7 Retrieval Regression Report Template
 
-## 1. 变更说明
+## 1. Change Summary
 
-- 变更摘要：
-- 涉及策略：
-- 发布目标：
-- 评测数据集版本：
+- Change summary:
+- Scope:
+- Release target:
+- Dataset version:
+- Profile version:
 
 ## 2. Baseline vs Candidate
 
-- Baseline：
-- Candidate：
-- Recall@K Delta：
-- MRR Delta：
-- nDCG Delta：
-- Citation Accuracy Delta：
-- P95 Latency Delta：
+- Baseline:
+- Candidate:
+- Recall@K delta:
+- MRR delta:
+- nDCG delta:
+- Citation accuracy delta:
+- Dense hit rate delta:
+- Sparse hit rate delta:
+- Dense participation rate delta:
+- Sparse participation rate delta:
+- Primary dense rate delta:
+- Primary sparse rate delta:
+- Empty rate delta:
+- P95 latency delta:
 
-## 3. 各策略结果
+## 3. Strategy Metrics
 
-| Strategy | Recall@K | MRR | nDCG | Citation Accuracy | P50(ms) | P95(ms) |
-| --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| dense_only |  |  |  |  |  |  |
-| hybrid |  |  |  |  |  |  |
-| hybrid_rewrite |  |  |  |  |  |  |
-| hybrid_rewrite_dynamic_topk |  |  |  |  |  |  |
+| Strategy | Recall@K | MRR | nDCG | Citation Acc | Dense Hit | Sparse Hit | Dense Part. | Sparse Part. | Primary Dense | Primary Sparse | Empty Rate | P50(ms) | P95(ms) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| baseline |  |  |  |  |  |  |  |  |  |  |  |  |  |
+| candidate |  |  |  |  |  |  |  |  |  |  |  |  |  |
 
-## 4. 贡献度分析
+## 4. Route Analysis
 
-- `hybrid` 相对 `dense_only`：
-- `hybrid_rewrite` 相对 `hybrid`：
-- `hybrid_rewrite_dynamic_topk` 相对 `hybrid_rewrite`：
+- Dense hits / sparse hits:
+- Dense participation / sparse participation:
+- Primary route distribution:
+- Empty-result cases:
+- Cases where sparse hit but did not become primary:
 
-## 5. 风险结论
+## 5. Findings
 
-- 质量风险：
-- 延迟风险：
-- 数据集覆盖盲区：
-- 是否建议进入灰度：
+- Quality risks:
+- Latency risks:
+- Dataset coverage gaps:
+- Recommend rollout:
 
-## 6. 回滚策略
+## 6. Rollback Plan
 
-1. 关闭 `RAG_ENABLE_DYNAMIC_TOPK`
-2. 关闭 `RAG_ENABLE_QUERY_REWRITE`
-3. 关闭 `RAG_ENABLE_HYBRID_RETRIEVAL`
-4. 回退到 Phase 1 基线路径
+1. Revert to the frozen non-RRF baseline profile.
+2. Reset dense/sparse weights to the baseline values.
+3. Disable the candidate-only tuning knobs if regression persists.
+4. Attach the failed regression report to the rollback ticket.

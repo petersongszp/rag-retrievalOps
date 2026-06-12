@@ -26,18 +26,7 @@ func SetJWTManager(m *authpkg.JWTManager) {
 // Register wires the RAG admin and public retrieval routes.
 // adminGroup is the /api/admin group with auth middleware already applied.
 func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
-	if !config.Global.RAG.Enabled {
-		log.Println("[RAG] rag.enabled=false, skip route registration")
-		return
-	}
-
-	log.Println("[RAG] Registering knowledge base routes")
-	registerKBGroup(h.Group("/api/kb"), false)
-	registerKBGroup(adminGroup.Group("/kb"), true)
-
-	log.Println("[RAG] Registering v1 public RAG routes")
-	registerRAGPublicRoutes(h.Group(""))
-
+	// ── 认证路由：始终注册，不受 RAG 开关影响 ──
 	log.Println("[RAG] Registering auth routes")
 	// 公开路由（不需要认证）
 	publicAuth := h.Group("/v1/auth")
@@ -84,6 +73,19 @@ func Register(h *server.Hertz, adminGroup *route.RouterGroup) {
 			tenantGroup.GET("/usage", authhandler.GetTenantUsage)
 		}
 	}
+
+	// ── RAG 相关路由：仅在 RAG 开启时注册 ──
+	if !config.Global.RAG.Enabled {
+		log.Println("[RAG] rag.enabled=false, skip RAG route registration")
+		return
+	}
+
+	log.Println("[RAG] Registering knowledge base routes")
+	registerKBGroup(h.Group("/api/kb"), false)
+	registerKBGroup(adminGroup.Group("/kb"), true)
+
+	log.Println("[RAG] Registering v1 public RAG routes")
+	registerRAGPublicRoutes(h.Group(""))
 }
 
 func registerRAGPublicRoutes(r *route.RouterGroup) {
