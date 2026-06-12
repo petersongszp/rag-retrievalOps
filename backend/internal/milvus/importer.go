@@ -137,6 +137,14 @@ func (mi *MarkdownImporter) ImportFile(ctx context.Context, filePath string, opt
 	}
 
 	// 存储到 Milvus
+	chunkmeta.PrepareChunksForIndexing(chunks, chunkmeta.ContextOptions{
+		Enabled:               mi.manager.Config.DocumentSplitter.ContextualEmbeddingEnabled,
+		Strategy:              mi.manager.Config.DocumentSplitter.ContextualEmbeddingStrategy,
+		MaxPrefixChars:        mi.manager.Config.DocumentSplitter.ContextualEmbeddingMaxPrefixChars,
+		MaxContentChars:       mi.manager.Config.DocumentSplitter.ContextualEmbeddingMaxContentChars,
+		SaveContentForDebug:   mi.manager.Config.DocumentSplitter.SaveEmbeddingContentForDebug,
+		StoredContentMaxChars: mi.manager.Config.DocumentSplitter.EmbeddingContentMaxLength,
+	})
 	docIDs, err := mi.manager.IndexerService.Store(ctx, chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store documents to Milvus: %w", err)
@@ -443,6 +451,14 @@ func (mi *MarkdownImporter) ImportText(ctx context.Context, content string, opts
 	// 核心步骤2：使用 Store 上传到 Milvus
 	// ========================================
 	// Store 会：1) 计算每个块的向量嵌入 2) 存储到 Milvus 数据库
+	chunkmeta.PrepareChunksForIndexing(chunks, chunkmeta.ContextOptions{
+		Enabled:               mi.manager.Config.DocumentSplitter.ContextualEmbeddingEnabled,
+		Strategy:              mi.manager.Config.DocumentSplitter.ContextualEmbeddingStrategy,
+		MaxPrefixChars:        mi.manager.Config.DocumentSplitter.ContextualEmbeddingMaxPrefixChars,
+		MaxContentChars:       mi.manager.Config.DocumentSplitter.ContextualEmbeddingMaxContentChars,
+		SaveContentForDebug:   mi.manager.Config.DocumentSplitter.SaveEmbeddingContentForDebug,
+		StoredContentMaxChars: mi.manager.Config.DocumentSplitter.EmbeddingContentMaxLength,
+	})
 	docIDs, err := mi.manager.IndexerService.Store(ctx, chunks)
 	if err != nil {
 		return nil, fmt.Errorf("failed to store documents to Milvus: %w", err)

@@ -108,7 +108,7 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		Collection: knowledgeCollection,
 		Embedding:  embeddingService.GetEmbedder(),
 	}
-	indexerService, err := storage.NewIndexerServiceWithDimension(ctx, indexerConfig, resolvedDim)
+	indexerService, err := storage.NewIndexerServiceWithDimension(ctx, indexerConfig, resolvedDim, &cfg.DocumentSplitter)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initialize indexer service: %w", err)
 	}
@@ -144,13 +144,13 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		candidateTopK = cfg.RAG.Phase2.CandidateTopK
 	}
 	hybridConfig := &retrieval.HybridRetrieverConfig{
-		CandidateTopK: candidateTopK,
-		FusionStrategy: cfg.RAG.Phase2.FusionStrategy,
-		RRFK:           cfg.RAG.Phase2.RRFK,
-		RRFDenseWeight: cfg.RAG.Phase2.RRFDenseWeight,
+		CandidateTopK:   candidateTopK,
+		FusionStrategy:  cfg.RAG.Phase2.FusionStrategy,
+		RRFK:            cfg.RAG.Phase2.RRFK,
+		RRFDenseWeight:  cfg.RAG.Phase2.RRFDenseWeight,
 		RRFSparseWeight: cfg.RAG.Phase2.RRFSparseWeight,
-		DenseWeight:   cfg.RAG.Phase2.HybridDenseWeight,
-		SparseWeight:  cfg.RAG.Phase2.HybridSparseWeight,
+		DenseWeight:     cfg.RAG.Phase2.HybridDenseWeight,
+		SparseWeight:    cfg.RAG.Phase2.HybridSparseWeight,
 		SparseConfig: &retrieval.SparseRetrieverConfig{
 			DefaultTopK: candidateTopK,
 		},

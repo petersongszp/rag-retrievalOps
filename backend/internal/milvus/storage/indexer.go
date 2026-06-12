@@ -4,6 +4,9 @@ import (
 	"context"
 	"fmt"
 
+	appconfig "interview-agents/internal/config"
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/indexer/milvus"
 	"github.com/cloudwego/eino/schema"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
@@ -13,12 +16,14 @@ import (
 
 // IndexerService 封装 Milvus 索引器服务
 type IndexerService struct {
-	indexer *milvus.Indexer
-	config  *milvus.IndexerConfig
+	indexer                      *milvus.Indexer
+	config                       *milvus.IndexerConfig
+	saveEmbeddingContentForDebug bool
+	embeddingContentMaxLength    int
 }
 
 // NewIndexerServiceWithDimension 创建新的索引器服务（指定维度）
-func NewIndexerServiceWithDimension(ctx context.Context, config *milvus.IndexerConfig, dimension int) (*IndexerService, error) {
+func NewIndexerServiceWithDimension(ctx context.Context, config *milvus.IndexerConfig, dimension int, splitterConfig *appconfig.SplitterConfig) (*IndexerService, error) {
 	if config == nil {
 		return nil, fmt.Errorf("config is nil")
 	}
@@ -76,19 +81,61 @@ func NewIndexerServiceWithDimension(ctx context.Context, config *milvus.IndexerC
 		return nil, fmt.Errorf("failed to create milvus indexer: %w", err)
 	}
 	return &IndexerService{
-		indexer: indexer,
-		config:  config,
+		indexer:                      indexer,
+		config:                       indexerConfig,
+		saveEmbeddingContentForDebug: splitterConfig != nil && splitterConfig.SaveEmbeddingContentForDebug,
+		embeddingContentMaxLength: func() int {
+			if splitterConfig == nil {
+				return 0
+			}
+			return splitterConfig.EmbeddingContentMaxLength
+		}(),
 	}, nil
 }
 
 // Store 存储文档到 Milvus
 func (s *IndexerService) Store(ctx context.Context, docs []*schema.Document) ([]string, error) {
-	if s.indexer == nil {
+	if s.indexer == nil || s.config == nil {
 		return nil, fmt.Errorf("indexer is not initialized")
 	}
-	ids, err := s.indexer.Store(ctx, docs)
+
+	texts := make([]string, 0, len(docs))
+	for _, doc := range docs {
+		texts = append(texts, chunkmeta.ResolveEmbeddingText(doc))
+	}
+
+	vectors, err := s.config.Embedding.EmbedStrings(ctx, texts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to store documents: %w", err)
+		return nil, fmt.Errorf("failed to embed documents: %w", err)
+	}
+	if len(vectors) != len(docs) {
+		return nil, fmt.Errorf("embedding result length mismatch: %d != %d", len(vectors), len(docs))
+	}
+
+	chunkmeta.StripIndexOnlyMetadata(docs, chunkmeta.ContextOptions{
+		SaveContentForDebug:   s.saveEmbeddingContentForDebug,
+		StoredContentMaxChars: s.embeddingContentMaxLength,
+	})
+
+	rows, err := s.config.DocumentConverter(ctx, docs, vectors)
+	if err != nil {
+		return nil, fmt.Errorf("failed to convert documents: %w", err)
+	}
+
+	results, err := s.config.Client.InsertRows(ctx, s.config.Collection, s.config.PartitionName, rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to insert rows: %w", err)
+	}
+	if err := s.config.Client.Flush(ctx, s.config.Collection, false); err != nil {
+		return nil, fmt.Errorf("failed to flush collection: %w", err)
+	}
+
+	ids := make([]string, results.Len())
+	for idx := 0; idx < results.Len(); idx++ {
+		ids[idx], err = results.GetAsString(idx)
+		if err != nil {
+			return nil, fmt.Errorf("failed to read inserted id: %w", err)
+		}
 	}
 	return ids, nil
 }

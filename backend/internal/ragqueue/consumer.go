@@ -211,6 +211,14 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 			chunk.ID = fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", payload.KBID, payload.DocumentID, i, time.Now().UnixNano())
 		}
 	}
+	chunkmeta.PrepareChunksForIndexing(chunks, chunkmeta.ContextOptions{
+		Enabled:               config.Global.DocumentSplitter.ContextualEmbeddingEnabled,
+		Strategy:              config.Global.DocumentSplitter.ContextualEmbeddingStrategy,
+		MaxPrefixChars:        config.Global.DocumentSplitter.ContextualEmbeddingMaxPrefixChars,
+		MaxContentChars:       config.Global.DocumentSplitter.ContextualEmbeddingMaxContentChars,
+		SaveContentForDebug:   config.Global.DocumentSplitter.SaveEmbeddingContentForDebug,
+		StoredContentMaxChars: config.Global.DocumentSplitter.EmbeddingContentMaxLength,
+	})
 
 	indexerService := manager.GetIndexerService()
 	if strings.TrimSpace(collection) != "" {

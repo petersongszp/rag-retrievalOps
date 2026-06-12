@@ -196,6 +196,12 @@ DocumentSplitter:
     - '! ' # 英文感叹号
     - '? ' # 英文问号
   KeepType: 0 # 分隔符保留策略: 0=不保留, 1=保留在开头, 2=保留在结尾
+  ContextualEmbeddingEnabled: false
+  ContextualEmbeddingStrategy: "title_section_v1"
+  ContextualEmbeddingMaxPrefixChars: 400
+  ContextualEmbeddingMaxContentChars: 3000
+  SaveEmbeddingContentForDebug: false
+  EmbeddingContentMaxLength: 1200
 
 # 微信配置
 wechat:

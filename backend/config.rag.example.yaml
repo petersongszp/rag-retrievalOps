@@ -149,6 +149,12 @@ DocumentSplitter:
     - "! "
     - "? "
   KeepType: 0
+  ContextualEmbeddingEnabled: false
+  ContextualEmbeddingStrategy: "title_section_v1"
+  ContextualEmbeddingMaxPrefixChars: 400
+  ContextualEmbeddingMaxContentChars: 3000
+  SaveEmbeddingContentForDebug: false
+  EmbeddingContentMaxLength: 1200
 
 rag_platform:
   enabled: true

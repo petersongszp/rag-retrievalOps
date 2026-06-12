@@ -839,6 +839,18 @@ func (c *Config) applyRAGDefaults() {
 	if c.RAG.Phase3.ModelRewriteShadowRatio <= 0 {
 		c.RAG.Phase3.ModelRewriteShadowRatio = 0.1
 	}
+	if strings.TrimSpace(c.DocumentSplitter.ContextualEmbeddingStrategy) == "" {
+		c.DocumentSplitter.ContextualEmbeddingStrategy = "title_section_v1"
+	}
+	if c.DocumentSplitter.ContextualEmbeddingMaxPrefixChars <= 0 {
+		c.DocumentSplitter.ContextualEmbeddingMaxPrefixChars = 400
+	}
+	if c.DocumentSplitter.ContextualEmbeddingMaxContentChars <= 0 {
+		c.DocumentSplitter.ContextualEmbeddingMaxContentChars = 3000
+	}
+	if c.DocumentSplitter.EmbeddingContentMaxLength <= 0 {
+		c.DocumentSplitter.EmbeddingContentMaxLength = 1200
+	}
 }
 
 func (c *Config) applyRAGEnvOverrides() error {
@@ -1902,10 +1914,16 @@ func (c *MilvusConfig) GetCollection(name string) string {
 
 // SplitterConfig 鏂囨。鍒嗗壊鍣ㄩ厤缃?
 type SplitterConfig struct {
-	ChunkSize   int      `yaml:"ChunkSize"`   // 鐩爣鐗囨澶у皬锛堝瓧绗︽暟锛?
-	OverlapSize int      `yaml:"OverlapSize"` // 鐗囨閲嶅彔澶у皬锛堝瓧绗︽暟锛?
-	Separators  []string `yaml:"Separators"`  // 鍒嗛殧绗﹀垪琛?
-	KeepType    int      `yaml:"KeepType"`    // 鍒嗛殧绗︿繚鐣欑瓥鐣ワ細0=涓嶄繚鐣? 1=淇濈暀鍦ㄥ紑澶? 2=淇濈暀鍦ㄧ粨灏?
+	ChunkSize                          int      `yaml:"ChunkSize"`   // 鐩爣鐗囨澶у皬锛堝瓧绗︽暟锛?
+	OverlapSize                        int      `yaml:"OverlapSize"` // 鐗囨閲嶅彔澶у皬锛堝瓧绗︽暟锛?
+	Separators                         []string `yaml:"Separators"`  // 鍒嗛殧绗﹀垪琛?
+	KeepType                           int      `yaml:"KeepType"`    // 鍒嗛殧绗︿繚鐣欑瓥鐣ワ細0=涓嶄繚鐣? 1=淇濈暀鍦ㄥ紑澶? 2=淇濈暀鍦ㄧ粨灏?
+	ContextualEmbeddingEnabled         bool     `yaml:"ContextualEmbeddingEnabled"`
+	ContextualEmbeddingStrategy        string   `yaml:"ContextualEmbeddingStrategy"`
+	ContextualEmbeddingMaxPrefixChars  int      `yaml:"ContextualEmbeddingMaxPrefixChars"`
+	ContextualEmbeddingMaxContentChars int      `yaml:"ContextualEmbeddingMaxContentChars"`
+	SaveEmbeddingContentForDebug       bool     `yaml:"SaveEmbeddingContentForDebug"`
+	EmbeddingContentMaxLength          int      `yaml:"EmbeddingContentMaxLength"`
 }
 
 // ExpandEnv 灞曞紑閰嶇疆涓殑鐜鍙橀噺寮曠敤
