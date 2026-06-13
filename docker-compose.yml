@@ -23,6 +23,15 @@ services:
       MILVUS_ADDRESS: milvus:19530
       MILVUS_USERNAME: ${MILVUS_USERNAME:-}
       MILVUS_PASSWORD: ${MILVUS_PASSWORD:-}
+      DOCUMENT_PARSER_PROVIDER: ${DOCUMENT_PARSER_PROVIDER:-http}
+      DOCUMENT_PARSER_ENGINE: ${DOCUMENT_PARSER_ENGINE:-docling}
+      DOCUMENT_PARSER_ENDPOINT: ${DOCUMENT_PARSER_ENDPOINT:-http://parser-provider:9000/parse}
+      DOCUMENT_PARSER_TIMEOUT_MS: ${DOCUMENT_PARSER_TIMEOUT_MS:-60000}
+      DOCUMENT_PARSER_STRICT_MODE: ${DOCUMENT_PARSER_STRICT_MODE:-true}
+      DOCUMENT_PARSER_SAVE_SIDECAR: ${DOCUMENT_PARSER_SAVE_SIDECAR:-true}
+      OCR_PROVIDER: ${OCR_PROVIDER:-http}
+      OCR_ENDPOINT: ${OCR_ENDPOINT:-}
+      OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-30000}
     depends_on:
       mysql:
         condition: service_healthy
@@ -33,6 +42,36 @@ services:
     volumes:
       - ./backend/config.yaml:/app/config.yaml:ro
       - ./backend/logs:/app/logs
+    networks:
+      - rag-network
+
+  docling-serve:
+    profiles: ["parser"]
+    image: ${DOCLING_SERVE_IMAGE:-quay.io/docling-project/docling-serve-cpu:latest}
+    restart: unless-stopped
+    ports:
+      - "${DOCLING_SERVE_PORT:-5001}:5001"
+    environment:
+      DOCLING_SERVE_ENABLE_UI: ${DOCLING_SERVE_ENABLE_UI:-1}
+    networks:
+      - rag-network
+
+  parser-provider:
+    profiles: ["parser"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.parser-provider
+    restart: unless-stopped
+    ports:
+      - "${PARSER_PROVIDER_PORT:-9000}:9000"
+    environment:
+      PARSER_PROVIDER_HOST: 0.0.0.0
+      PARSER_PROVIDER_PORT: 9000
+      DOCLING_BASE_URL: http://docling-serve:5001
+      DOCLING_CONVERT_PATH: /v1/convert/file
+      DOCLING_TIMEOUT_MS: ${DOCLING_TIMEOUT_MS:-120000}
+    depends_on:
+      - docling-serve
     networks:
       - rag-network
 

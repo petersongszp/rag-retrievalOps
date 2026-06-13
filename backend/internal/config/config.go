@@ -243,6 +243,7 @@ type RAGConfig struct {
 
 type DocumentParserConfig struct {
 	Provider    string    `yaml:"provider" env:"DOCUMENT_PARSER_PROVIDER"`
+	Engine      string    `yaml:"engine" env:"DOCUMENT_PARSER_ENGINE"`
 	Endpoint    string    `yaml:"endpoint" env:"DOCUMENT_PARSER_ENDPOINT"`
 	TimeoutMS   int       `yaml:"timeout_ms" env:"DOCUMENT_PARSER_TIMEOUT_MS"`
 	StrictMode  bool      `yaml:"strict_mode" env:"DOCUMENT_PARSER_STRICT_MODE"`
@@ -497,6 +498,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	cfg.applyEmbeddingEnvOverrides()
 	cfg.RAG.FeatureFlags.normalizePhase4Aliases()
 	cfg.applyRAGDefaults()
+	if err := cfg.applyDocumentParserEnvOverrides(); err != nil {
+		return nil, err
+	}
 	cfg.ConfigVersion = cfg.buildConfigVersion()
 	if err := cfg.writePhase1BaselineSnapshot(configPath); err != nil {
 		return nil, err
@@ -728,6 +732,9 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if strings.TrimSpace(c.RAG.DocumentParser.Provider) == "" {
 		c.RAG.DocumentParser.Provider = "http"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Engine) == "" {
+		c.RAG.DocumentParser.Engine = "docling"
 	}
 	if c.RAG.DocumentParser.TimeoutMS <= 0 {
 		c.RAG.DocumentParser.TimeoutMS = 60000
@@ -1203,6 +1210,48 @@ func (c *Config) applyRAGEnvOverrides() error {
 	}
 	if value, ok := os.LookupEnv("BOOTSTRAP_TENANT_NAME"); ok {
 		c.RAG.Auth.BootstrapTenantName = strings.TrimSpace(value)
+	}
+	return nil
+}
+
+func (c *Config) applyDocumentParserEnvOverrides() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_PROVIDER"); ok {
+		c.RAG.DocumentParser.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENGINE"); ok {
+		c.RAG.DocumentParser.Engine = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENDPOINT"); ok {
+		c.RAG.DocumentParser.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("DOCUMENT_PARSER_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.TimeoutMS = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_STRICT_MODE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.StrictMode = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_SAVE_SIDECAR"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.SaveSidecar = value
+	}
+	if value, ok := os.LookupEnv("OCR_PROVIDER"); ok {
+		c.RAG.DocumentParser.OCR.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("OCR_ENDPOINT"); ok {
+		c.RAG.DocumentParser.OCR.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("OCR_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.OCR.TimeoutMS = value
 	}
 	return nil
 }

@@ -589,15 +589,21 @@ func extractNormalizedKnowledgeDocument(ctx context.Context, filePath, fileType,
 		})
 	} else if documentparser.IsProviderType(normalizedType) {
 		timeout := time.Duration(config.Global.RAG.DocumentParser.TimeoutMS) * time.Millisecond
-		provider := documentparser.NewHTTPProvider(documentparser.HTTPProviderConfig{
+		provider, providerErr := documentparser.NewProvider(documentparser.ProviderConfig{
+			Provider: config.Global.RAG.DocumentParser.Provider,
 			Endpoint: config.Global.RAG.DocumentParser.Endpoint,
 			Timeout:  timeout,
 		})
+		if providerErr != nil {
+			_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(providerErr))
+			return nil, "", providerErr
+		}
 		doc, err = provider.Parse(ctx, documentparser.ProviderRequest{
 			FileName: fileName,
 			FileType: normalizedType,
 			Content:  content,
 			Options: map[string]interface{}{
+				"engine":      config.Global.RAG.DocumentParser.Engine,
 				"strict_mode": config.Global.RAG.DocumentParser.StrictMode,
 				"ocr": map[string]interface{}{
 					"provider":   config.Global.RAG.DocumentParser.OCR.Provider,

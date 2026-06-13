@@ -82,6 +82,7 @@ rag:
   environment: dev
   document_parser:
     provider: http
+    engine: docling
     endpoint: http://parser-provider:9000/parse
     timeout_ms: 60000
     strict_mode: true

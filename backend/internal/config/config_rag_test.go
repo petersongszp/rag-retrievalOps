@@ -69,6 +69,7 @@ func TestValidateRAGPrerequisites_Valid(t *testing.T) {
 func TestRAGDocumentParserDefaults(t *testing.T) {
 	cfg := baseValidRAGConfig()
 	cfg.RAG.DocumentParser.Provider = ""
+	cfg.RAG.DocumentParser.Engine = ""
 	cfg.RAG.DocumentParser.TimeoutMS = 0
 	cfg.RAG.DocumentParser.StrictMode = false
 	cfg.RAG.DocumentParser.SaveSidecar = false
@@ -77,6 +78,9 @@ func TestRAGDocumentParserDefaults(t *testing.T) {
 
 	if cfg.RAG.DocumentParser.Provider != "http" {
 		t.Fatalf("Provider = %q", cfg.RAG.DocumentParser.Provider)
+	}
+	if cfg.RAG.DocumentParser.Engine != "docling" {
+		t.Fatalf("Engine = %q", cfg.RAG.DocumentParser.Engine)
 	}
 	if cfg.RAG.DocumentParser.TimeoutMS != 60000 {
 		t.Fatalf("TimeoutMS = %d", cfg.RAG.DocumentParser.TimeoutMS)
@@ -92,6 +96,79 @@ func TestRAGDocumentParserDefaults(t *testing.T) {
 	}
 	if cfg.RAG.DocumentParser.OCR.TimeoutMS != 30000 {
 		t.Fatalf("OCR.TimeoutMS = %d", cfg.RAG.DocumentParser.OCR.TimeoutMS)
+	}
+}
+
+func TestLoadConfig_DocumentParserEnvOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+
+	baseConfig := `
+rag:
+  enabled: true
+  environment: dev
+  feature_flags:
+    enable_prod_guard: false
+  thresholds:
+    max_retry_count: 3
+    retry_backoff_ms: 500
+    retrieve_timeout_ms: 3000
+    user_qps_limit: 20
+Milvus:
+  Address: localhost:19530
+  CollectionName: documents
+Embedding:
+  APIKey: test-key
+  Model: bge-m3
+  BaseURL: https://example.com/v1
+  Dimensions: 1024
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("DOCUMENT_PARSER_PROVIDER", "http")
+	t.Setenv("DOCUMENT_PARSER_ENGINE", "docling")
+	t.Setenv("DOCUMENT_PARSER_ENDPOINT", "http://parser-provider:9000/parse")
+	t.Setenv("DOCUMENT_PARSER_TIMEOUT_MS", "120000")
+	t.Setenv("DOCUMENT_PARSER_STRICT_MODE", "false")
+	t.Setenv("DOCUMENT_PARSER_SAVE_SIDECAR", "false")
+	t.Setenv("OCR_PROVIDER", "http")
+	t.Setenv("OCR_ENDPOINT", "http://paddleocr:9000/ocr")
+	t.Setenv("OCR_TIMEOUT_MS", "45000")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	parser := cfg.RAG.DocumentParser
+	if parser.Provider != "http" {
+		t.Fatalf("Provider = %q", parser.Provider)
+	}
+	if parser.Engine != "docling" {
+		t.Fatalf("Engine = %q", parser.Engine)
+	}
+	if parser.Endpoint != "http://parser-provider:9000/parse" {
+		t.Fatalf("Endpoint = %q", parser.Endpoint)
+	}
+	if parser.TimeoutMS != 120000 {
+		t.Fatalf("TimeoutMS = %d", parser.TimeoutMS)
+	}
+	if parser.StrictMode {
+		t.Fatalf("StrictMode should be overridden to false")
+	}
+	if parser.SaveSidecar {
+		t.Fatalf("SaveSidecar should be overridden to false")
+	}
+	if parser.OCR.Provider != "http" {
+		t.Fatalf("OCR.Provider = %q", parser.OCR.Provider)
+	}
+	if parser.OCR.Endpoint != "http://paddleocr:9000/ocr" {
+		t.Fatalf("OCR.Endpoint = %q", parser.OCR.Endpoint)
+	}
+	if parser.OCR.TimeoutMS != 45000 {
+		t.Fatalf("OCR.TimeoutMS = %d", parser.OCR.TimeoutMS)
 	}
 }
 
