@@ -579,7 +579,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           <Upload {...uploadProps} maxCount={10}>
             <Button icon={<UploadOutlined />}>选择文件</Button>
           </Upload>
-          <Text type="secondary">支持格式：PDF、MD、TXT、MARKDOWN</Text>
+          <Text type="secondary">支持格式：PDF、MD、TXT、MARKDOWN、DOCX、HTML、HTM</Text>
         </Space>
       </Modal>
     </div>
