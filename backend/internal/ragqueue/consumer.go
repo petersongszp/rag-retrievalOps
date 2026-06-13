@@ -15,10 +15,9 @@ import (
 	"interview-agents/internal/config"
 	"interview-agents/internal/documentparser"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/milvus/chunking"
 	"interview-agents/internal/model"
 	"interview-agents/internal/observability/metrics"
-
-	"github.com/cloudwego/eino/schema"
 )
 
 type knowledgeIngestErrorType string
@@ -154,7 +153,7 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	if err != nil {
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to get milvus manager", err)
 	}
-	if manager.GetSplitterService() == nil || manager.GetIndexerService() == nil {
+	if manager.GetChunkingStrategy() == nil || manager.GetIndexerService() == nil {
 		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
 	}
 
@@ -184,11 +183,11 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	baseMeta := milvus.NewKBDocumentMetadata(tenantID, payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
 	baseMeta.Extra["collection"] = collection
 	baseMeta.Extra["normalized_path"] = normalizedPath
-	doc := &schema.Document{
-		Content:  normalizedDoc.ContentMarkdown,
-		MetaData: baseMeta.ToMap(),
-	}
-	chunks, err := manager.GetSplitterService().SplitMarkdownDocument(ctx, doc)
+	chunks, err := manager.GetChunkingStrategy().Split(ctx, chunking.Request{
+		Document:       normalizedDoc,
+		BaseMeta:       baseMeta.ToMap(),
+		NormalizedPath: normalizedPath,
+	})
 	if err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
 		return 0, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
@@ -206,8 +205,6 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 			chunk.ID = fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", payload.KBID, payload.DocumentID, i, time.Now().UnixNano())
 		}
 	}
-	documentparser.AnnotateChunksWithProvenance(chunks, normalizedDoc, normalizedPath)
-
 	indexerService := manager.GetIndexerService()
 	if strings.TrimSpace(collection) != "" {
 		indexerService, err = manager.NewIndexerServiceForCollection(ctx, collection)
