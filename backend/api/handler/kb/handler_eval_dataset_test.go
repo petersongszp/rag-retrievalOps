@@ -9,7 +9,6 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
-	"time"
 
 	"interview-agents/internal/milvus/evaluation"
 	"interview-agents/internal/model"
@@ -18,7 +17,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/ut"
 	"github.com/cloudwego/hertz/pkg/protocol"
-	"gorm.io/driver/mysql"
+	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
 )
 
@@ -163,27 +162,21 @@ func TestEvalDatasetL1Flow(t *testing.T) {
 func setupEvalDatasetTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	adminDB, err := openMySQLWithRetry("root:root@tcp(127.0.0.1:3307)/mysql?charset=utf8mb4&parseTime=True&loc=Local")
+	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name())
+	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
 	if err != nil {
-		t.Fatalf("failed to open mysql admin db: %v", err)
-	}
-
-	testDBName := fmt.Sprintf("interview_agent_eval_l1_test_%d", time.Now().UnixNano())
-	if err := adminDB.Exec("CREATE DATABASE IF NOT EXISTS " + testDBName + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
-		t.Fatalf("failed to create test database: %v", err)
-	}
-	t.Cleanup(func() {
-		_ = adminDB.Exec("DROP DATABASE IF EXISTS " + testDBName).Error
-	})
-
-	db, err := openMySQLWithRetry("root:root@tcp(127.0.0.1:3307)/" + testDBName + "?charset=utf8mb4&parseTime=True&loc=Local")
-	if err != nil {
-		t.Fatalf("failed to open test database: %v", err)
+		t.Fatalf("failed to open sqlite test database: %v", err)
 	}
 	if err := db.AutoMigrate(&model.KBKnowledgeBase{}, &model.KBEvalDataset{}, &model.KBEvalCase{}, &model.KBEvalRun{}, &model.KBRetrieveLog{}); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 	model.SetDBGetter(func() *gorm.DB { return db })
+	t.Cleanup(func() {
+		model.SetDBGetter(nil)
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	return db
 }
 
@@ -229,27 +222,4 @@ func decodeJSONResponse(t *testing.T, body []byte, target interface{}) {
 
 func toString(value uint64) string {
 	return fmt.Sprintf("%d", value)
-}
-
-func openMySQLWithRetry(dsn string) (*gorm.DB, error) {
-	var lastErr error
-	for attempt := 0; attempt < 5; attempt++ {
-		db, err := gorm.Open(mysql.Open(dsn), &gorm.Config{})
-		if err == nil {
-			sqlDB, sqlErr := db.DB()
-			if sqlErr == nil {
-				if pingErr := sqlDB.Ping(); pingErr == nil {
-					return db, nil
-				} else {
-					lastErr = pingErr
-				}
-			} else {
-				lastErr = sqlErr
-			}
-		} else {
-			lastErr = err
-		}
-		time.Sleep(500 * time.Millisecond)
-	}
-	return nil, lastErr
 }

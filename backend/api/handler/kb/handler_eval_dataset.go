@@ -1,6 +1,7 @@
 package kb
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -555,11 +556,7 @@ func readEvalCaseImportPayload(c *app.RequestContext) ([]evaluation.DatasetCase,
 	if len(body) == 0 {
 		return nil, fmt.Errorf("request body is empty")
 	}
-	var items []evaluation.DatasetCase
-	if err := json.Unmarshal(body, &items); err != nil {
-		return nil, fmt.Errorf("invalid import JSON: %w", err)
-	}
-	return items, nil
+	return parseEvalCaseImportJSON(body)
 }
 
 func readEvalCaseImportFile(fileHeader *multipart.FileHeader) ([]evaluation.DatasetCase, error) {
@@ -574,11 +571,30 @@ func readEvalCaseImportFile(fileHeader *multipart.FileHeader) ([]evaluation.Data
 		return nil, fmt.Errorf("failed to read import file: %w", err)
 	}
 
-	var items []evaluation.DatasetCase
-	if err := json.Unmarshal(content, &items); err != nil {
+	return parseEvalCaseImportJSON(content)
+}
+
+func parseEvalCaseImportJSON(content []byte) ([]evaluation.DatasetCase, error) {
+	trimmed := bytes.TrimSpace(content)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("request body is empty")
+	}
+	if trimmed[0] == '[' {
+		var items []evaluation.DatasetCase
+		if err := json.Unmarshal(trimmed, &items); err != nil {
+			return nil, fmt.Errorf("invalid import JSON: %w", err)
+		}
+		return items, nil
+	}
+
+	var bundle evaluation.DatasetBundle
+	if err := json.Unmarshal(trimmed, &bundle); err != nil {
 		return nil, fmt.Errorf("invalid import JSON: %w", err)
 	}
-	return items, nil
+	if bundle.Cases == nil {
+		return nil, fmt.Errorf("invalid import JSON: expected an array or dataset object with cases")
+	}
+	return bundle.Cases, nil
 }
 
 func syncEvalDatasetCaseCount(datasetID uint64) error {
