@@ -141,6 +141,57 @@ func TestMarkdownStrategyKeepsFormulaHeadingAsHardBoundary(t *testing.T) {
 	}
 }
 
+func TestMarkdownStrategyIgnoresHeadingsInsideFencedCode(t *testing.T) {
+	splitterService, err := splitter.NewDocumentSplitterService(context.Background(), &recursive.Config{
+		ChunkSize:   1000,
+		OverlapSize: 200,
+		KeepType:    0,
+	})
+	if err != nil {
+		t.Fatalf("NewDocumentSplitterService returned error: %v", err)
+	}
+
+	normalized := &documentparser.NormalizedDocument{
+		ContentMarkdown: "## 示例代码\n\n```markdown\n### 这不是标题\n公式说明在代码块中。\n```\n\n代码块后的说明仍属于示例代码章节。\n",
+		Source: documentparser.NormalizedSource{
+			FileName: "code.md",
+			FileType: "md",
+		},
+		Quality:   documentparser.ParseQuality{Status: "ok", Score: 1},
+		Extractor: documentparser.ExtractorInfo{Provider: "local", Version: documentparser.NormalizerVersion},
+	}
+
+	strategy := NewMarkdownStrategy(splitterService)
+	chunks, err := strategy.Split(context.Background(), Request{
+		Document:       normalized,
+		BaseMeta:       map[string]interface{}{"document_id": uint64(8), "title": "代码文档"},
+		NormalizedPath: "/tmp/code.md.normalized.json",
+	})
+	if err != nil {
+		t.Fatalf("Split returned error: %v", err)
+	}
+
+	foundCodeSection := false
+	for _, chunk := range chunks {
+		if chunk == nil || chunk.MetaData == nil {
+			continue
+		}
+		if got := chunk.MetaData["section_title"]; got == "这不是标题" {
+			t.Fatalf("heading inside fenced code produced its own section: %#v", chunk.MetaData)
+		}
+		if chunk.MetaData["section_title"] == "示例代码" {
+			foundCodeSection = true
+			if !strings.Contains(chunk.Content, "### 这不是标题") || !strings.Contains(chunk.Content, "代码块后的说明") {
+				t.Fatalf("code section should preserve fenced-code heading and trailing text together, got %q", chunk.Content)
+			}
+			assertParentChildMetadata(t, chunk)
+		}
+	}
+	if !foundCodeSection {
+		t.Fatalf("expected 示例代码 section, got %d chunks", len(chunks))
+	}
+}
+
 func assertParentChildMetadata(t *testing.T, chunk *schema.Document) {
 	t.Helper()
 	if chunk == nil {

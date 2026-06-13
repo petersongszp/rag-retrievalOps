@@ -7,6 +7,9 @@ import (
 	"unicode/utf8"
 
 	"github.com/cloudwego/eino/schema"
+	"github.com/yuin/goldmark"
+	goldmarkast "github.com/yuin/goldmark/ast"
+	goldmarktext "github.com/yuin/goldmark/text"
 
 	"interview-agents/internal/documentparser"
 )
@@ -134,6 +137,97 @@ func splitMarkdownByHeadingStructure(req Request) ([]*schema.Document, bool) {
 }
 
 func markdownHeadingSections(content string) []markdownHeadingSection {
+	source := []byte(content)
+	root := goldmark.New().Parser().Parse(goldmarktext.NewReader(source))
+	sections := make([]markdownHeadingSection, 0)
+	hierarchy := make([]string, 6)
+
+	_ = goldmarkast.Walk(root, func(node goldmarkast.Node, entering bool) (goldmarkast.WalkStatus, error) {
+		if !entering {
+			return goldmarkast.WalkContinue, nil
+		}
+		heading, ok := node.(*goldmarkast.Heading)
+		if !ok {
+			return goldmarkast.WalkContinue, nil
+		}
+		start := headingSourceStart(content, heading)
+		if len(sections) == 0 && start > 0 && strings.TrimSpace(content[:start]) != "" {
+			sections = append(sections, markdownHeadingSection{start: 0, end: start})
+		}
+		if len(sections) > 0 {
+			sections[len(sections)-1].end = start
+		}
+
+		level := heading.Level
+		title := normalizeMarkdownHeadingTitle(string(heading.Text(source)))
+		if title == "" {
+			level, title, ok = parseMarkdownHeading(sliceMarkdownLineAt(content, start))
+			if !ok {
+				return goldmarkast.WalkContinue, nil
+			}
+		}
+
+		if level <= len(hierarchy) {
+			hierarchy[level-1] = title
+			for i := level; i < len(hierarchy); i++ {
+				hierarchy[i] = ""
+			}
+		}
+
+		path := make([]string, 0, level)
+		for i := 0; i < level && i < len(hierarchy); i++ {
+			if hierarchy[i] != "" {
+				path = append(path, hierarchy[i])
+			}
+		}
+		sections = append(sections, markdownHeadingSection{
+			start:     start,
+			level:     level,
+			title:     title,
+			hierarchy: path,
+		})
+		return goldmarkast.WalkSkipChildren, nil
+	})
+
+	if len(sections) == 0 {
+		return nil
+	}
+	sections[len(sections)-1].end = len(content)
+	return sections
+}
+
+func headingSourceStart(content string, heading *goldmarkast.Heading) int {
+	if heading == nil || heading.Lines() == nil || heading.Lines().Len() == 0 {
+		return 0
+	}
+	start := heading.Lines().At(0).Start
+	if start < 0 {
+		start = 0
+	}
+	if start > len(content) {
+		start = len(content)
+	}
+	for start > 0 && content[start-1] != '\n' {
+		start--
+	}
+	return start
+}
+
+func sliceMarkdownLineAt(content string, start int) string {
+	if start < 0 {
+		start = 0
+	}
+	if start >= len(content) {
+		return ""
+	}
+	end := strings.IndexByte(content[start:], '\n')
+	if end < 0 {
+		return content[start:]
+	}
+	return content[start : start+end]
+}
+
+func markdownHeadingSectionsByLineScan(content string) []markdownHeadingSection {
 	sections := make([]markdownHeadingSection, 0)
 	hierarchy := make([]string, 6)
 	var current *markdownHeadingSection
