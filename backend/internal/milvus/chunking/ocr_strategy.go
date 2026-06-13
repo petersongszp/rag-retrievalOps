@@ -35,7 +35,7 @@ func (s *OCRAwareStrategy) Split(ctx context.Context, req Request) ([]*schema.Do
 		return nil, err
 	}
 	annotateOCRQuality(chunks, req.Document, s.confidenceThreshold, true)
-	finalizeChunkIndexes(chunks)
+	finalizeChunks(req, chunks)
 	return chunks, nil
 }
 

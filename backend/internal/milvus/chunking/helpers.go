@@ -1,6 +1,9 @@
 package chunking
 
 import (
+	"crypto/sha1"
+	"encoding/hex"
+	"fmt"
 	"math"
 	"sort"
 	"strings"
@@ -14,11 +17,28 @@ import (
 const (
 	defaultStructuredChunkBytes = 1000
 	defaultMaxChunkContentBytes = 4096
+
+	chunkingParentChildMetadataVersion = "phase3-parent-child-v1"
+	parentStrategyHeading              = "heading_section"
+	parentStrategyTable                = "table"
+	parentStrategyDocument             = "paragraph_window"
+	defaultSectionTitle                = "Document"
 )
 
 type span struct {
 	start int
 	end   int
+}
+
+type chunkParentContext struct {
+	id            string
+	sectionTitle  string
+	hierarchyPath string
+	start         int
+	end           int
+	strategy      string
+	tokenCount    int
+	truncated     bool
 }
 
 func validSpan(content string, start, end int) bool {
@@ -121,6 +141,263 @@ func finalizeChunkIndexes(chunks []*schema.Document) {
 		chunk.MetaData["chunk_index"] = i
 		chunk.MetaData["total_chunks"] = total
 	}
+}
+
+func finalizeChunks(req Request, chunks []*schema.Document) {
+	if len(chunks) == 0 {
+		return
+	}
+	content := ""
+	if req.Document != nil {
+		content = req.Document.ContentMarkdown
+	}
+	sections := markdownHeadingSections(content)
+
+	for i, chunk := range chunks {
+		if chunk == nil {
+			continue
+		}
+		if chunk.MetaData == nil {
+			chunk.MetaData = map[string]interface{}{}
+		}
+		for key, value := range cloneMetadata(req.BaseMeta) {
+			if _, exists := chunk.MetaData[key]; !exists {
+				chunk.MetaData[key] = value
+			}
+		}
+		if req.NormalizedPath != "" {
+			chunk.MetaData["normalized_path"] = req.NormalizedPath
+		}
+
+		child := resolveChunkChildSpan(content, chunk)
+		chunk.MetaData["chunk_index"] = i
+		chunk.MetaData["total_chunks"] = len(chunks)
+		chunk.MetaData["child_start_offset"] = child.start
+		chunk.MetaData["child_end_offset"] = child.end
+
+		documentKey := resolveChunkDocumentKey(chunk.MetaData, content)
+		chunkID := strings.TrimSpace(fmt.Sprint(chunk.MetaData["chunk_id"]))
+		if chunkID == "" || chunkID == "<nil>" {
+			chunkID = fmt.Sprintf("%s-child-%03d", documentKey, i)
+			chunk.MetaData["chunk_id"] = chunkID
+		}
+		if strings.TrimSpace(fmt.Sprint(chunk.MetaData["child_id"])) == "" || strings.TrimSpace(fmt.Sprint(chunk.MetaData["child_id"])) == "<nil>" {
+			chunk.MetaData["child_id"] = chunkID
+		}
+		if strings.TrimSpace(chunk.ID) == "" {
+			chunk.ID = chunkID
+		}
+
+		parent := resolveChunkParentContext(content, chunk.MetaData, child, sections, documentKey)
+		if parent.id == "" {
+			chunk.MetaData["parent_child_available"] = false
+			continue
+		}
+
+		chunk.MetaData["parent_id"] = parent.id
+		chunk.MetaData["parent_start_offset"] = parent.start
+		chunk.MetaData["parent_end_offset"] = parent.end
+		chunk.MetaData["parent_child_available"] = true
+		chunk.MetaData["parent_build_version"] = chunkingParentChildMetadataVersion
+		chunk.MetaData["parent_build_strategy"] = parent.strategy
+		chunk.MetaData["parent_token_count"] = parent.tokenCount
+		chunk.MetaData["parent_truncated"] = parent.truncated
+		if parent.sectionTitle != "" {
+			chunk.MetaData["section_title"] = parent.sectionTitle
+		}
+		if parent.hierarchyPath != "" {
+			chunk.MetaData["hierarchy_path"] = parent.hierarchyPath
+		}
+	}
+}
+
+func resolveChunkChildSpan(content string, chunk *schema.Document) span {
+	if chunk == nil {
+		return span{}
+	}
+	start := readIntMetadata(chunk.MetaData, "child_start_offset")
+	end := readIntMetadata(chunk.MetaData, "child_end_offset")
+	if validSpan(content, start, end) || (start == 0 && end == len(content) && len(content) > 0) {
+		return span{start: start, end: end}
+	}
+
+	if strings.TrimSpace(content) != "" && strings.TrimSpace(chunk.Content) != "" {
+		if idx := strings.Index(content, chunk.Content); idx >= 0 {
+			return span{start: idx, end: idx + len(chunk.Content)}
+		}
+		trimmed := strings.TrimSpace(chunk.Content)
+		if idx := strings.Index(content, trimmed); idx >= 0 {
+			return span{start: idx, end: idx + len(trimmed)}
+		}
+	}
+	if len(content) == 0 {
+		return span{}
+	}
+	return span{start: 0, end: minInt(len(content), len(strings.TrimSpace(chunk.Content)))}
+}
+
+func resolveChunkParentContext(content string, metadata map[string]interface{}, child span, sections []markdownHeadingSection, documentKey string) chunkParentContext {
+	if len(content) == 0 {
+		return chunkParentContext{}
+	}
+
+	unit := strings.TrimSpace(fmt.Sprint(metadata["chunking_unit"]))
+	section := findHeadingSectionForSpan(sections, child)
+	parent := chunkParentContext{
+		start:         0,
+		end:           len(content),
+		sectionTitle:  resolveChunkBaseTitle(metadata),
+		hierarchyPath: resolveChunkBaseTitle(metadata),
+		strategy:      parentStrategyDocument,
+	}
+	if section != nil {
+		parent.start = section.start
+		parent.end = section.end
+		parent.sectionTitle = firstNonEmpty(readStringMetadata(metadata, "section_title"), section.title, parent.sectionTitle)
+		parent.hierarchyPath = firstNonEmpty(readStringMetadata(metadata, "hierarchy_path"), strings.Join(section.hierarchy, " > "), parent.sectionTitle)
+		parent.strategy = parentStrategyHeading
+	}
+	if unit == "table" && child.end > child.start {
+		parent.start = child.start
+		parent.end = child.end
+		parent.strategy = parentStrategyTable
+		parent.sectionTitle = firstNonEmpty(readStringMetadata(metadata, "section_title"), tableParentTitle(metadata), parent.sectionTitle)
+		parent.hierarchyPath = firstNonEmpty(readStringMetadata(metadata, "hierarchy_path"), sectionHierarchy(section), parent.sectionTitle)
+	}
+
+	if parent.end <= parent.start {
+		parent.start = child.start
+		parent.end = child.end
+	}
+	if parent.end <= parent.start {
+		return chunkParentContext{}
+	}
+	parent.id = fmt.Sprintf("%s-parent-%s-000", documentKey, shortHash(fmt.Sprintf("%s:%d:%d", parent.hierarchyPath, parent.start, parent.end)))
+	parent.tokenCount = approximateTokenCount(sliceBySpan(content, parent.start, parent.end))
+	parent.truncated = (parent.end - parent.start) > defaultStructuredChunkBytes
+	return parent
+}
+
+func findHeadingSectionForSpan(sections []markdownHeadingSection, child span) *markdownHeadingSection {
+	var best *markdownHeadingSection
+	bestWidth := math.MaxInt
+	for i := range sections {
+		section := &sections[i]
+		if section.start <= child.start && child.start < section.end {
+			width := section.end - section.start
+			if width < bestWidth {
+				best = section
+				bestWidth = width
+			}
+		}
+	}
+	return best
+}
+
+func tableParentTitle(metadata map[string]interface{}) string {
+	if ids, ok := metadata["table_ids"].([]string); ok && len(ids) > 0 && strings.TrimSpace(ids[0]) != "" {
+		return "Table " + strings.TrimSpace(ids[0])
+	}
+	if id := readStringMetadata(metadata, "table_id"); id != "" {
+		return "Table " + id
+	}
+	return ""
+}
+
+func sectionHierarchy(section *markdownHeadingSection) string {
+	if section == nil {
+		return ""
+	}
+	return strings.Join(section.hierarchy, " > ")
+}
+
+func readStringMetadata(metadata map[string]interface{}, key string) string {
+	if metadata == nil {
+		return ""
+	}
+	value := strings.TrimSpace(fmt.Sprint(metadata[key]))
+	if value == "<nil>" {
+		return ""
+	}
+	return value
+}
+
+func resolveChunkDocumentKey(metadata map[string]interface{}, content string) string {
+	for _, key := range []string{"document_id", "doc_id"} {
+		if value := readStringMetadata(metadata, key); value != "" {
+			return "doc-" + sanitizeIDComponent(value)
+		}
+	}
+	for _, key := range []string{"file_name", "title"} {
+		if value := readStringMetadata(metadata, key); value != "" {
+			return sanitizeIDComponent(value) + "-" + shortHash(content)
+		}
+	}
+	if strings.TrimSpace(content) == "" {
+		return "document"
+	}
+	return "document-" + shortHash(content)
+}
+
+func resolveChunkBaseTitle(metadata map[string]interface{}) string {
+	for _, key := range []string{"title", "file_name"} {
+		if value := readStringMetadata(metadata, key); value != "" {
+			return value
+		}
+	}
+	return defaultSectionTitle
+}
+
+func sanitizeIDComponent(input string) string {
+	trimmed := strings.TrimSpace(strings.ToLower(input))
+	if trimmed == "" {
+		return "document"
+	}
+	replacer := strings.NewReplacer(
+		" ", "-",
+		"/", "-",
+		"\\", "-",
+		":", "-",
+		".", "-",
+		"#", "-",
+		">", "-",
+	)
+	cleaned := strings.Trim(replacer.Replace(trimmed), "-")
+	if cleaned == "" {
+		return "document"
+	}
+	return cleaned
+}
+
+func shortHash(input string) string {
+	sum := sha1.Sum([]byte(input))
+	return hex.EncodeToString(sum[:4])
+}
+
+func approximateTokenCount(content string) int {
+	trimmed := strings.TrimSpace(content)
+	if trimmed == "" {
+		return 0
+	}
+	fields := strings.Fields(trimmed)
+	if len(fields) > 1 {
+		return len(fields)
+	}
+	return maxInt(1, int(math.Ceil(float64(len([]rune(trimmed)))/4.0)))
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
 }
 
 func chunkSpan(chunk *schema.Document) span {

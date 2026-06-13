@@ -74,7 +74,7 @@ func (s *TableAwareStrategy) Split(ctx context.Context, req Request) ([]*schema.
 	if MatchOCRAware(req.Document) {
 		annotateOCRQuality(chunks, req.Document, defaultOCRConfidenceThreshold, false)
 	}
-	finalizeChunkIndexes(chunks)
+	finalizeChunks(req, chunks)
 	return chunks, nil
 }
 

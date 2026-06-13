@@ -70,6 +70,7 @@ func TestTableAwareStrategyAddsAtomicTableChunks(t *testing.T) {
 	if tableChunk.MetaData["child_start_offset"] != 10 || tableChunk.MetaData["child_end_offset"] != 55 {
 		t.Fatalf("child offsets = %v/%v", tableChunk.MetaData["child_start_offset"], tableChunk.MetaData["child_end_offset"])
 	}
+	assertParentChildMetadata(t, tableChunk)
 	if tableChunk.Content == "" || tableChunk.Content == doc.ContentMarkdown {
 		t.Fatalf("expected dedicated table retrieval content, got %q", tableChunk.Content)
 	}

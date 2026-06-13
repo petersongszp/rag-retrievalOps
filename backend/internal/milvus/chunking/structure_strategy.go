@@ -89,6 +89,6 @@ func (s *StructureAwareStrategy) Split(ctx context.Context, req Request) ([]*sch
 		}
 		return s.fallback.Split(ctx, req)
 	}
-	finalizeChunkIndexes(chunks)
+	finalizeChunks(req, chunks)
 	return chunks, nil
 }
