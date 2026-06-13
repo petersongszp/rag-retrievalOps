@@ -66,6 +66,35 @@ func TestValidateRAGPrerequisites_Valid(t *testing.T) {
 	}
 }
 
+func TestRAGDocumentParserDefaults(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.DocumentParser.Provider = ""
+	cfg.RAG.DocumentParser.TimeoutMS = 0
+	cfg.RAG.DocumentParser.StrictMode = false
+	cfg.RAG.DocumentParser.SaveSidecar = false
+
+	cfg.applyRAGDefaults()
+
+	if cfg.RAG.DocumentParser.Provider != "http" {
+		t.Fatalf("Provider = %q", cfg.RAG.DocumentParser.Provider)
+	}
+	if cfg.RAG.DocumentParser.TimeoutMS != 60000 {
+		t.Fatalf("TimeoutMS = %d", cfg.RAG.DocumentParser.TimeoutMS)
+	}
+	if !cfg.RAG.DocumentParser.StrictMode {
+		t.Fatalf("StrictMode should default to true")
+	}
+	if !cfg.RAG.DocumentParser.SaveSidecar {
+		t.Fatalf("SaveSidecar should default to true")
+	}
+	if cfg.RAG.DocumentParser.OCR.Provider != "http" {
+		t.Fatalf("OCR.Provider = %q", cfg.RAG.DocumentParser.OCR.Provider)
+	}
+	if cfg.RAG.DocumentParser.OCR.TimeoutMS != 30000 {
+		t.Fatalf("OCR.TimeoutMS = %d", cfg.RAG.DocumentParser.OCR.TimeoutMS)
+	}
+}
+
 func TestValidateRAGPrerequisites_HybridWeightInvalid(t *testing.T) {
 	cfg := baseValidRAGConfig()
 	cfg.RAG.FeatureFlags.EnableHybridRetrieval = true

@@ -1,4 +1,4 @@
-﻿package config
+package config
 
 import (
 	"bytes"
@@ -43,17 +43,17 @@ type Config struct {
 	Feishu           FeishuConfig       `yaml:"feishu"`       // 椋炰功閰嶇疆
 	Email            EmailConfig        `yaml:"email"`        // 閭欢閰嶇疆
 	RateLimit        LLMRateLimitConfig `yaml:"rate_limit"`   // LLM API 闄愭祦閰嶇疆
-	Payment          PaymentConfig      `yaml:"payment"`      
+	Payment          PaymentConfig      `yaml:"payment"`
 	RAGPlatform      RAGPlatformConfig  `yaml:"rag_platform"` // RAG Platform client config
 	ConfigVersion    string             `yaml:"-"`
 }
 
 // RAGPlatformConfig RAG Platform client config
 type RAGPlatformConfig struct {
-	Enabled      bool     `yaml:"enabled"`       // enable RAG Platform calls
-	BaseURL      string   `yaml:"base_url"`      // RAG Platform address
-	APIKey       string   `yaml:"api_key"`       // API Key
-	AppID        string   `yaml:"app_id"`        // client app ID
+	Enabled      bool     `yaml:"enabled"`        // enable RAG Platform calls
+	BaseURL      string   `yaml:"base_url"`       // RAG Platform address
+	APIKey       string   `yaml:"api_key"`        // API Key
+	AppID        string   `yaml:"app_id"`         // client app ID
 	DefaultKBIDs []uint64 `yaml:"default_kb_ids"` // default knowledge base IDs
 }
 
@@ -230,14 +230,30 @@ type AuthConfig struct {
 
 // RAGConfig RAG 鑳藉姏鎬诲紑鍏?
 type RAGConfig struct {
-	Enabled      bool             `yaml:"enabled"`
-	Environment  string           `yaml:"environment"`
-	Auth         AuthConfig       `yaml:"auth"`
-	FeatureFlags RAGFeatureFlags  `yaml:"feature_flags"`
-	Thresholds   RAGThresholds    `yaml:"thresholds"`
-	Phase2       RAGPhase2Config  `yaml:"phase2"`
-	Phase3       RAGPhase3Config  `yaml:"phase3"`
-	Release      RAGReleaseConfig `yaml:"release"`
+	Enabled        bool                 `yaml:"enabled"`
+	Environment    string               `yaml:"environment"`
+	Auth           AuthConfig           `yaml:"auth"`
+	DocumentParser DocumentParserConfig `yaml:"document_parser"`
+	FeatureFlags   RAGFeatureFlags      `yaml:"feature_flags"`
+	Thresholds     RAGThresholds        `yaml:"thresholds"`
+	Phase2         RAGPhase2Config      `yaml:"phase2"`
+	Phase3         RAGPhase3Config      `yaml:"phase3"`
+	Release        RAGReleaseConfig     `yaml:"release"`
+}
+
+type DocumentParserConfig struct {
+	Provider    string    `yaml:"provider" env:"DOCUMENT_PARSER_PROVIDER"`
+	Endpoint    string    `yaml:"endpoint" env:"DOCUMENT_PARSER_ENDPOINT"`
+	TimeoutMS   int       `yaml:"timeout_ms" env:"DOCUMENT_PARSER_TIMEOUT_MS"`
+	StrictMode  bool      `yaml:"strict_mode" env:"DOCUMENT_PARSER_STRICT_MODE"`
+	SaveSidecar bool      `yaml:"save_sidecar" env:"DOCUMENT_PARSER_SAVE_SIDECAR"`
+	OCR         OCRConfig `yaml:"ocr"`
+}
+
+type OCRConfig struct {
+	Provider  string `yaml:"provider" env:"OCR_PROVIDER"`
+	Endpoint  string `yaml:"endpoint" env:"OCR_ENDPOINT"`
+	TimeoutMS int    `yaml:"timeout_ms" env:"OCR_TIMEOUT_MS"`
 }
 
 type RAGFeatureFlags struct {
@@ -708,6 +724,20 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if strings.TrimSpace(c.RAG.Environment) == "" {
 		c.RAG.Environment = "dev"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Provider) == "" {
+		c.RAG.DocumentParser.Provider = "http"
+	}
+	if c.RAG.DocumentParser.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.TimeoutMS = 60000
+	}
+	c.RAG.DocumentParser.StrictMode = true
+	c.RAG.DocumentParser.SaveSidecar = true
+	if strings.TrimSpace(c.RAG.DocumentParser.OCR.Provider) == "" {
+		c.RAG.DocumentParser.OCR.Provider = "http"
+	}
+	if c.RAG.DocumentParser.OCR.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.OCR.TimeoutMS = 30000
 	}
 	if !c.RAG.FeatureFlags.EnableProdGuard || c.RAG.Environment != "prod" {
 		if c.RAG.Thresholds.MaxRetryCount <= 0 {
