@@ -265,6 +265,7 @@ Embedding:
 	t.Setenv("EMBEDDING_PROVIDER", "openai")
 	t.Setenv("EMBEDDING_API_KEY", "test-key")
 	t.Setenv("EMBEDDING_MODEL", "bge-m3")
+	t.Setenv("ARK_EMBEDDING_API_TYPE", "multimodal")
 	t.Setenv("EMBEDDING_BASE_URL", "https://example.com/v1")
 
 	cfg, err := LoadConfig(configPath)
@@ -274,6 +275,70 @@ Embedding:
 
 	if cfg.Embedding.Provider != "openai" {
 		t.Fatalf("expected embedding provider to expand to openai, got %q", cfg.Embedding.Provider)
+	}
+	if cfg.Embedding.ArkAPIType != "" {
+		t.Fatalf("expected openai provider to ignore ark API type env, got %q", cfg.Embedding.ArkAPIType)
+	}
+}
+
+func TestLoadConfig_UsesArkEmbeddingAPITypeEnv(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	baseConfig := `
+rag:
+  enabled: false
+  environment: dev
+Embedding:
+  Provider: ark
+  APIKey: test-key
+  Model: doubao-embedding-vision-251215
+  BaseURL: https://ark.cn-beijing.volces.com/api/v3
+  Dimensions: 2048
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("ARK_EMBEDDING_API_TYPE", "multimodal")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Embedding.ArkAPIType != "multimodal" {
+		t.Fatalf("expected ark embedding API type to come from ARK_EMBEDDING_API_TYPE, got %q", cfg.Embedding.ArkAPIType)
+	}
+}
+
+func TestLoadConfig_IgnoresGenericEmbeddingAPIType(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	baseConfig := `
+rag:
+  enabled: false
+  environment: dev
+Embedding:
+  Provider: ark
+  APIKey: test-key
+  Model: doubao-embedding-vision-251215
+  BaseURL: https://ark.cn-beijing.volces.com/api/v3
+  Dimensions: 2048
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("EMBEDDING_API_TYPE", "multi_modal")
+	t.Setenv("ARK_EMBEDDING_API_TYPE", "")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if cfg.Embedding.ArkAPIType != "" {
+		t.Fatalf("expected generic EMBEDDING_API_TYPE to be ignored, got %q", cfg.Embedding.ArkAPIType)
 	}
 }
 

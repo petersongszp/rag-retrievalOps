@@ -86,9 +86,14 @@ func newArkEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding
 	if retryTimes == 0 {
 		retryTimes = 3
 	}
+	apiType, err := resolveArkAPIType(cfg.ArkAPIType)
+	if err != nil {
+		return nil, err
+	}
 
 	arkCfg := &ark.EmbeddingConfig{
 		Model:      cfg.Model,
+		APIType:    apiType,
 		BaseURL:    baseURL,
 		Region:     region,
 		APIKey:     cfg.APIKey,
@@ -98,6 +103,24 @@ func newArkEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding
 		RetryTimes: &retryTimes,
 	}
 	return ark.NewEmbedder(ctx, arkCfg)
+}
+
+func resolveArkAPIType(value string) (*ark.APIType, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	switch normalized {
+	case "", "text", "text_api":
+		return nil, nil
+	case "multi_modal", "multimodal", "multi_modal_api":
+		apiType := ark.APITypeMultiModal
+		return &apiType, nil
+	default:
+		if strings.Contains(normalized, "$") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unsupported ark embedding API type %q, supported: text_api, multi_modal_api", value)
+	}
 }
 
 func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding.Embedder, error) {

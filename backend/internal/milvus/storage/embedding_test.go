@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"testing"
 
+	"github.com/cloudwego/eino-ext/components/embedding/ark"
 	"github.com/cloudwego/eino/components/embedding"
 
 	"interview-agents/internal/config"
@@ -72,5 +73,49 @@ func TestResolveEmbeddingBatchSizeHonorsExplicitConfig(t *testing.T) {
 	}
 	if got := resolveEmbeddingBatchSize(cfg); got != 8 {
 		t.Fatalf("expected explicit batch size 8, got %d", got)
+	}
+}
+
+func TestResolveArkAPITypeMapsMultiModalAliases(t *testing.T) {
+	tests := []struct {
+		name  string
+		input string
+	}{
+		{name: "env short form", input: "multi_modal"},
+		{name: "ark env form", input: "multimodal"},
+		{name: "sdk form", input: "multi_modal_api"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := resolveArkAPIType(tt.input)
+			if err != nil {
+				t.Fatalf("resolveArkAPIType returned error: %v", err)
+			}
+			if got == nil || *got != ark.APITypeMultiModal {
+				t.Fatalf("expected APITypeMultiModal, got %v", got)
+			}
+		})
+	}
+}
+
+func TestResolveArkAPITypeRejectsUnknownValue(t *testing.T) {
+	_, err := resolveArkAPIType("unsupported")
+	if err == nil {
+		t.Fatal("expected unsupported API type to return error")
+	}
+}
+
+func TestResolveArkAPITypeUsesArkSpecificField(t *testing.T) {
+	cfg := &config.EmbeddingConfig{
+		ArkAPIType: "multimodal",
+	}
+
+	got, err := resolveArkAPIType(cfg.ArkAPIType)
+	if err != nil {
+		t.Fatalf("resolveArkAPIType returned error: %v", err)
+	}
+	if got == nil || *got != ark.APITypeMultiModal {
+		t.Fatalf("expected APITypeMultiModal, got %v", got)
 	}
 }

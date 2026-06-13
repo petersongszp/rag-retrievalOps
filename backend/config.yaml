@@ -113,6 +113,7 @@ Embedding:
   APIKey: "${EMBEDDING_API_KEY}"
   Provider: "${EMBEDDING_PROVIDER}"
   Model: "${EMBEDDING_MODEL}"
+  ArkAPIType: "${ARK_EMBEDDING_API_TYPE}"
   BaseURL: "${EMBEDDING_BASE_URL}"
   Region: "${EMBEDDING_REGION}"
   Timeout: 30s

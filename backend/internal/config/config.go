@@ -494,6 +494,7 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := cfg.applyRAGEnvOverrides(); err != nil {
 		return nil, err
 	}
+	cfg.applyEmbeddingEnvOverrides()
 	cfg.RAG.FeatureFlags.normalizePhase4Aliases()
 	cfg.applyRAGDefaults()
 	cfg.ConfigVersion = cfg.buildConfigVersion()
@@ -1206,6 +1207,27 @@ func (c *Config) applyRAGEnvOverrides() error {
 	return nil
 }
 
+func (c *Config) applyEmbeddingEnvOverrides() {
+	if c == nil {
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(c.Embedding.Provider))
+	if provider != "ark" {
+		return
+	}
+	if !isUnsetEnvPlaceholder(c.Embedding.ArkAPIType) {
+		return
+	}
+	if value := strings.TrimSpace(os.Getenv("ARK_EMBEDDING_API_TYPE")); value != "" {
+		c.Embedding.ArkAPIType = value
+	}
+}
+
+func isUnsetEnvPlaceholder(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed == "" || strings.Contains(trimmed, "$")
+}
+
 // GetAccessTokenTTL 解析 access token TTL 配置，返回 time.Duration
 func (c *AuthConfig) GetAccessTokenTTL() time.Duration {
 	ttl := strings.TrimSpace(c.AccessTokenTTL)
@@ -1793,10 +1815,11 @@ type EmbeddingConfig struct {
 	SecretKey string `yaml:"SecretKey"` // 使用 SK 认证 (ark 专用)
 
 	// 服务配置
-	Provider string `yaml:"Provider"` // 向量模型提供商: ark, openai, ollama (默认 ark)
-	Model    string `yaml:"Model"`    // 模型 ID
-	BaseURL  string `yaml:"BaseURL"`  // API 基础 URL
-	Region   string `yaml:"Region"`   // 服务区域 (ark 专用)
+	Provider   string `yaml:"Provider"`   // 向量模型提供商: ark, openai, ollama (默认 ark)
+	Model      string `yaml:"Model"`      // 模型 ID
+	ArkAPIType string `yaml:"ArkAPIType"` // Ark API 类型: text_api, multi_modal_api
+	BaseURL    string `yaml:"BaseURL"`    // API 基础 URL
+	Region     string `yaml:"Region"`     // 服务区域 (ark 专用)
 
 	// 高级配置
 	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
@@ -1854,6 +1877,7 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
 	c.Embedding.Provider = expandEnvVar(c.Embedding.Provider)
 	c.Embedding.Model = expandEnvVar(c.Embedding.Model)
+	c.Embedding.ArkAPIType = expandEnvVar(c.Embedding.ArkAPIType)
 	c.Embedding.BaseURL = expandEnvVar(c.Embedding.BaseURL)
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)
 	c.Embedding.User = expandEnvVar(c.Embedding.User)
