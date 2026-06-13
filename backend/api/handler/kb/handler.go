@@ -1958,8 +1958,14 @@ func validateKnowledgeFile(fileHeader *multipart.FileHeader) (string, error) {
 		return "md", nil
 	case ".markdown":
 		return "markdown", nil
+	case ".docx":
+		return "docx", nil
+	case ".html":
+		return "html", nil
+	case ".htm":
+		return "htm", nil
 	default:
-		return "", fmt.Errorf("only pdf/txt/md/markdown files are supported")
+		return "", fmt.Errorf("only pdf/txt/md/markdown/docx/html/htm files are supported")
 	}
 }
 

@@ -201,7 +201,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     fileList,
     beforeUpload: () => false,
     onChange: ({ fileList: nextFileList }) => setFileList(nextFileList),
-    accept: '.pdf,.md,.txt,.markdown',
+    accept: '.pdf,.md,.txt,.markdown,.docx,.html,.htm',
   };
 
   const handleDeleteDocument = (document: KBDocument) => {
