@@ -84,8 +84,7 @@ func buildTableRetrievalContent(markdown string, table documentparser.Normalized
 	parts := []string{fmt.Sprintf("Table %s", table.ID)}
 	if tableMarkdown != "" {
 		parts = append(parts, tableMarkdown)
-	}
-	if rows != "" {
+	} else if rows != "" {
 		parts = append(parts, "Rows:\n"+rows)
 	}
 	return strings.Join(parts, "\n\n")

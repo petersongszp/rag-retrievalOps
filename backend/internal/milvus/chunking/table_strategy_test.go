@@ -2,6 +2,7 @@ package chunking
 
 import (
 	"context"
+	"fmt"
 	"strings"
 	"testing"
 
@@ -76,6 +77,34 @@ func TestTableAwareStrategyAddsAtomicTableChunks(t *testing.T) {
 	}
 }
 
+func TestTableRetrievalContentDoesNotDuplicateMarkdownAndRenderedRows(t *testing.T) {
+	markdown := strings.TrimSpace(`
+## 计费规则
+
+| **项目** | **按量付费** | **包年包月** |
+| --- | --- | --- |
+| 计费公式 | 计算规格费用=实例购买后的服务时长（小时）×规格单价（元/小时） | 计算规格费用=购买时长（月）×规格单价（元/月） |
+`)
+	start := strings.Index(markdown, "| **项目**")
+	if start < 0 {
+		t.Fatal("test markdown table start not found")
+	}
+	table := documentparser.NormalizedTable{
+		ID:            "table-001",
+		MarkdownStart: start,
+		MarkdownEnd:   len(markdown),
+		Rows: []documentparser.TableRow{
+			{Cells: []documentparser.TableCell{{Text: "项目", IsHeader: true}, {Text: "按量付费", IsHeader: true}, {Text: "包年包月", IsHeader: true}}},
+			{Cells: []documentparser.TableCell{{Text: "计费公式"}, {Text: "计算规格费用=实例购买后的服务时长（小时）×规格单价（元/小时）"}, {Text: "计算规格费用=购买时长（月）×规格单价（元/月）"}}},
+		},
+	}
+
+	content := buildTableRetrievalContent(markdown, table)
+	if count := strings.Count(content, "计算规格费用=实例购买后的服务时长"); count != 1 {
+		t.Fatalf("expected table retrieval content to include the pay-as-you-go formula once, got %d in %q", count, content)
+	}
+}
+
 func TestTableAwareStrategyKeepsLargeTableChunksWithinMilvusContentLimit(t *testing.T) {
 	markdown := strings.TrimSpace(`
 ## 公共云地域单价**（元/百万次****）**
@@ -96,6 +125,19 @@ func TestTableAwareStrategyKeepsLargeTableChunksWithinMilvusContentLimit(t *test
 | 第三阶梯 | (50,200\\] | 1.35 |   |   | 6.75 |   |   |
 | 第四阶梯 | \\>200 | 1.08 |   |   | 5.4 |   |   |
 `)
+	var extraRows strings.Builder
+	extraRows.WriteString(markdown)
+	for i := 0; i < 80; i++ {
+		fmt.Fprintf(
+			&extraRows,
+			"\n| 附加地域%02d（用于验证超长 Markdown 表格会被拆分且不会超过 Milvus varchar 限制） | 第五阶梯 | \\>%d | %.2f |   |   | %.2f |   |   |",
+			i,
+			200+i,
+			1.08+float64(i)/100,
+			5.4+float64(i)/10,
+		)
+	}
+	markdown = extraRows.String()
 	doc, err := documentparser.NormalizeLocal(context.Background(), documentparser.LocalRequest{
 		FileName: "rocketmq-pricing.md",
 		FileType: "md",
