@@ -242,24 +242,25 @@ func SearchWithExprAndMetrics(
 			documents = append(documents, doc)
 		}
 	}
+	documents = applyTitleMatchBoost(query, documents)
 	postprocessMs := time.Since(postprocessStart).Milliseconds()
 
 	return &SearchResult{
 		Documents: documents,
 		Metrics: SearchMetrics{
-			EmbeddingMs:       embeddingMs,
-			SearchMs:          searchMs,
-			PostprocessMs:     postprocessMs,
-			HitCount:          rawHitCount,
-			TruncatedCount:    rawHitCount - len(documents),
-			CandidateTopK:     topK,
-			FinalTopK:         len(documents),
-			Strategy:          "phase1",
-			RetrieverVersion:  DenseRetrieverVersion,
-			DenseHits:         len(documents),
+			EmbeddingMs:        embeddingMs,
+			SearchMs:           searchMs,
+			PostprocessMs:      postprocessMs,
+			HitCount:           rawHitCount,
+			TruncatedCount:     rawHitCount - len(documents),
+			CandidateTopK:      topK,
+			FinalTopK:          len(documents),
+			Strategy:           "phase1",
+			RetrieverVersion:   DenseRetrieverVersion,
+			DenseHits:          len(documents),
 			DenseParticipation: len(documents),
-			PrimaryDenseCount: len(documents),
-			DenseContribution: len(documents),
+			PrimaryDenseCount:  len(documents),
+			DenseContribution:  len(documents),
 		},
 	}, nil
 }
