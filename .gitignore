@@ -31,3 +31,4 @@ gaoerDocs/
 
 test-repo/
 .worktrees/
+.testFile/
