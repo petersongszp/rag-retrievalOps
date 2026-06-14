@@ -56,7 +56,7 @@ func NewJaccardReranker(config *JaccardRerankerConfig) *JaccardReranker {
 			Version:             DefaultRerankVersion,
 		}
 	}
-	if config.OriginalScoreWeight < 0 || config.OriginalScoreWeight > 1 {
+	if config.OriginalScoreWeight <= 0 || config.OriginalScoreWeight > 1 {
 		config.OriginalScoreWeight = 0.7
 	}
 	if config.TopK <= 0 {

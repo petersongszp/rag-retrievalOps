@@ -74,6 +74,42 @@ func TestJaccardRerankerAnnotatesSourceContract(t *testing.T) {
 	}
 }
 
+func TestJaccardRerankerDefaultsOriginalScoreWeightForPartialConfig(t *testing.T) {
+	reranker := NewJaccardReranker(&JaccardRerankerConfig{
+		TopK:      2,
+		ModelName: DefaultRerankModelJaccardV1,
+		Version:   DefaultRerankVersion,
+	})
+
+	docs := []*schema.Document{
+		{
+			ID:      "title-boosted",
+			Content: "### 1.2 超过规格限制后行为",
+			MetaData: map[string]interface{}{
+				"score": 1.0,
+			},
+		},
+		{
+			ID:      "lexical-overlap",
+			Content: "超过 tps 规格 上限 后 会 怎样",
+			MetaData: map[string]interface{}{
+				"score": 0.2,
+			},
+		},
+	}
+
+	result, err := reranker.Rerank(context.Background(), "超过 tps 规格上限后会怎样", docs)
+	if err != nil {
+		t.Fatalf("rerank returned error: %v", err)
+	}
+	if len(result.Documents) != 2 {
+		t.Fatalf("expected 2 reranked documents, got %d", len(result.Documents))
+	}
+	if result.Documents[0].ID != "title-boosted" {
+		t.Fatalf("expected original score to keep boosted document first, got %s", result.Documents[0].ID)
+	}
+}
+
 func TestConfigurableRerankerFallsBackOnPrimaryError(t *testing.T) {
 	primary := &stubReranker{err: errors.New("boom")}
 	fallback := &stubReranker{
