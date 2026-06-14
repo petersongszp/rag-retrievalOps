@@ -230,9 +230,7 @@ func mergeKnowledgeBaseSearchResults(results []*retrieval.SearchResult, collecti
 		}
 	}
 
-	sort.SliceStable(docs, func(i, j int) bool {
-		return readRetrieveDocScore(docs[i]) > readRetrieveDocScore(docs[j])
-	})
+	sortRetrieveDocsByDisplayScore(docs)
 	if topK > 0 && len(docs) > topK {
 		docs = docs[:topK]
 	}
@@ -302,6 +300,12 @@ func readRetrieveDocScore(doc *schema.Document) float64 {
 		return score
 	}
 	return getFloat64Metadata(doc.MetaData, "score")
+}
+
+func sortRetrieveDocsByDisplayScore(docs []*schema.Document) {
+	sort.SliceStable(docs, func(i, j int) bool {
+		return readRetrieveDocScore(docs[i]) > readRetrieveDocScore(docs[j])
+	})
 }
 
 func DeleteKnowledgeBase(ctx context.Context, c *app.RequestContext) {
