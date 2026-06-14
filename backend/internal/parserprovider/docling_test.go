@@ -87,6 +87,128 @@ func TestDoclingClientParseUploadsFileAndNormalizesMarkdown(t *testing.T) {
 	}
 }
 
+func TestDoclingClientParseExtractsMarkdownTables(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{"status":"success","document":{"filename":"billing.pdf","md_content":"## 计费规则\n\n| **项目** | **按量付费** | **包年包月** |\n|----|----|----|\n| **计费公式** | 计算规格费用 = 服务时长（小时） × 规格单价（元/小时） | 计算规格费用 = 购买时长（月） × 规格单价（元/月） |"}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !strings.Contains(doc.ContentMarkdown, "| 项目 | 按量付费 | 包年包月 |") {
+		t.Fatalf("expected canonical table header, got %q", doc.ContentMarkdown)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	if got := table.Rows[0].Cells[0].Text; got != "项目" {
+		t.Fatalf("first header cell = %q", got)
+	}
+	if got := table.Rows[1].Cells[0].Text; got != "计费公式" {
+		t.Fatalf("first data cell = %q", got)
+	}
+	if table.MarkdownStart <= 0 || table.MarkdownEnd > len(doc.ContentMarkdown) {
+		t.Fatalf("invalid markdown range %d-%d for content length %d", table.MarkdownStart, table.MarkdownEnd, len(doc.ContentMarkdown))
+	}
+}
+
+func TestDoclingClientParseExtractsStructuredJSONTables(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if err := req.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("ParseMultipartForm: %v", err)
+			}
+			formats := req.MultipartForm.Value["to_formats"]
+			if len(formats) != 2 || formats[0] != "md" || formats[1] != "json" {
+				t.Fatalf("to_formats = %v", formats)
+			}
+			body := `{
+				"status": "success",
+				"document": {
+					"filename": "billing.pdf",
+					"md_content": "## 计费规则\n\n项目 按量付费 包年包月\n计费公式 计算规格费用 = 实例购买后的服务时长（小时） × 规格单价（元/小时） 计算规格费用 = 购买时长（月） × 规格单价（元/月）",
+					"json_content": {
+						"tables": [
+							{
+								"self_ref": "#/tables/0",
+								"prov": [{"page_no": 2}],
+								"data": {
+									"num_rows": 2,
+									"num_cols": 3,
+									"table_cells": [
+										{"text": "项目", "start_row_offset_idx": 0, "end_row_offset_idx": 1, "start_col_offset_idx": 0, "end_col_offset_idx": 1, "column_header": true},
+										{"text": "按量付费", "start_row_offset_idx": 0, "end_row_offset_idx": 1, "start_col_offset_idx": 1, "end_col_offset_idx": 2, "column_header": true},
+										{"text": "包年包月", "start_row_offset_idx": 0, "end_row_offset_idx": 1, "start_col_offset_idx": 2, "end_col_offset_idx": 3, "column_header": true},
+										{"text": "计费公式", "start_row_offset_idx": 1, "end_row_offset_idx": 2, "start_col_offset_idx": 0, "end_col_offset_idx": 1},
+										{"text": "计算规格费用 = 实例购买后的服务时长（小时） × 规格单价（元/小时）", "start_row_offset_idx": 1, "end_row_offset_idx": 2, "start_col_offset_idx": 1, "end_col_offset_idx": 2},
+										{"text": "计算规格费用 = 购买时长（月） × 规格单价（元/月）", "start_row_offset_idx": 1, "end_row_offset_idx": 2, "start_col_offset_idx": 2, "end_col_offset_idx": 3}
+									]
+								}
+							}
+						]
+					}
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one structured table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	if table.Page != 2 {
+		t.Fatalf("table page = %d", table.Page)
+	}
+	if got := table.Rows[0].Cells[0].Text; got != "项目" {
+		t.Fatalf("first header cell = %q", got)
+	}
+	if got := table.Rows[1].Cells[1].Text; got != "计算规格费用 = 实例购买后的服务时长（小时） × 规格单价（元/小时）" {
+		t.Fatalf("pay-as-you-go cell = %q", got)
+	}
+	if !strings.Contains(doc.ContentMarkdown, "| 项目 | 按量付费 | 包年包月 |") {
+		t.Fatalf("expected structured table markdown to be appended, got %q", doc.ContentMarkdown)
+	}
+	if table.MarkdownStart <= 0 || table.MarkdownEnd > len(doc.ContentMarkdown) {
+		t.Fatalf("invalid markdown range %d-%d for content length %d", table.MarkdownStart, table.MarkdownEnd, len(doc.ContentMarkdown))
+	}
+}
+
 func TestParseHandlerReturnsNormalizedDocument(t *testing.T) {
 	upstream := &fakeParser{
 		doc: &documentparser.NormalizedDocument{
