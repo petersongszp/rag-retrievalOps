@@ -121,6 +121,9 @@ func TestApplyScoreCliffGuard_ShortPreciseQueryKeepsOnlyStrongMatch(t *testing.T
 		makeStrategicDocWithContent("doc-2", "p-1", 0.38, "### 1.2 超过规格限制后行为\n\n超过弹性能力上限后，实例还是会被限流。"),
 		makeStrategicDocWithContent("doc-3", "p-2", 0.37, "购买实例时，选择指定的计算规格即可创建实例，此时无需支付费用。"),
 	}
+	for _, doc := range docs {
+		doc.MetaData["rerank_score"] = 0.0
+	}
 	decision := TopKDecision{
 		FinalTopK:      3,
 		DecisionReason: "short_precise_query",

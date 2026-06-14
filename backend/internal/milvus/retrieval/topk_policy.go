@@ -280,7 +280,7 @@ func ApplyScoreCliffGuard(query string, docs []*schema.Document, decision TopKDe
 		return docs, decision
 	}
 
-	topScore := readStrategicScore(docs[0])
+	topScore := readScoreCliffScore(docs[0])
 	if topScore < 0.55 {
 		return docs, decision
 	}
@@ -288,7 +288,7 @@ func ApplyScoreCliffGuard(query string, docs []*schema.Document, decision TopKDe
 	cutoff := scoreCliffKeepCutoff(topScore)
 	keepCount := 1
 	for idx := 1; idx < len(docs); idx++ {
-		if readStrategicScore(docs[idx]) < cutoff {
+		if readScoreCliffScore(docs[idx]) < cutoff {
 			break
 		}
 		keepCount = idx + 1
@@ -308,6 +308,20 @@ func ApplyScoreCliffGuard(query string, docs []*schema.Document, decision TopKDe
 
 func scoreCliffKeepCutoff(topScore float64) float64 {
 	return maxFloat64(topScore*0.72, topScore-0.18)
+}
+
+func readScoreCliffScore(doc *schema.Document) float64 {
+	if doc == nil || doc.MetaData == nil {
+		return 0
+	}
+	for _, key := range []string{"score", "fusion_score", "rerank_score"} {
+		if value, ok := doc.MetaData[key]; ok {
+			if score, ok := castScore(value); ok && score > 0 {
+				return score
+			}
+		}
+	}
+	return 0
 }
 
 func documentHasPreciseQueryMatch(normalizedQuery string, doc *schema.Document) bool {
