@@ -209,6 +209,163 @@ func TestDoclingClientParseExtractsStructuredJSONTables(t *testing.T) {
 	}
 }
 
+func TestDoclingClientParseExtendsFragmentedPDFTableSpan(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{
+				"status": "success",
+				"document": {
+					"filename": "billing.pdf",
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 | 包年包月 |\n| --- | --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长（小时） × 规格单价（元/小时） | 计算规格费用 = 购买时长（月） × 规格单价（元/月） |\n\n## 计费周期 按小时计费\n\n当前计费周期内，若实例的服务时间不足 1 小时按照 1 小时计算。\n\n例如，实例购买时间为 10 点 30 分，则 10 点到 11 点这一计费周期内，计算规格费用为 1 小时 × 规格单价，而非 0.5 小时 × 规格单价。\n\n## 3. 常见问题\n\n实例购买后立即开始计费。"
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	tableContent := doc.ContentMarkdown[table.MarkdownStart:table.MarkdownEnd]
+	if !strings.Contains(tableContent, "10 点 30 分") {
+		t.Fatalf("expected table span to include fragmented billing-cycle row, got %q", tableContent)
+	}
+	if strings.Contains(tableContent, "## 3. 常见问题") {
+		t.Fatalf("table span should stop before next numbered section, got %q", tableContent)
+	}
+}
+
+func TestDoclingClientParseDoesNotExtendPDFTableSpanIntoUnrelatedUnnumberedSection(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{
+				"status": "success",
+				"document": {
+					"filename": "billing.pdf",
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 |\n| --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长 × 规格单价 |\n\n## 注意事项\n\n请确保账号余额充足。\n\n上传资料前请阅读开通说明。\n\n## 3. 下一章\n\n后续正文。"
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	tableContent := doc.ContentMarkdown[table.MarkdownStart:table.MarkdownEnd]
+	if strings.Contains(tableContent, "注意事项") || strings.Contains(tableContent, "账号余额") {
+		t.Fatalf("table span should not include unrelated unnumbered section, got %q", tableContent)
+	}
+}
+
+func TestDoclingTableRowsRejectsOversizedDimensions(t *testing.T) {
+	rows, merged := doclingTableRows(map[string]interface{}{
+		"data": map[string]interface{}{
+			"num_rows": float64(100000),
+			"num_cols": float64(2),
+			"table_cells": []interface{}{
+				map[string]interface{}{
+					"text":                 "项目",
+					"start_row_offset_idx": float64(0),
+					"end_row_offset_idx":   float64(1),
+					"start_col_offset_idx": float64(0),
+					"end_col_offset_idx":   float64(1),
+					"column_header":        true,
+				},
+			},
+		},
+	})
+	if len(rows) != 0 || merged {
+		t.Fatalf("expected oversized table to be discarded, got rows=%d merged=%v", len(rows), merged)
+	}
+}
+
+func TestDoclingTableRowsDoesNotTreatRowHeaderAsColumnHeader(t *testing.T) {
+	rows, _ := doclingTableRows(map[string]interface{}{
+		"data": map[string]interface{}{
+			"num_rows": float64(2),
+			"num_cols": float64(2),
+			"table_cells": []interface{}{
+				map[string]interface{}{
+					"text":                 "地域",
+					"start_row_offset_idx": float64(0),
+					"end_row_offset_idx":   float64(1),
+					"start_col_offset_idx": float64(0),
+					"end_col_offset_idx":   float64(1),
+					"row_header":           true,
+				},
+				map[string]interface{}{
+					"text":                 "单价",
+					"start_row_offset_idx": float64(0),
+					"end_row_offset_idx":   float64(1),
+					"start_col_offset_idx": float64(1),
+					"end_col_offset_idx":   float64(2),
+				},
+				map[string]interface{}{
+					"text":                 "北京",
+					"start_row_offset_idx": float64(1),
+					"end_row_offset_idx":   float64(2),
+					"start_col_offset_idx": float64(0),
+					"end_col_offset_idx":   float64(1),
+					"row_header":           true,
+				},
+				map[string]interface{}{
+					"text":                 "1.00",
+					"start_row_offset_idx": float64(1),
+					"end_row_offset_idx":   float64(2),
+					"start_col_offset_idx": float64(1),
+					"end_col_offset_idx":   float64(2),
+				},
+			},
+		},
+	})
+	if len(rows) != 2 || len(rows[0].Cells) != 2 {
+		t.Fatalf("expected 2x2 rows, got %+v", rows)
+	}
+	if !rows[0].Cells[0].IsHeader || !rows[0].Cells[1].IsHeader {
+		t.Fatalf("expected first row to be promoted as fallback column header, got %+v", rows[0].Cells)
+	}
+	if rows[1].Cells[0].IsHeader {
+		t.Fatalf("row_header should not mark body row cells as column headers, got %+v", rows[1].Cells)
+	}
+}
+
 func TestParseHandlerReturnsNormalizedDocument(t *testing.T) {
 	upstream := &fakeParser{
 		doc: &documentparser.NormalizedDocument{

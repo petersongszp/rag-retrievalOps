@@ -11,11 +11,19 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"interview-agents/internal/documentparser"
 )
 
-const DoclingAdapterVersion = "docling-serve-adapter-v1"
+const (
+	DoclingAdapterVersion = "docling-serve-adapter-v1"
+
+	maxDoclingFragmentedTableExtensionBytes = 4096
+	maxDoclingTableRows                     = 10000
+	maxDoclingTableCols                     = 200
+	maxDoclingTableCells                    = 50000
+)
 
 type ParseRequest struct {
 	FileName string
@@ -180,13 +188,6 @@ func normalizeDoclingResponse(resp doclingConvertResponse, req ParseRequest) (*d
 			Retryable: false,
 		}
 	}
-	content, tables := documentparser.NormalizeMarkdownPipeTables(content)
-	if len(tables) == 0 {
-		jsonTables := extractDoclingStructuredTables(doc.JSONContent)
-		if len(jsonTables) > 0 {
-			content, tables = appendStructuredTablesToMarkdown(content, jsonTables)
-		}
-	}
 
 	fileName := strings.TrimSpace(req.FileName)
 	if fileName == "" {
@@ -195,6 +196,17 @@ func normalizeDoclingResponse(resp doclingConvertResponse, req ParseRequest) (*d
 	fileType := documentparser.NormalizeFileType(req.FileType)
 	if fileType == "" {
 		fileType = documentparser.NormalizeFileType(filepath.Ext(fileName))
+	}
+
+	content, tables := documentparser.NormalizeMarkdownPipeTables(content)
+	if fileType == "pdf" && len(tables) > 0 {
+		tables = extendDoclingFragmentedPDFTableSpans(content, tables)
+	}
+	if len(tables) == 0 {
+		jsonTables := extractDoclingStructuredTables(doc.JSONContent)
+		if len(jsonTables) > 0 {
+			content, tables = appendStructuredTablesToMarkdown(content, jsonTables)
+		}
 	}
 
 	normalized := &documentparser.NormalizedDocument{
@@ -218,6 +230,180 @@ func normalizeDoclingResponse(resp doclingConvertResponse, req ParseRequest) (*d
 		return nil, fmt.Errorf("invalid normalized docling document: %w", err)
 	}
 	return normalized, nil
+}
+
+func extendDoclingFragmentedPDFTableSpans(content string, tables []documentparser.NormalizedTable) []documentparser.NormalizedTable {
+	if len(tables) == 0 {
+		return tables
+	}
+	extended := make([]documentparser.NormalizedTable, len(tables))
+	copy(extended, tables)
+	for i := range extended {
+		table := &extended[i]
+		if !validMarkdownSpan(content, table.MarkdownStart, table.MarkdownEnd) {
+			continue
+		}
+		limit := len(content)
+		if i+1 < len(extended) && validMarkdownSpan(content, extended[i+1].MarkdownStart, extended[i+1].MarkdownEnd) {
+			limit = extended[i+1].MarkdownStart
+		}
+		if end := doclingFragmentedTableExtensionEnd(content, table.MarkdownEnd, limit, table.Rows); end > table.MarkdownEnd {
+			// Extend only the retrieval markdown span; Rows remains the structured pipe table.
+			table.MarkdownEnd = end
+		}
+	}
+	return extended
+}
+
+func doclingFragmentedTableExtensionEnd(content string, start, limit int, rows []documentparser.TableRow) int {
+	if start < 0 || start > len(content) {
+		return start
+	}
+	if limit < start {
+		limit = start
+	}
+	if limit > len(content) {
+		limit = len(content)
+	}
+
+	lineStart := start
+	extensionEnd := start
+	firstContinuationStart := -1
+	for lineStart < limit {
+		lineEnd := lineStart
+		for lineEnd < limit && content[lineEnd] != '\n' {
+			lineEnd++
+		}
+		nextLineStart := lineEnd
+		if nextLineStart < limit && content[nextLineStart] == '\n' {
+			nextLineStart++
+		}
+
+		line := strings.TrimSpace(strings.TrimSuffix(content[lineStart:lineEnd], "\r"))
+		if isNumberedMarkdownHeading(line) {
+			break
+		}
+		if firstContinuationStart < 0 {
+			if line == "" {
+				lineStart = nextLineStart
+				continue
+			}
+			if !isUnnumberedMarkdownHeading(line) {
+				return start
+			}
+			firstContinuationStart = lineStart
+		}
+		extensionEnd = nextLineStart
+		lineStart = nextLineStart
+	}
+	if firstContinuationStart < 0 {
+		return start
+	}
+	extensionEnd = trimRightWhitespaceIndex(content, start, extensionEnd)
+	if extensionEnd-firstContinuationStart > maxDoclingFragmentedTableExtensionBytes {
+		return start
+	}
+	if !doclingContinuationReferencesTable(content[firstContinuationStart:extensionEnd], rows) {
+		return start
+	}
+	return extensionEnd
+}
+
+func validMarkdownSpan(content string, start, end int) bool {
+	return start >= 0 && end >= start && end <= len(content)
+}
+
+func isUnnumberedMarkdownHeading(line string) bool {
+	return isMarkdownHeading(line) && !isNumberedMarkdownHeading(line)
+}
+
+func isNumberedMarkdownHeading(line string) bool {
+	if !isMarkdownHeading(line) {
+		return false
+	}
+	text := strings.TrimSpace(strings.TrimLeft(line, "#"))
+	if text == "" {
+		return false
+	}
+	first := text[0]
+	return first >= '0' && first <= '9'
+}
+
+func isMarkdownHeading(line string) bool {
+	if !strings.HasPrefix(line, "#") {
+		return false
+	}
+	headingMarks := 0
+	for headingMarks < len(line) && line[headingMarks] == '#' {
+		headingMarks++
+	}
+	return headingMarks > 0 && headingMarks < len(line) && line[headingMarks] == ' '
+}
+
+func trimRightWhitespaceIndex(content string, start, end int) int {
+	if end > len(content) {
+		end = len(content)
+	}
+	for end > start {
+		switch content[end-1] {
+		case ' ', '\n', '\r', '\t':
+			end--
+		default:
+			return end
+		}
+	}
+	return end
+}
+
+func doclingContinuationReferencesTable(candidate string, rows []documentparser.TableRow) bool {
+	candidate = strings.ToLower(candidate)
+	for _, keyword := range doclingTableContinuationKeywords(rows) {
+		if strings.Contains(candidate, keyword) {
+			return true
+		}
+	}
+	return false
+}
+
+func doclingTableContinuationKeywords(rows []documentparser.TableRow) []string {
+	seen := make(map[string]struct{})
+	keywords := make([]string, 0)
+	for _, row := range rows {
+		for _, cell := range row.Cells {
+			for _, keyword := range splitDoclingTableKeywords(cell.Text) {
+				if !isSignificantDoclingTableKeyword(keyword) {
+					continue
+				}
+				if _, ok := seen[keyword]; ok {
+					continue
+				}
+				seen[keyword] = struct{}{}
+				keywords = append(keywords, keyword)
+			}
+		}
+	}
+	return keywords
+}
+
+func splitDoclingTableKeywords(value string) []string {
+	return strings.FieldsFunc(strings.ToLower(value), func(r rune) bool {
+		return !unicode.IsLetter(r) && !unicode.IsDigit(r)
+	})
+}
+
+func isSignificantDoclingTableKeyword(value string) bool {
+	if value == "" {
+		return false
+	}
+	runeCount := 0
+	hasNonDigit := false
+	for _, r := range value {
+		runeCount++
+		if !unicode.IsDigit(r) {
+			hasNonDigit = true
+		}
+	}
+	return hasNonDigit && runeCount >= 3
 }
 
 func extractDoclingStructuredTables(raw json.RawMessage) []documentparser.NormalizedTable {
@@ -290,8 +476,11 @@ func doclingTableRows(tableMap map[string]interface{}) ([]documentparser.TableRo
 
 	numRows, _ := intFromAny(data, "num_rows", "nrows", "rows")
 	numCols, _ := intFromAny(data, "num_cols", "ncols", "cols")
+	if !doclingTableDimensionsAllowed(numRows, numCols) {
+		return nil, false
+	}
 	parsedCells := make([]doclingParsedCell, 0, len(cellValues))
-	hasHeader := false
+	hasColumnHeader := false
 	merged := false
 
 	for _, cellValue := range cellValues {
@@ -306,12 +495,17 @@ func doclingTableRows(tableMap map[string]interface{}) ([]documentparser.TableRo
 		}
 		rowSpan := spanFromCell(cellMap, row, "end_row_offset_idx", "row_span", "rowspan")
 		colSpan := spanFromCell(cellMap, col, "end_col_offset_idx", "col_span", "colspan")
+		if !doclingTableCellBoundsAllowed(row, col, rowSpan, colSpan) {
+			return nil, false
+		}
+		rowEnd := row + rowSpan
+		colEnd := col + colSpan
 		if rowSpan > 1 || colSpan > 1 {
 			merged = true
 		}
-		isHeader := boolFromAny(cellMap, "column_header", "row_header", "is_header", "header")
+		isHeader := boolFromAny(cellMap, "column_header", "is_header", "header")
 		if isHeader {
-			hasHeader = true
+			hasColumnHeader = true
 		}
 		text := normalizeDoclingTableCellText(stringFromAny(cellMap, "text", "content"))
 		parsedCells = append(parsedCells, doclingParsedCell{
@@ -322,11 +516,14 @@ func doclingTableRows(tableMap map[string]interface{}) ([]documentparser.TableRo
 			text:     text,
 			isHeader: isHeader,
 		})
-		if row+rowSpan > numRows {
-			numRows = row + rowSpan
+		if rowEnd > numRows {
+			numRows = rowEnd
 		}
-		if col+colSpan > numCols {
-			numCols = col + colSpan
+		if colEnd > numCols {
+			numCols = colEnd
+		}
+		if !doclingTableDimensionsAllowed(numRows, numCols) {
+			return nil, false
 		}
 	}
 	if len(parsedCells) == 0 || numRows <= 0 || numCols <= 0 {
@@ -348,12 +545,35 @@ func doclingTableRows(tableMap map[string]interface{}) ([]documentparser.TableRo
 			IsHeader: cell.isHeader,
 		}
 	}
-	if !hasHeader && len(rows) > 0 {
+	if !hasColumnHeader && len(rows) > 0 {
 		for i := range rows[0].Cells {
 			rows[0].Cells[i].IsHeader = true
 		}
 	}
 	return trimEmptyDoclingRows(rows), merged
+}
+
+func doclingTableDimensionsAllowed(numRows, numCols int) bool {
+	if numRows < 0 || numCols < 0 {
+		return false
+	}
+	if numRows > maxDoclingTableRows || numCols > maxDoclingTableCols {
+		return false
+	}
+	return numCols == 0 || numRows == 0 || numRows <= maxDoclingTableCells/numCols
+}
+
+func doclingTableCellBoundsAllowed(row, col, rowSpan, colSpan int) bool {
+	if row < 0 || col < 0 || rowSpan <= 0 || colSpan <= 0 {
+		return false
+	}
+	if row > maxDoclingTableRows || col > maxDoclingTableCols {
+		return false
+	}
+	if rowSpan > maxDoclingTableRows || colSpan > maxDoclingTableCols {
+		return false
+	}
+	return row+rowSpan <= maxDoclingTableRows && col+colSpan <= maxDoclingTableCols
 }
 
 type doclingParsedCell struct {
