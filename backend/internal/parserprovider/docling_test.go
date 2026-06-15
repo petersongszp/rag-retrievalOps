@@ -216,7 +216,7 @@ func TestDoclingClientParseExtendsFragmentedPDFTableSpan(t *testing.T) {
 				"status": "success",
 				"document": {
 					"filename": "billing.pdf",
-					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 | 包年包月 |\n| --- | --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长（小时） × 规格单价（元/小时） | 计算规格费用 = 购买时长（月） × 规格单价（元/月） |\n\n## 计费周期 按小时计费\n\n当前计费周期内，若实例的服务时间不足 1 小时按照 1 小时计算。\n\n例如，实例购买时间为 10 点 30 分，则 10 点到 11 点这一计费周期内，计算规格费用为 1 小时 × 规格单价，而非 0.5 小时 × 规格单价。\n\n## 3. 常见问题\n\n实例购买后立即开始计费。"
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 | 包年包月 |\n| --- | --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长（小时） × 规格单价（元/小时） | 计算规格费用 = 购买时长（月） × 规格单价（元/月） |\n\n### 计费周期 按小时计费\n\n当前计费周期内，若实例的服务时间不足 1 小时按照 1 小时计算。\n\n例如，实例购买时间为 10 点 30 分，则 10 点到 11 点这一计费周期内，计算规格费用为 1 小时 × 规格单价，而非 0.5 小时 × 规格单价。\n\n## 3. 常见问题\n\n实例购买后立即开始计费。"
 				}
 			}`
 			return &http.Response{
@@ -301,7 +301,7 @@ func TestDoclingClientParseStopsFragmentedPDFTableSpanBeforeNextUnnumberedSectio
 				"status": "success",
 				"document": {
 					"filename": "billing.pdf",
-					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 |\n| --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长 × 规格单价 |\n\n## 计费周期 按小时计费\n\n例如，当前计费周期内计算规格费用为 1 小时 × 规格单价。\n\n## 注意事项\n\n规格单价可能在普通说明里再次出现，但这里不是表格续接内容。\n\n## 3. 下一章\n\n后续正文。"
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 |\n| --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长 × 规格单价 |\n\n### 计费周期 按小时计费\n\n例如，当前计费周期内计算规格费用为 1 小时 × 规格单价。\n\n## 注意事项\n\n规格单价可能在普通说明里再次出现，但这里不是表格续接内容。\n\n## 3. 下一章\n\n后续正文。"
 				}
 			}`
 			return &http.Response{
@@ -338,9 +338,50 @@ func TestDoclingClientParseStopsFragmentedPDFTableSpanBeforeNextUnnumberedSectio
 	}
 }
 
+func TestDoclingClientParseDoesNotExtendPDFTableSpanIntoSameLevelUnnumberedHeading(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{
+				"status": "success",
+				"document": {
+					"filename": "billing.pdf",
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 |\n| --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长 × 规格单价 |\n\n## 使用方式\n\n调用接口时仍会提到计算规格费用，但这里已经是同级新章节。"
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	tableContent := doc.ContentMarkdown[table.MarkdownStart:table.MarkdownEnd]
+	if strings.Contains(tableContent, "使用方式") || strings.Contains(tableContent, "同级新章节") {
+		t.Fatalf("table span should stop before same-level unnumbered heading, got %q", tableContent)
+	}
+}
+
 func TestDoclingFragmentedTableExtensionRequiresASCIIKeywordBoundary(t *testing.T) {
 	content := "\n\n## Notes\n\nThe xa1by identifier is unrelated prose."
-	end := doclingFragmentedTableExtensionEnd(content, 0, len(content), []documentparser.TableRow{
+	end := doclingFragmentedTableExtensionEnd(content, 0, 0, len(content), []documentparser.TableRow{
 		{Cells: []documentparser.TableCell{{Text: "a1b", IsHeader: true}}},
 	})
 	if end != 0 {

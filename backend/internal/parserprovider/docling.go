@@ -247,7 +247,7 @@ func extendDoclingFragmentedPDFTableSpans(content string, tables []documentparse
 		if i+1 < len(extended) && validMarkdownSpan(content, extended[i+1].MarkdownStart, extended[i+1].MarkdownEnd) {
 			limit = extended[i+1].MarkdownStart
 		}
-		if end := doclingFragmentedTableExtensionEnd(content, table.MarkdownEnd, limit, table.Rows); end > table.MarkdownEnd {
+		if end := doclingFragmentedTableExtensionEnd(content, table.MarkdownStart, table.MarkdownEnd, limit, table.Rows); end > table.MarkdownEnd {
 			// Extend only the retrieval markdown span; Rows remains the structured pipe table.
 			table.MarkdownEnd = end
 		}
@@ -255,7 +255,7 @@ func extendDoclingFragmentedPDFTableSpans(content string, tables []documentparse
 	return extended
 }
 
-func doclingFragmentedTableExtensionEnd(content string, start, limit int, rows []documentparser.TableRow) int {
+func doclingFragmentedTableExtensionEnd(content string, tableStart, start, limit int, rows []documentparser.TableRow) int {
 	if start < 0 || start > len(content) {
 		return start
 	}
@@ -266,6 +266,7 @@ func doclingFragmentedTableExtensionEnd(content string, start, limit int, rows [
 		limit = len(content)
 	}
 
+	contextHeadingLevel := markdownHeadingLevelBefore(content, tableStart)
 	lineStart := start
 	extensionEnd := start
 	firstContinuationStart := -1
@@ -280,6 +281,9 @@ func doclingFragmentedTableExtensionEnd(content string, start, limit int, rows [
 		}
 
 		line := strings.TrimSpace(strings.TrimSuffix(content[lineStart:lineEnd], "\r"))
+		if headingLevel := markdownHeadingLevel(line); contextHeadingLevel > 0 && headingLevel > 0 && headingLevel <= contextHeadingLevel {
+			break
+		}
 		if isNumberedMarkdownHeading(line) {
 			break
 		}
@@ -333,14 +337,46 @@ func isNumberedMarkdownHeading(line string) bool {
 }
 
 func isMarkdownHeading(line string) bool {
+	return markdownHeadingLevel(line) > 0
+}
+
+func markdownHeadingLevel(line string) int {
 	if !strings.HasPrefix(line, "#") {
-		return false
+		return 0
 	}
 	headingMarks := 0
 	for headingMarks < len(line) && line[headingMarks] == '#' {
 		headingMarks++
 	}
-	return headingMarks > 0 && headingMarks < len(line) && line[headingMarks] == ' '
+	if headingMarks == 0 || headingMarks > 6 || headingMarks >= len(line) || line[headingMarks] != ' ' {
+		return 0
+	}
+	return headingMarks
+}
+
+func markdownHeadingLevelBefore(content string, offset int) int {
+	if offset < 0 {
+		offset = 0
+	}
+	if offset > len(content) {
+		offset = len(content)
+	}
+	level := 0
+	for lineStart := 0; lineStart < offset; {
+		lineEnd := lineStart
+		for lineEnd < offset && content[lineEnd] != '\n' {
+			lineEnd++
+		}
+		line := strings.TrimSpace(strings.TrimSuffix(content[lineStart:lineEnd], "\r"))
+		if headingLevel := markdownHeadingLevel(line); headingLevel > 0 {
+			level = headingLevel
+		}
+		lineStart = lineEnd
+		if lineStart < offset && content[lineStart] == '\n' {
+			lineStart++
+		}
+	}
+	return level
 }
 
 func trimRightWhitespaceIndex(content string, start, end int) int {
