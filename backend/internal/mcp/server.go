@@ -2,6 +2,7 @@ package mcp
 
 import (
 	"fmt"
+	"strings"
 
 	ragclient "interview-agents/internal/mcp/client"
 	"interview-agents/internal/mcp/handler"
@@ -10,11 +11,11 @@ import (
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-const serverVersion = "0.1.0"
+const serverVersion = "0.2.0"
 
-func NewServer(retriever handler.Retriever) (*mcpsdk.Server, error) {
-	if retriever == nil {
-		return nil, fmt.Errorf("retriever is required")
+func NewServer(retrieverFactory handler.RetrieverFactory) (*mcpsdk.Server, error) {
+	if retrieverFactory == nil {
+		return nil, fmt.Errorf("retrieverFactory is required")
 	}
 
 	server := mcpsdk.NewServer(
@@ -27,7 +28,7 @@ func NewServer(retriever handler.Retriever) (*mcpsdk.Server, error) {
 			Capabilities: &mcpsdk.ServerCapabilities{},
 		},
 	)
-	retrieveHandler := handler.NewRetrieveHandler(retriever)
+	retrieveHandler := handler.NewRetrieveHandler(retrieverFactory)
 	mcpsdk.AddTool[handler.RetrieveKnowledgeInput, handler.RetrieveKnowledgeOutput](
 		server,
 		tools.RetrieveKnowledge(),
@@ -40,9 +41,27 @@ func NewServerFromConfig(cfg Config) (*mcpsdk.Server, error) {
 	if err := cfg.Validate(); err != nil {
 		return nil, err
 	}
-	ragClient, err := ragclient.New(cfg.RAGBaseURL, cfg.RAGAccessToken, cfg.Timeout)
-	if err != nil {
-		return nil, fmt.Errorf("create RAG client: %w", err)
+	return NewServer(NewRetrieverFactoryFromConfig(cfg))
+}
+
+func NewRetrieverFactoryFromConfig(cfg Config) handler.RetrieverFactory {
+	return handler.RetrieverFactoryFunc(func(req *mcpsdk.CallToolRequest) (handler.Retriever, error) {
+		authorization := strings.TrimSpace(cfg.StdioAuthorizationHeader())
+		if req != nil && req.Extra != nil && req.Extra.Header != nil {
+			if header := strings.TrimSpace(req.Extra.Header.Get("Authorization")); header != "" {
+				authorization = header
+			}
+		}
+		if authorization == "" {
+			return nil, fmt.Errorf("unauthorized: Authorization header is required")
+		}
+		return ragclient.NewWithAuthorization(cfg.RAGBaseURL, authorization, cfg.Timeout)
+	})
+}
+
+func (c Config) StdioAuthorizationHeader() string {
+	if strings.TrimSpace(c.RAGAccessToken) == "" {
+		return ""
 	}
-	return NewServer(ragClient)
+	return "Bearer " + strings.TrimSpace(c.RAGAccessToken)
 }

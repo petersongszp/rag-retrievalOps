@@ -51,6 +51,11 @@ func TestNormalizeInputRejectsInvalidArguments(t *testing.T) {
 		{name: "missing kb", input: RetrieveKnowledgeInput{Query: "q"}, want: "kb_id or kb_ids is required"},
 		{name: "zero kb", input: RetrieveKnowledgeInput{Query: "q", KBIDs: []uint64{0}}, want: "positive integers"},
 		{name: "bad top k", input: RetrieveKnowledgeInput{Query: "q", KBIDs: []uint64{1}, TopK: 21}, want: "top_k"},
+		{name: "oversized metadata", input: RetrieveKnowledgeInput{
+			Query:          "q",
+			KBIDs:          []uint64{1},
+			MetadataFilter: map[string]interface{}{"payload": strings.Repeat("x", maxMetadataFilterBytes)},
+		}, want: "metadata_filter exceeds"},
 		{name: "deep metadata", input: RetrieveKnowledgeInput{
 			Query:          "q",
 			KBIDs:          []uint64{1},
@@ -90,7 +95,9 @@ func TestRetrieveHandlerReturnsReadableTextAndStructuredOutput(t *testing.T) {
 			},
 		},
 	}
-	h := NewRetrieveHandler(retriever)
+	h := NewRetrieveHandler(RetrieverFactoryFunc(func(*mcp.CallToolRequest) (Retriever, error) {
+		return retriever, nil
+	}))
 	result, output, err := h.Handle(context.Background(), nil, RetrieveKnowledgeInput{
 		Query: "jvm tuning",
 		KBID:  1,
@@ -112,7 +119,7 @@ func TestRetrieveHandlerReturnsReadableTextAndStructuredOutput(t *testing.T) {
 	if !ok {
 		t.Fatalf("Content[0] = %T, want *mcp.TextContent", result.Content[0])
 	}
-	if !strings.Contains(text.Text, "检索结果（共 1 条）") || !strings.Contains(text.Text, "jvm.md") {
+	if !strings.Contains(text.Text, "Retrieved 1 item(s).") || !strings.Contains(text.Text, "jvm.md") {
 		t.Fatalf("unexpected readable text: %s", text.Text)
 	}
 }

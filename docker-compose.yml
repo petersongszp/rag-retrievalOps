@@ -36,6 +36,43 @@ services:
     networks:
       - rag-network
 
+  rag-mcp-server:
+    env_file:
+      - .env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8898}:${MCP_PORT:-8898}"
+    environment:
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-http}
+      MCP_HOST: ${MCP_HOST:-0.0.0.0}
+      MCP_PORT: ${MCP_PORT:-8898}
+      MCP_ENDPOINT: ${MCP_ENDPOINT:-/mcp}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      MCP_UPSTREAM_TIMEOUT_MS: ${MCP_UPSTREAM_TIMEOUT_MS:-5000}
+      MCP_ENABLE_LEGACY_APP_ID: ${MCP_ENABLE_LEGACY_APP_ID:-false}
+      RAG_BASE_URL: ${RAG_BASE_URL:-http://rag-server:8899}
+      # Keep a local-debug fallback so stdio-based binaries can still boot when needed.
+      RAG_ACCESS_TOKEN: ${RAG_ACCESS_TOKEN:-rag_local_debug_token}
+    depends_on:
+      rag-server:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ \"$${MCP_TRANSPORT:-http}\" = \"http\" ]; then curl -fsS \"http://127.0.0.1:$${MCP_PORT:-8898}/healthz\" >/dev/null; else pgrep -f rag-mcp-server >/dev/null; fi",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - rag-network
+
   mysql:
     image: mysql:8.0
     restart: unless-stopped

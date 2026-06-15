@@ -5,9 +5,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 	"unicode/utf8"
 
 	ragclient "interview-agents/internal/mcp/client"
+	internalmetrics "interview-agents/internal/mcp/metrics"
 
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
@@ -23,6 +25,16 @@ const (
 
 type Retriever interface {
 	Retrieve(context.Context, ragclient.RetrieveRequest) (*ragclient.RetrieveResponse, error)
+}
+
+type RetrieverFactory interface {
+	RetrieverFor(*mcp.CallToolRequest) (Retriever, error)
+}
+
+type RetrieverFactoryFunc func(*mcp.CallToolRequest) (Retriever, error)
+
+func (f RetrieverFactoryFunc) RetrieverFor(req *mcp.CallToolRequest) (Retriever, error) {
+	return f(req)
 }
 
 type RetrieveKnowledgeInput struct {
@@ -45,26 +57,35 @@ type RetrieveKnowledgeOutput struct {
 }
 
 type RetrieveHandler struct {
-	retriever Retriever
+	retrieverFactory RetrieverFactory
 }
 
-func NewRetrieveHandler(retriever Retriever) *RetrieveHandler {
-	return &RetrieveHandler{retriever: retriever}
+func NewRetrieveHandler(retrieverFactory RetrieverFactory) *RetrieveHandler {
+	return &RetrieveHandler{retrieverFactory: retrieverFactory}
 }
 
 func (h *RetrieveHandler) Handle(
 	ctx context.Context,
-	_ *mcp.CallToolRequest,
+	request *mcp.CallToolRequest,
 	input RetrieveKnowledgeInput,
 ) (*mcp.CallToolResult, RetrieveKnowledgeOutput, error) {
+	startedAt := time.Now()
 	normalized, err := normalizeInput(input)
 	if err != nil {
-		return nil, RetrieveKnowledgeOutput{}, err
+		internalmetrics.ObserveToolCall("retrieve_knowledge", "invalid_request", "invalid_request", durationMs(startedAt), 0)
+		return toolErrorResult(err), RetrieveKnowledgeOutput{}, nil
 	}
 
-	response, err := h.retriever.Retrieve(ctx, normalized)
+	retriever, err := h.retrieverFactory.RetrieverFor(request)
 	if err != nil {
-		return nil, RetrieveKnowledgeOutput{}, err
+		internalmetrics.IncAuthMissing()
+		internalmetrics.ObserveToolCall("retrieve_knowledge", "error", "unauthorized", durationMs(startedAt), 0)
+		return toolErrorResult(err), RetrieveKnowledgeOutput{}, nil
+	}
+
+	response, err := retriever.Retrieve(ctx, normalized)
+	if err != nil {
+		return mapToolError(err, startedAt), RetrieveKnowledgeOutput{}, nil
 	}
 
 	output := RetrieveKnowledgeOutput{
@@ -76,6 +97,7 @@ func (h *RetrieveHandler) Handle(
 		Refusal:            response.Refusal,
 		EvidenceGateResult: response.EvidenceGateResult,
 	}
+	internalmetrics.ObserveToolCall("retrieve_knowledge", "success", "none", durationMs(startedAt), len(output.Items))
 	result := &mcp.CallToolResult{
 		Content: []mcp.Content{
 			&mcp.TextContent{Text: formatReadableResult(response)},
@@ -179,17 +201,17 @@ func valueDepth(value interface{}) int {
 
 func formatReadableResult(response *ragclient.RetrieveResponse) string {
 	var builder strings.Builder
-	fmt.Fprintf(&builder, "检索结果（共 %d 条）：", len(response.Items))
+	fmt.Fprintf(&builder, "Retrieved %d item(s).", len(response.Items))
 	if response.RequestID != "" {
-		fmt.Fprintf(&builder, "\n请求 ID: %s", response.RequestID)
+		fmt.Fprintf(&builder, "\nrequest_id: %s", response.RequestID)
 	}
 	for index, item := range response.Items {
 		fmt.Fprintf(
 			&builder,
-			"\n\n[%d] 相关度: %.4f | 来源: %s | 知识库: %d | 文档: %d | 分块: %d\n%s",
+			"\n\n[%d] score=%.4f source=%s kb_id=%d document_id=%d chunk_index=%d\n%s",
 			index+1,
 			item.Score,
-			fallback(item.Citation.FileName, "未知"),
+			fallback(item.Citation.FileName, "unknown"),
 			item.Citation.KBID,
 			item.Citation.DocumentID,
 			item.Citation.ChunkIndex,
@@ -197,9 +219,75 @@ func formatReadableResult(response *ragclient.RetrieveResponse) string {
 		)
 	}
 	if response.Refusal != nil {
-		builder.WriteString("\n\n检索结果包含证据门禁拒答信息，请结合结构化结果处理。")
+		builder.WriteString("\n\nResponse contains refusal metadata; inspect the structured payload before answering.")
 	}
 	return builder.String()
+}
+
+func mapToolError(err error, startedAt time.Time) *mcp.CallToolResult {
+	upstreamErr, ok := err.(*ragclient.UpstreamError)
+	if !ok {
+		internalmetrics.ObserveToolCall("retrieve_knowledge", "error", "backend_error", durationMs(startedAt), 0)
+		return toolErrorResult(fmt.Errorf("backend_error: %s", err.Error()))
+	}
+
+	switch upstreamErr.Code {
+	case "unauthorized":
+		internalmetrics.IncAuthMissing()
+	case "forbidden":
+		internalmetrics.IncForbidden()
+	case "backend_timeout":
+		internalmetrics.IncBackendTimeout()
+	}
+	internalmetrics.IncUpstreamError(upstreamErr.Code)
+	internalmetrics.ObserveToolCall("retrieve_knowledge", "error", upstreamErr.Code, durationMs(startedAt), 0)
+
+	payload := map[string]interface{}{
+		"code":      upstreamErr.Code,
+		"message":   upstreamErr.Message,
+		"retryable": upstreamErr.Retryable,
+	}
+	if upstreamErr.RequestID != "" {
+		payload["request_id"] = upstreamErr.RequestID
+	}
+	body, _ := json.Marshal(payload)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(body)},
+		},
+		StructuredContent: payload,
+		IsError:           true,
+	}
+}
+
+func toolErrorResult(err error) *mcp.CallToolResult {
+	message := strings.TrimSpace(err.Error())
+	code, detail := splitErrorCode(message)
+	payload := map[string]interface{}{
+		"code":      code,
+		"message":   detail,
+		"retryable": false,
+	}
+	body, _ := json.Marshal(payload)
+	return &mcp.CallToolResult{
+		Content: []mcp.Content{
+			&mcp.TextContent{Text: string(body)},
+		},
+		StructuredContent: payload,
+		IsError:           true,
+	}
+}
+
+func splitErrorCode(message string) (string, string) {
+	code := "invalid_request"
+	detail := message
+	if head, tail, ok := strings.Cut(message, ":"); ok {
+		code = strings.TrimSpace(head)
+		if strings.TrimSpace(tail) != "" {
+			detail = strings.TrimSpace(tail)
+		}
+	}
+	return code, detail
 }
 
 func fallback(value, defaultValue string) string {
@@ -207,4 +295,8 @@ func fallback(value, defaultValue string) string {
 		return defaultValue
 	}
 	return value
+}
+
+func durationMs(startedAt time.Time) float64 {
+	return float64(time.Since(startedAt).Milliseconds())
 }

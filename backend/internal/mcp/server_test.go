@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	ragclient "interview-agents/internal/mcp/client"
+	"interview-agents/internal/mcp/handler"
 	"interview-agents/internal/mcp/tools"
 
 	mcpsdk "github.com/modelcontextprotocol/go-sdk/mcp"
@@ -30,12 +31,18 @@ func (r *protocolRetriever) Retrieve(ctx context.Context, req ragclient.Retrieve
 	}, nil
 }
 
+func staticFactory(retriever handler.Retriever) handler.RetrieverFactory {
+	return handler.RetrieverFactoryFunc(func(*mcpsdk.CallToolRequest) (handler.Retriever, error) {
+		return retriever, nil
+	})
+}
+
 func TestServerListsAndCallsRetrieveKnowledge(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
 	retriever := &protocolRetriever{}
-	server, err := NewServer(retriever)
+	server, err := NewServer(staticFactory(retriever))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -105,7 +112,7 @@ func TestServerRejectsForbiddenIdentityArguments(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
 
-	server, err := NewServer(&protocolRetriever{})
+	server, err := NewServer(staticFactory(&protocolRetriever{}))
 	if err != nil {
 		t.Fatalf("NewServer() error = %v", err)
 	}
@@ -135,6 +142,21 @@ func TestServerRejectsForbiddenIdentityArguments(t *testing.T) {
 	}
 	if !callResult.IsError {
 		t.Fatalf("IsError = false, want true")
+	}
+
+	callResult, err = session.CallTool(ctx, &mcpsdk.CallToolParams{
+		Name: tools.RetrieveKnowledgeName,
+		Arguments: map[string]interface{}{
+			"query":     "q",
+			"kb_ids":    []uint64{1},
+			"tenant_id": 9,
+		},
+	})
+	if err != nil {
+		t.Fatalf("CallTool() protocol error = %v", err)
+	}
+	if !callResult.IsError {
+		t.Fatalf("tenant override IsError = false, want true")
 	}
 
 	cancel()

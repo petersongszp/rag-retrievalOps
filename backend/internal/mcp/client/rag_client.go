@@ -70,12 +70,16 @@ func (e *UpstreamError) Error() string {
 }
 
 type Client struct {
-	endpoint   string
-	token      string
-	httpClient *http.Client
+	endpoint      string
+	authorization string
+	httpClient    *http.Client
 }
 
 func New(baseURL, token string, timeout time.Duration) (*Client, error) {
+	return NewWithAuthorization(baseURL, "Bearer "+strings.TrimSpace(token), timeout)
+}
+
+func NewWithAuthorization(baseURL, authorization string, timeout time.Duration) (*Client, error) {
 	baseURL = strings.TrimSpace(baseURL)
 	parsed, err := url.Parse(baseURL)
 	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
@@ -85,9 +89,9 @@ func New(baseURL, token string, timeout time.Duration) (*Client, error) {
 		return nil, fmt.Errorf("timeout must be positive")
 	}
 	return &Client{
-		endpoint:   strings.TrimRight(baseURL, "/") + "/v1/retrieve",
-		token:      strings.TrimSpace(token),
-		httpClient: &http.Client{Timeout: timeout},
+		endpoint:      strings.TrimRight(baseURL, "/") + "/v1/retrieve",
+		authorization: strings.TrimSpace(authorization),
+		httpClient:    &http.Client{Timeout: timeout},
 	}, nil
 }
 
@@ -103,7 +107,9 @@ func (c *Client) Retrieve(ctx context.Context, req RetrieveRequest) (*RetrieveRe
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 	httpReq.Header.Set("Accept", "application/json")
-	httpReq.Header.Set("Authorization", "Bearer "+c.token)
+	if c.authorization != "" {
+		httpReq.Header.Set("Authorization", c.authorization)
+	}
 
 	resp, err := c.httpClient.Do(httpReq)
 	if err != nil {
