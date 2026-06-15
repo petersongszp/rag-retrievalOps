@@ -294,6 +294,60 @@ func TestDoclingClientParseDoesNotExtendPDFTableSpanIntoUnrelatedUnnumberedSecti
 	}
 }
 
+func TestDoclingClientParseStopsFragmentedPDFTableSpanBeforeNextUnnumberedSection(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{
+				"status": "success",
+				"document": {
+					"filename": "billing.pdf",
+					"md_content": "## 2. 计费规则\n\n| 项目 | 按量付费 |\n| --- | --- |\n| 计费公式 | 计算规格费用 = 服务时长 × 规格单价 |\n\n## 计费周期 按小时计费\n\n例如，当前计费周期内计算规格费用为 1 小时 × 规格单价。\n\n## 注意事项\n\n规格单价可能在普通说明里再次出现，但这里不是表格续接内容。\n\n## 3. 下一章\n\n后续正文。"
+				}
+			}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if len(doc.Tables) != 1 {
+		t.Fatalf("expected one table, got %d", len(doc.Tables))
+	}
+	table := doc.Tables[0]
+	tableContent := doc.ContentMarkdown[table.MarkdownStart:table.MarkdownEnd]
+	if !strings.Contains(tableContent, "当前计费周期") {
+		t.Fatalf("expected table span to include first continuation block, got %q", tableContent)
+	}
+	if strings.Contains(tableContent, "注意事项") || strings.Contains(tableContent, "普通说明") {
+		t.Fatalf("table span should stop before the next unnumbered section, got %q", tableContent)
+	}
+}
+
+func TestDoclingFragmentedTableExtensionRequiresASCIIKeywordBoundary(t *testing.T) {
+	content := "\n\n## Notes\n\nThe xa1by identifier is unrelated prose."
+	end := doclingFragmentedTableExtensionEnd(content, 0, len(content), []documentparser.TableRow{
+		{Cells: []documentparser.TableCell{{Text: "a1b", IsHeader: true}}},
+	})
+	if end != 0 {
+		t.Fatalf("expected embedded ASCII keyword not to extend table span, got end=%d content=%q", end, content[:end])
+	}
+}
+
 func TestDoclingTableRowsRejectsOversizedDimensions(t *testing.T) {
 	rows, merged := doclingTableRows(map[string]interface{}{
 		"data": map[string]interface{}{

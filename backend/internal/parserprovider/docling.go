@@ -283,6 +283,9 @@ func doclingFragmentedTableExtensionEnd(content string, start, limit int, rows [
 		if isNumberedMarkdownHeading(line) {
 			break
 		}
+		if firstContinuationStart >= 0 && isUnnumberedMarkdownHeading(line) {
+			break
+		}
 		if firstContinuationStart < 0 {
 			if line == "" {
 				lineStart = nextLineStart
@@ -358,11 +361,38 @@ func trimRightWhitespaceIndex(content string, start, end int) int {
 func doclingContinuationReferencesTable(candidate string, rows []documentparser.TableRow) bool {
 	candidate = strings.ToLower(candidate)
 	for _, keyword := range doclingTableContinuationKeywords(rows) {
-		if strings.Contains(candidate, keyword) {
+		if doclingCandidateContainsKeyword(candidate, keyword) {
 			return true
 		}
 	}
 	return false
+}
+
+func doclingCandidateContainsKeyword(candidate, keyword string) bool {
+	if keyword == "" {
+		return false
+	}
+	if !isASCIITableKeyword(keyword) {
+		return strings.Contains(candidate, keyword)
+	}
+	for _, token := range splitDoclingTableKeywords(candidate) {
+		if token == keyword {
+			return true
+		}
+	}
+	return false
+}
+
+func isASCIITableKeyword(value string) bool {
+	if value == "" {
+		return false
+	}
+	for _, r := range value {
+		if r > unicode.MaxASCII {
+			return false
+		}
+	}
+	return true
 }
 
 func doclingTableContinuationKeywords(rows []documentparser.TableRow) []string {
