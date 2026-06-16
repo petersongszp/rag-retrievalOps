@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	"github.com/cloudwego/eino/schema"
 
@@ -102,6 +103,60 @@ func TestTableRetrievalContentDoesNotDuplicateMarkdownAndRenderedRows(t *testing
 	content := buildTableRetrievalContent(markdown, table)
 	if count := strings.Count(content, "计算规格费用=实例购买后的服务时长"); count != 1 {
 		t.Fatalf("expected table retrieval content to include the pay-as-you-go formula once, got %d in %q", count, content)
+	}
+}
+
+func TestTableAwareStrategyUsesRenderedRowsWhenTableSpanSplitsUTF8(t *testing.T) {
+	markdown := strings.TrimSpace(`
+## 计费规则
+
+| 项目 | 按量付费 |
+| --- | --- |
+| 计费公式 | 服务时长（小时） |
+`)
+	start := strings.Index(markdown, "项目") + 1
+	if start <= 0 || utf8.RuneStart(markdown[start]) {
+		t.Fatal("test span should start inside a multibyte rune")
+	}
+	doc := &documentparser.NormalizedDocument{
+		ContentMarkdown: markdown,
+		Source:          documentparser.NormalizedSource{FileName: "billing.docx", FileType: "docx"},
+		Tables: []documentparser.NormalizedTable{
+			{
+				ID:            "table-001",
+				MarkdownStart: start,
+				MarkdownEnd:   len(markdown),
+				Rows: []documentparser.TableRow{
+					{Cells: []documentparser.TableCell{{Text: "项目", IsHeader: true}, {Text: "按量付费", IsHeader: true}}},
+					{Cells: []documentparser.TableCell{{Text: "计费公式"}, {Text: "服务时长（小时）"}}},
+				},
+				Quality: documentparser.TableQuality{Status: "ok"},
+			},
+		},
+		Quality:   documentparser.ParseQuality{Status: "ok", Score: 1},
+		Extractor: documentparser.ExtractorInfo{Provider: "docling", Version: "v1"},
+	}
+
+	chunks, err := NewTableAwareStrategy(&shortChunkStrategy{}).Split(context.Background(), Request{Document: doc})
+	if err != nil {
+		t.Fatalf("Split returned error: %v", err)
+	}
+
+	var tableChunk *schema.Document
+	for _, chunk := range chunks {
+		if chunk != nil && chunk.MetaData["chunking_unit"] == "table" {
+			tableChunk = chunk
+			break
+		}
+	}
+	if tableChunk == nil {
+		t.Fatalf("expected table chunk")
+	}
+	if !utf8.ValidString(tableChunk.Content) {
+		t.Fatalf("table chunk content must be valid UTF-8: %q", tableChunk.Content)
+	}
+	if !strings.Contains(tableChunk.Content, "Rows:") || !strings.Contains(tableChunk.Content, "项目: 计费公式") {
+		t.Fatalf("expected table chunk to fall back to rendered rows, got %q", tableChunk.Content)
 	}
 }
 

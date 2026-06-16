@@ -30,7 +30,7 @@ func (s *TableAwareStrategy) Split(ctx context.Context, req Request) ([]*schema.
 		return nil, err
 	}
 	for _, table := range req.Document.Tables {
-		if !validSpan(req.Document.ContentMarkdown, table.MarkdownStart, table.MarkdownEnd) {
+		if !validSpan(req.Document.ContentMarkdown, table.MarkdownStart, table.MarkdownEnd) && len(table.Rows) == 0 {
 			continue
 		}
 		content := buildTableRetrievalContent(req.Document.ContentMarkdown, table)
@@ -79,7 +79,10 @@ func (s *TableAwareStrategy) Split(ctx context.Context, req Request) ([]*schema.
 }
 
 func buildTableRetrievalContent(markdown string, table documentparser.NormalizedTable) string {
-	tableMarkdown := sliceBySpan(markdown, table.MarkdownStart, table.MarkdownEnd)
+	tableMarkdown := ""
+	if validUTF8Span(markdown, table.MarkdownStart, table.MarkdownEnd) {
+		tableMarkdown = sliceBySpan(markdown, table.MarkdownStart, table.MarkdownEnd)
+	}
 	rows := renderTableRows(table.Rows)
 	parts := []string{fmt.Sprintf("Table %s", table.ID)}
 	if tableMarkdown != "" {

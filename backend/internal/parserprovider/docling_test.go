@@ -130,6 +130,88 @@ func TestDoclingClientParseExtractsMarkdownTables(t *testing.T) {
 	}
 }
 
+func TestDoclingClientParseRestoresHTMLLeadInBeforeFirstHeading(t *testing.T) {
+	sourceHTML := `<html><body><div>` +
+		`<p style="margin-bottom:24pt; font-size:20pt"><span style="font-weight:bold">云消息队列 RocketMQ 版 — 消息收发计算规格计费说明</span></p>` +
+		`<p style="margin-bottom:12pt"><span>包年包月或按量付费计费方式下，消息收发计算规格为云消息队列 RocketMQ 版的必选计费项，云消息队列 RocketMQ 版根据消息收发TPS上限提供不同的计算规格，并按照规格大小和购买时长计算费用。</span></p>` +
+		`<h1><span>1. </span><span>计算规格说明</span></h1>` +
+		`<p>正文</p>` +
+		`</div></body></html>`
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			body := `{"status":"success","document":{"filename":"billing.html","md_content":"# 1. 计算规格说明\n\n正文"}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	doc, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.html",
+		FileType: "html",
+		Content:  []byte(sourceHTML),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !strings.Contains(doc.ContentMarkdown, "必选计费项") {
+		t.Fatalf("HTML lead-in paragraph missing from normalized markdown:\n%s", doc.ContentMarkdown)
+	}
+	if !strings.HasPrefix(doc.ContentMarkdown, "**云消息队列 RocketMQ 版") {
+		t.Fatalf("HTML styled title should be restored before first heading, got:\n%s", doc.ContentMarkdown)
+	}
+	if strings.Index(doc.ContentMarkdown, "必选计费项") > strings.Index(doc.ContentMarkdown, "# 1. 计算规格说明") {
+		t.Fatalf("HTML lead-in should appear before first heading, got:\n%s", doc.ContentMarkdown)
+	}
+}
+
+func TestDoclingClientParseForwardsDoclingOptions(t *testing.T) {
+	client := &http.Client{
+		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			if err := req.ParseMultipartForm(1 << 20); err != nil {
+				t.Fatalf("ParseMultipartForm: %v", err)
+			}
+			if got := req.FormValue("pdf_backend"); got != "pypdfium2" {
+				t.Fatalf("pdf_backend = %q, want pypdfium2", got)
+			}
+			if got := req.FormValue("table_mode"); got != "fast" {
+				t.Fatalf("table_mode = %q, want fast", got)
+			}
+			body := `{"status":"success","document":{"filename":"billing.pdf","md_content":"## 1.3 消息收发TPS计算规则\n\nok"}}`
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       io.NopCloser(strings.NewReader(body)),
+			}, nil
+		}),
+	}
+	adapter := NewDoclingClient(DoclingConfig{
+		BaseURL: "http://docling:5001",
+		Timeout: 2 * time.Second,
+		Client:  client,
+	})
+
+	_, err := adapter.Parse(context.Background(), ParseRequest{
+		FileName: "billing.pdf",
+		FileType: "pdf",
+		Content:  []byte("%PDF"),
+		Options: map[string]interface{}{
+			"pdf_backend": "pypdfium2",
+			"table_mode":  "fast",
+		},
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+}
+
 func TestDoclingClientParseExtractsStructuredJSONTables(t *testing.T) {
 	client := &http.Client{
 		Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
@@ -487,6 +569,10 @@ func TestParseHandlerReturnsNormalizedDocument(t *testing.T) {
 	if err := writer.WriteField("file_type", "pdf"); err != nil {
 		t.Fatalf("WriteField: %v", err)
 	}
+	options := `{"pdf_backend":"pypdfium2"}`
+	if err := writer.WriteField("options", options); err != nil {
+		t.Fatalf("WriteField options: %v", err)
+	}
 	if err := writer.Close(); err != nil {
 		t.Fatalf("Close writer: %v", err)
 	}
@@ -512,6 +598,9 @@ func TestParseHandlerReturnsNormalizedDocument(t *testing.T) {
 	}
 	if upstream.req.FileName != "scan.pdf" || upstream.req.FileType != "pdf" || string(upstream.req.Content) != "%PDF" {
 		t.Fatalf("upstream request = %+v", upstream.req)
+	}
+	if got := upstream.req.Options["pdf_backend"]; got != "pypdfium2" {
+		t.Fatalf("upstream pdf_backend option = %v", got)
 	}
 }
 

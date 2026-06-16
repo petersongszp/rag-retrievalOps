@@ -110,6 +110,7 @@ func (p *HTTPProvider) Parse(ctx context.Context, req ProviderRequest) (*Normali
 	if err := json.Unmarshal(respBody, &doc); err != nil {
 		return nil, fmt.Errorf("decode parser provider response: %w", err)
 	}
+	doc.ContentMarkdown = RestoreHTMLLeadInBeforeFirstHeading(req.FileType, req.Content, doc.ContentMarkdown)
 	if err := doc.Validate(); err != nil {
 		return nil, fmt.Errorf("invalid parser provider response: %w", err)
 	}

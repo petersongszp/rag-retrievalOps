@@ -9,13 +9,15 @@ import (
 const NormalizerVersion = "document-normalizer-v1"
 
 type NormalizedDocument struct {
-	ContentMarkdown string            `json:"content_markdown"`
-	Source          NormalizedSource  `json:"source"`
-	Blocks          []NormalizedBlock `json:"blocks,omitempty"`
-	Tables          []NormalizedTable `json:"tables,omitempty"`
-	OmittedImages   []OmittedImage    `json:"omitted_images,omitempty"`
-	Quality         ParseQuality      `json:"quality"`
-	Extractor       ExtractorInfo     `json:"extractor"`
+	ContentMarkdown    string               `json:"content_markdown"`
+	ContentMarkdownRaw string               `json:"content_markdown_raw,omitempty"`
+	Source             NormalizedSource     `json:"source"`
+	Blocks             []NormalizedBlock    `json:"blocks,omitempty"`
+	Tables             []NormalizedTable    `json:"tables,omitempty"`
+	OmittedImages      []OmittedImage       `json:"omitted_images,omitempty"`
+	Quality            ParseQuality         `json:"quality"`
+	Extractor          ExtractorInfo        `json:"extractor"`
+	Canonicalization   CanonicalizationInfo `json:"canonicalization,omitempty"`
 }
 
 type NormalizedSource struct {
@@ -80,6 +82,14 @@ type TableQuality struct {
 type ExtractorInfo struct {
 	Provider string `json:"provider"`
 	Version  string `json:"version"`
+}
+
+type CanonicalizationInfo struct {
+	Version       string   `json:"version,omitempty"`
+	AppliedRules  []string `json:"applied_rules,omitempty"`
+	Warnings      []string `json:"warnings,omitempty"`
+	RawSHA1       string   `json:"raw_sha1,omitempty"`
+	CanonicalSHA1 string   `json:"canonical_sha1,omitempty"`
 }
 
 type ProviderError struct {

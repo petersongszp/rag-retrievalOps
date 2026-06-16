@@ -54,6 +54,49 @@ func TestHTTPProviderParseSuccess(t *testing.T) {
 	}
 }
 
+func TestHTTPProviderParseRestoresHTMLLeadInFromRequestContent(t *testing.T) {
+	sourceHTML := `<html><body><div>` +
+		`<p><span style="font-weight:bold">云消息队列 RocketMQ 版 — 消息收发计算规格计费说明</span></p>` +
+		`<p>包年包月或按量付费计费方式下，消息收发计算规格为云消息队列 RocketMQ 版的必选计费项。</p>` +
+		`<h1>1. 计算规格说明</h1>` +
+		`</div></body></html>`
+	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		body, err := json.Marshal(NormalizedDocument{
+			ContentMarkdown: "# 1. 计算规格说明\n\n正文",
+			Source: NormalizedSource{
+				FileName: "billing.html",
+				FileType: "html",
+			},
+			Quality:   ParseQuality{Status: "ok", Score: 1},
+			Extractor: ExtractorInfo{Provider: "http-parser", Version: NormalizerVersion},
+		})
+		if err != nil {
+			t.Fatalf("Marshal: %v", err)
+		}
+		return jsonResponse(http.StatusOK, string(body)), nil
+	})}
+
+	provider := NewHTTPProvider(HTTPProviderConfig{
+		Endpoint: "http://parser.test/parse",
+		Timeout:  2 * time.Second,
+		Client:   client,
+	})
+	doc, err := provider.Parse(context.Background(), ProviderRequest{
+		FileName: "billing.html",
+		FileType: "html",
+		Content:  []byte(sourceHTML),
+	})
+	if err != nil {
+		t.Fatalf("Parse returned error: %v", err)
+	}
+	if !strings.Contains(doc.ContentMarkdown, "必选计费项") {
+		t.Fatalf("HTML lead-in paragraph missing from provider markdown:\n%s", doc.ContentMarkdown)
+	}
+	if strings.Index(doc.ContentMarkdown, "必选计费项") > strings.Index(doc.ContentMarkdown, "# 1. 计算规格说明") {
+		t.Fatalf("HTML lead-in should appear before first heading, got:\n%s", doc.ContentMarkdown)
+	}
+}
+
 func TestHTTPProviderParseProviderError(t *testing.T) {
 	client := &http.Client{Transport: roundTripFunc(func(r *http.Request) (*http.Response, error) {
 		body, err := json.Marshal(ProviderError{

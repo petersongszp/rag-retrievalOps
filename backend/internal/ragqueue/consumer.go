@@ -14,6 +14,7 @@ import (
 
 	"interview-agents/internal/config"
 	"interview-agents/internal/documentparser"
+	"interview-agents/internal/documentparser/canonical"
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/milvus/chunking"
 	"interview-agents/internal/model"
@@ -595,23 +596,32 @@ func extractNormalizedKnowledgeDocument(ctx context.Context, filePath, fileType,
 			_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(providerErr))
 			return nil, "", providerErr
 		}
+		options := map[string]interface{}{
+			"engine":      config.Global.RAG.DocumentParser.Engine,
+			"strict_mode": config.Global.RAG.DocumentParser.StrictMode,
+			"ocr": map[string]interface{}{
+				"provider":   config.Global.RAG.DocumentParser.OCR.Provider,
+				"endpoint":   config.Global.RAG.DocumentParser.OCR.Endpoint,
+				"timeout_ms": config.Global.RAG.DocumentParser.OCR.TimeoutMS,
+			},
+		}
+		if normalizedType == "pdf" {
+			options["pdf_backend"] = "pypdfium2"
+		}
 		doc, err = provider.Parse(ctx, documentparser.ProviderRequest{
 			FileName: fileName,
 			FileType: normalizedType,
 			Content:  content,
-			Options: map[string]interface{}{
-				"engine":      config.Global.RAG.DocumentParser.Engine,
-				"strict_mode": config.Global.RAG.DocumentParser.StrictMode,
-				"ocr": map[string]interface{}{
-					"provider":   config.Global.RAG.DocumentParser.OCR.Provider,
-					"endpoint":   config.Global.RAG.DocumentParser.OCR.Endpoint,
-					"timeout_ms": config.Global.RAG.DocumentParser.OCR.TimeoutMS,
-				},
-			},
+			Options:  options,
 		})
 	} else {
 		return nil, "", fmt.Errorf("unsupported file type: %s", normalizedType)
 	}
+	if err != nil {
+		_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(err))
+		return nil, "", err
+	}
+	doc, err = canonical.Normalize(doc)
 	if err != nil {
 		_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(err))
 		return nil, "", err

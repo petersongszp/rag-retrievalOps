@@ -104,6 +104,9 @@ func (c *DoclingClient) Parse(ctx context.Context, req ParseRequest) (*documentp
 	if err := writer.WriteField("image_export_mode", "placeholder"); err != nil {
 		return nil, fmt.Errorf("write docling image_export_mode field: %w", err)
 	}
+	if err := writeDoclingOptions(writer, req.Options); err != nil {
+		return nil, err
+	}
 	if err := writer.Close(); err != nil {
 		return nil, fmt.Errorf("close docling multipart body: %w", err)
 	}
@@ -149,6 +152,42 @@ func (c *DoclingClient) convertURL() string {
 		path = "/" + path
 	}
 	return c.baseURL + path
+}
+
+func writeDoclingOptions(writer *multipart.Writer, options map[string]interface{}) error {
+	if len(options) == 0 {
+		return nil
+	}
+	for _, key := range []string{
+		"pdf_backend",
+		"table_mode",
+		"table_cell_matching",
+		"do_ocr",
+		"force_ocr",
+		"ocr_preset",
+		"pipeline",
+		"do_table_structure",
+		"include_images",
+		"include_page_images",
+		"images_scale",
+		"md_page_break_placeholder",
+	} {
+		value, ok := options[key]
+		if !ok || value == nil {
+			continue
+		}
+		if err := writer.WriteField(key, fmt.Sprint(value)); err != nil {
+			return fmt.Errorf("write docling option %s: %w", key, err)
+		}
+	}
+	if langs, ok := options["ocr_lang"].([]interface{}); ok {
+		for _, lang := range langs {
+			if err := writer.WriteField("ocr_lang", fmt.Sprint(lang)); err != nil {
+				return fmt.Errorf("write docling option ocr_lang: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 type doclingConvertResponse struct {
@@ -198,6 +237,7 @@ func normalizeDoclingResponse(resp doclingConvertResponse, req ParseRequest) (*d
 		fileType = documentparser.NormalizeFileType(filepath.Ext(fileName))
 	}
 
+	content = documentparser.RestoreHTMLLeadInBeforeFirstHeading(fileType, req.Content, content)
 	content, tables := documentparser.NormalizeMarkdownPipeTables(content)
 	if fileType == "pdf" && len(tables) > 0 {
 		tables = extendDoclingFragmentedPDFTableSpans(content, tables)

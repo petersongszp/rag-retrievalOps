@@ -44,7 +44,7 @@ func TestApplyTitleMatchBoostPromotesHierarchyTitleMatch(t *testing.T) {
 	}
 }
 
-func TestApplyTitleMatchBoostPromotesLimitBehaviorIntent(t *testing.T) {
+func TestApplyTitleMatchBoostDoesNotPromoteDomainSpecificIntentWithoutTitleMatch(t *testing.T) {
 	docs := []*schema.Document{
 		{
 			ID:      "doc-11-child-000",
@@ -82,15 +82,17 @@ func TestApplyTitleMatchBoostPromotesLimitBehaviorIntent(t *testing.T) {
 	}
 
 	boosted := applyTitleMatchBoost("超过 TPS 规格上限后会怎样？", docs)
-	if boosted[0].ID != "doc-11-child-002" {
-		t.Fatalf("expected limit behavior chunk to rank first, got %s", boosted[0].ID)
+	if boosted[0].ID != "doc-11-child-000" {
+		t.Fatalf("expected original ranking to be preserved, got %s", boosted[0].ID)
 	}
-	if boosted[0].MetaData["title_match_boost_reason"] != "limit_behavior_intent" {
-		t.Fatalf("expected limit_behavior_intent boost, got %v", boosted[0].MetaData["title_match_boost_reason"])
+	for _, doc := range boosted {
+		if doc.MetaData["title_match_boost_applied"] == true {
+			t.Fatalf("expected no title boost for domain-specific intent query, got %v", doc.MetaData["title_match_boost_reason"])
+		}
 	}
 }
 
-func TestApplyTitleMatchBoostPromotesBillingFormulaIntent(t *testing.T) {
+func TestApplyTitleMatchBoostDoesNotPromoteContentOnlyFormulaEvidence(t *testing.T) {
 	docs := []*schema.Document{
 		{
 			ID:      "doc-15-child-000",
@@ -117,10 +119,12 @@ func TestApplyTitleMatchBoostPromotesBillingFormulaIntent(t *testing.T) {
 	}
 
 	boosted := applyTitleMatchBoost("RocketMQ 计算规格费用怎么计算?", docs)
-	if boosted[0].ID != "doc-15-child-004" {
-		t.Fatalf("expected billing formula chunk to rank first, got %s", boosted[0].ID)
+	if boosted[0].ID != "doc-15-child-000" {
+		t.Fatalf("expected original ranking to be preserved, got %s", boosted[0].ID)
 	}
-	if boosted[0].MetaData["title_match_boost_reason"] != "billing_formula_intent" {
-		t.Fatalf("expected billing_formula_intent boost, got %v", boosted[0].MetaData["title_match_boost_reason"])
+	for _, doc := range boosted {
+		if doc.MetaData["title_match_boost_applied"] == true {
+			t.Fatalf("expected no title boost for content-only formula evidence, got %v", doc.MetaData["title_match_boost_reason"])
+		}
 	}
 }

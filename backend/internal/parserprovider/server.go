@@ -68,11 +68,24 @@ func NewParseHandler(parser Parser) http.Handler {
 		if fileType == "" {
 			fileType = documentparser.NormalizeFileType(filepath.Ext(fileName))
 		}
+		options := map[string]interface{}(nil)
+		if rawOptions := r.FormValue("options"); rawOptions != "" {
+			if err := json.Unmarshal([]byte(rawOptions), &options); err != nil {
+				writeProviderError(w, http.StatusBadRequest, &documentparser.ProviderError{
+					Code:      "invalid_options",
+					Message:   fmt.Sprintf("decode options: %v", err),
+					Stage:     "parse",
+					Retryable: false,
+				})
+				return
+			}
+		}
 
 		doc, err := parser.Parse(r.Context(), ParseRequest{
 			FileName: fileName,
 			FileType: fileType,
 			Content:  content,
+			Options:  options,
 		})
 		if err != nil {
 			if providerErr, ok := err.(*documentparser.ProviderError); ok {

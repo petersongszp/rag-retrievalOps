@@ -45,6 +45,14 @@ func validSpan(content string, start, end int) bool {
 	return start >= 0 && end > start && end <= len(content)
 }
 
+func validUTF8Span(content string, start, end int) bool {
+	return validSpan(content, start, end) && utf8Boundary(content, start) && utf8Boundary(content, end)
+}
+
+func utf8Boundary(content string, offset int) bool {
+	return offset == 0 || offset == len(content) || (offset > 0 && offset < len(content) && utf8.RuneStart(content[offset]))
+}
+
 func sliceBySpan(content string, start, end int) string {
 	if start < 0 {
 		start = 0
@@ -54,6 +62,12 @@ func sliceBySpan(content string, start, end int) string {
 	}
 	if end < start {
 		end = start
+	}
+	for start < end && !utf8Boundary(content, start) {
+		start++
+	}
+	for end > start && !utf8Boundary(content, end) {
+		end--
 	}
 	return strings.TrimSpace(content[start:end])
 }

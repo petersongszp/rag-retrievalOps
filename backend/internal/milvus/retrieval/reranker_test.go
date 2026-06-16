@@ -110,6 +110,45 @@ func TestJaccardRerankerDefaultsOriginalScoreWeightForPartialConfig(t *testing.T
 	}
 }
 
+func TestJaccardRerankerPrefersTableAnswerOverShortNumericDistractor(t *testing.T) {
+	reranker := NewJaccardReranker(&JaccardRerankerConfig{
+		OriginalScoreWeight: 0.7,
+		TopK:                2,
+		ModelName:           DefaultRerankModelJaccardV1,
+		Version:             DefaultRerankVersion,
+	})
+
+	docs := []*schema.Document{
+		{
+			ID:      "short-distractor",
+			Content: "## 针对高级特性消息\n\n消息发送场景下，发送 10 条事务消息，则消息发送 TPS 为 10×5=50 次/秒。",
+			MetaData: map[string]interface{}{
+				"score": 0.50,
+			},
+		},
+		{
+			ID:      "billing-table",
+			Content: "Table table-001\n\n| 项目 | 按量付费 | 包年包月 |\n| --- | --- | --- |\n| 计费周期 | 按小时计费。当前计费周期内，若实例的服务时间不足 1 小时按照 1 小时计算。例如，实例购买时间为 10 点 30 分，则 10 点到 11 点这一计费周期内，计算规格费用为 1 小时 × 规格单价，而非 0.5 小时 × 规格单价。 | 按月计费 |",
+			MetaData: map[string]interface{}{
+				"score":         0.45,
+				"chunking_unit": "table",
+				"table_ids":     []string{"table-001"},
+			},
+		},
+	}
+
+	result, err := reranker.Rerank(context.Background(), "10:30 购买实例，不是一小时怎么收费?", docs)
+	if err != nil {
+		t.Fatalf("rerank returned error: %v", err)
+	}
+	if len(result.Documents) != 2 {
+		t.Fatalf("expected 2 reranked documents, got %d", len(result.Documents))
+	}
+	if result.Documents[0].ID != "billing-table" {
+		t.Fatalf("expected billing table first, got %s", result.Documents[0].ID)
+	}
+}
+
 func TestConfigurableRerankerFallsBackOnPrimaryError(t *testing.T) {
 	primary := &stubReranker{err: errors.New("boom")}
 	fallback := &stubReranker{
