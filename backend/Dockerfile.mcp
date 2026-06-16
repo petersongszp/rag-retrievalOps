@@ -1,0 +1,38 @@
+# MCP Server Dockerfile
+FROM golang:1.25.1-alpine AS builder
+
+RUN apk add --no-cache git ca-certificates tzdata
+
+WORKDIR /app
+COPY go.mod go.sum ./
+ENV GOPROXY=https://goproxy.cn,https://proxy.golang.org,direct
+ENV GOSUMDB=off
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -o rag-mcp-server ./cmd/rag-mcp-server
+
+FROM alpine:3.18
+RUN apk add --no-cache ca-certificates tzdata curl procps
+
+ENV TZ=Asia/Shanghai \
+    MCP_TRANSPORT=http \
+    MCP_HOST=0.0.0.0 \
+    MCP_PORT=8898 \
+    MCP_ENDPOINT=/mcp \
+    MCP_HEALTH_PATH=/healthz
+
+RUN addgroup -g 1001 appuser && adduser -D -u 1001 -G appuser appuser
+
+WORKDIR /app
+COPY --from=builder /app/rag-mcp-server ./
+
+RUN mkdir -p /app/logs && chown -R appuser:appuser /app
+USER appuser
+
+EXPOSE 8898
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=5 \
+    CMD sh -c 'if [ "${MCP_TRANSPORT:-http}" = "http" ]; then curl -fsS "http://127.0.0.1:${MCP_PORT:-8898}${MCP_HEALTH_PATH:-/healthz}" >/dev/null; else pgrep -f rag-mcp-server >/dev/null; fi'
+
+CMD ["sh", "-c", "exec ./rag-mcp-server --transport ${MCP_TRANSPORT:-http} ${MCP_EXTRA_ARGS:-}"]
