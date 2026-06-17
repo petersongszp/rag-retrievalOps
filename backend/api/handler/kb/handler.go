@@ -1049,7 +1049,6 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
 	searchResult.Metrics.QueryType = queryType
 	searchResult.Metrics.ExperimentID = experimentDecision.ExperimentID
-	searchResult.Metrics.StrategyVersion = searchResult.Metrics.StrategyVersion
 	switch experimentDecision.Group {
 	case experiment.GroupCandidate, experiment.GroupShadow:
 		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.CandidateVersion, searchResult.Metrics.StrategyVersion)

@@ -49,8 +49,8 @@ services:
     profiles: ["parser"]
     image: ${DOCLING_SERVE_IMAGE:-quay.io/docling-project/docling-serve-cpu:latest}
     restart: unless-stopped
-    ports:
-      - "${DOCLING_SERVE_PORT:-5001}:5001"
+    # ports:
+    #   - "${DOCLING_SERVE_PORT:-5001}:5001"  # 容器内部网络访问即可，无需暴露到宿主机
     environment:
       DOCLING_SERVE_ENABLE_UI: ${DOCLING_SERVE_ENABLE_UI:-1}
     networks:
@@ -62,8 +62,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.parser-provider
     restart: unless-stopped
-    ports:
-      - "${PARSER_PROVIDER_PORT:-9000}:9000"
+    # ports:
+    #   - "${PARSER_PROVIDER_PORT:-9000}:9000"  # 容器内部网络访问即可，无需暴露到宿主机
     environment:
       PARSER_PROVIDER_HOST: 0.0.0.0
       PARSER_PROVIDER_PORT: 9000
