@@ -71,7 +71,7 @@ func probeEmbeddingDimension(ctx context.Context, embeddingService *storage.Embe
 		return 0, fmt.Errorf("embedding service is nil")
 	}
 
-	vectors, err := embeddingService.EmbedBatch(ctx, []string{"dimension probe"})
+	vectors, err := embeddingService.GetEmbedder().EmbedStrings(ctx, []string{"dimension probe"})
 	if err != nil {
 		return 0, fmt.Errorf("failed to probe embedding dimension: %w", err)
 	}

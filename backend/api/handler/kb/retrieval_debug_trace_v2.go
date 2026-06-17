@@ -14,31 +14,33 @@ import (
 const standardRefusalTemplateVersion = "phase3-standard-refusal-v1"
 
 type retrievalDebugTraceResponse struct {
-	RequestID         string                              `json:"request_id"`
-	DebugAvailable    bool                                `json:"debug_available"`
-	FusionStrategy    string                              `json:"fusion_strategy,omitempty"`
-	RRFK              int                                 `json:"rrf_k,omitempty"`
-	KBIDs             []uint64                            `json:"kb_ids,omitempty"`
-	OriginalQuery     string                              `json:"original_query,omitempty"`
-	RewrittenQuery    string                              `json:"rewritten_query,omitempty"`
-	RewriteStrategy   string                              `json:"rewrite_strategy,omitempty"`
-	RewriteGainBucket string                              `json:"rewrite_gain_bucket,omitempty"`
-	TermHits          []string                            `json:"term_hits,omitempty"`
-	RouteFinalQueries map[string]string                   `json:"route_final_queries,omitempty"`
-	RouteHits         []retrievalDebugRouteHitResponse    `json:"route_hits,omitempty"`
-	FusionResults     retrievalDebugFusionResponse        `json:"fusion_results,omitempty"`
-	DedupeResults     retrievalDebugDedupeResponse        `json:"dedupe_results,omitempty"`
-	RerankResults     retrievalDebugRerankResponse        `json:"rerank_results,omitempty"`
-	FilterResults     retrievalDebugFilterResponse        `json:"filter_results,omitempty"`
-	ParentChild       retrievalDebugParentChildResponse   `json:"parent_child"`
-	TopKDecision      retrievalDebugTopKDecisionResponse  `json:"topk_decision"`
-	EvidenceGate      retrievalDebugEvidenceGateResponse  `json:"evidence_gate"`
-	CitationCheck     retrievalDebugCitationCheckResponse `json:"citation_check"`
-	FinalResults      []retrieveItem                      `json:"final_results,omitempty"`
-	StageDurations    map[string]int64                    `json:"stage_durations,omitempty"`
-	Degradation       retrievalDebugDegradationResponse   `json:"degradation"`
-	ContractGaps      []string                            `json:"contract_gaps,omitempty"`
-	CreatedAt         time.Time                           `json:"created_at"`
+	RequestID         string                               `json:"request_id"`
+	DebugAvailable    bool                                 `json:"debug_available"`
+	FusionStrategy    string                               `json:"fusion_strategy,omitempty"`
+	RRFK              int                                  `json:"rrf_k,omitempty"`
+	KBIDs             []uint64                             `json:"kb_ids,omitempty"`
+	OriginalQuery     string                               `json:"original_query,omitempty"`
+	RewrittenQuery    string                               `json:"rewritten_query,omitempty"`
+	RewriteStrategy   string                               `json:"rewrite_strategy,omitempty"`
+	RewriteGainBucket string                               `json:"rewrite_gain_bucket,omitempty"`
+	TermHits          []string                             `json:"term_hits,omitempty"`
+	RouteFinalQueries map[string]string                    `json:"route_final_queries,omitempty"`
+	RouteHits         []retrievalDebugRouteHitResponse     `json:"route_hits,omitempty"`
+	FusionResults     retrievalDebugFusionResponse         `json:"fusion_results,omitempty"`
+	DedupeResults     retrievalDebugDedupeResponse         `json:"dedupe_results,omitempty"`
+	RerankResults     retrievalDebugRerankResponse         `json:"rerank_results,omitempty"`
+	FilterResults     retrievalDebugFilterResponse         `json:"filter_results,omitempty"`
+	ParentChild       retrievalDebugParentChildResponse    `json:"parent_child"`
+	TopKDecision      retrievalDebugTopKDecisionResponse   `json:"topk_decision"`
+	SemanticCache     retrievalDebugSemanticCacheResponse  `json:"semantic_cache"`
+	EmbeddingCache    retrievalDebugEmbeddingCacheResponse `json:"embedding_cache"`
+	EvidenceGate      retrievalDebugEvidenceGateResponse   `json:"evidence_gate"`
+	CitationCheck     retrievalDebugCitationCheckResponse  `json:"citation_check"`
+	FinalResults      []retrieveItem                       `json:"final_results,omitempty"`
+	StageDurations    map[string]int64                     `json:"stage_durations,omitempty"`
+	Degradation       retrievalDebugDegradationResponse    `json:"degradation"`
+	ContractGaps      []string                             `json:"contract_gaps,omitempty"`
+	CreatedAt         time.Time                            `json:"created_at"`
 }
 
 type retrievalDebugRouteHitResponse struct {
@@ -110,6 +112,25 @@ type retrievalDebugTopKDecisionResponse struct {
 	TokenBudget          int     `json:"token_budget"`
 	TokenBudgetRemaining int     `json:"token_budget_remaining"`
 	TopKDecisionReason   string  `json:"topk_decision_reason,omitempty"`
+}
+
+type retrievalDebugSemanticCacheResponse struct {
+	Enabled           bool    `json:"enabled"`
+	Hit               bool    `json:"hit"`
+	Reason            string  `json:"reason,omitempty"`
+	EntryID           string  `json:"entry_id,omitempty"`
+	Similarity        float64 `json:"similarity,omitempty"`
+	Threshold         float64 `json:"threshold,omitempty"`
+	CandidateCount    int     `json:"candidate_count"`
+	HighestSimilarity float64 `json:"highest_similarity,omitempty"`
+	LookupMs          int64   `json:"lookup_ms,omitempty"`
+}
+
+type retrievalDebugEmbeddingCacheResponse struct {
+	Enabled  bool   `json:"enabled"`
+	Hit      bool   `json:"hit"`
+	Reason   string `json:"reason,omitempty"`
+	LookupMs int64  `json:"lookup_ms,omitempty"`
 }
 
 type retrievalDebugEvidenceGateResponse struct {
@@ -200,6 +221,79 @@ func buildRetrievalDebugTraceResponse(
 			TokenBudget:          searchMetrics.TokenBudget,
 			TokenBudgetRemaining: searchMetrics.TokenBudgetRemain,
 			TopKDecisionReason:   firstNonEmptyString(searchMetrics.TopKDecisionReason, logTopKReason(logEntry)),
+		},
+		SemanticCache: retrievalDebugSemanticCacheResponse{
+			Enabled: boolValue(
+				searchMetrics.SemanticCacheEnabled,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.SemanticCacheEnabled
+					}
+					return false
+				}(),
+			),
+			Hit: boolValue(
+				searchMetrics.SemanticCacheHit,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.SemanticCacheHit
+					}
+					return false
+				}(),
+			),
+			Reason: firstNonEmptyString(
+				searchMetrics.SemanticCacheReason,
+				func() string {
+					if logEntry != nil {
+						return strings.TrimSpace(logEntry.SemanticCacheReason)
+					}
+					return ""
+				}(),
+			),
+			EntryID: firstNonEmptyString(
+				searchMetrics.SemanticCacheEntryID,
+				func() string {
+					if logEntry != nil {
+						return strings.TrimSpace(logEntry.SemanticCacheEntryID)
+					}
+					return ""
+				}(),
+			),
+			Similarity:        firstNonEmptyFloat(searchMetrics.SemanticCacheSimilarity, logSemanticCacheSimilarity(logEntry)),
+			Threshold:         firstNonEmptyFloat(searchMetrics.SemanticCacheThreshold, config.Global.RAG.SemanticCache.SimilarityThreshold),
+			CandidateCount:    searchMetrics.SemanticCacheCandidateCount,
+			HighestSimilarity: maxFloat64(searchMetrics.SemanticCacheHighestSimilarity, searchMetrics.SemanticCacheSimilarity),
+			LookupMs:          maxInt64(searchMetrics.SemanticCacheLookupMs, logSemanticCacheLookupMs(logEntry)),
+		},
+		EmbeddingCache: retrievalDebugEmbeddingCacheResponse{
+			Enabled: boolValue(
+				searchMetrics.EmbeddingCacheEnabled,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.EmbeddingCacheEnabled
+					}
+					return false
+				}(),
+			),
+			Hit: boolValue(
+				searchMetrics.EmbeddingCacheHit,
+				func() bool {
+					if logEntry != nil {
+						return logEntry.EmbeddingCacheHit
+					}
+					return false
+				}(),
+			),
+			Reason: firstNonEmptyString(
+				searchMetrics.EmbeddingCacheReason,
+				func() string {
+					if logEntry != nil {
+						return strings.TrimSpace(logEntry.EmbeddingCacheReason)
+					}
+					return ""
+				}(),
+			),
+			LookupMs: maxInt64(searchMetrics.EmbeddingCacheLookupMs, logEmbeddingCacheLookupMs(logEntry)),
 		},
 		EvidenceGate: retrievalDebugEvidenceGateResponse{
 			EvidenceGateResult: searchMetrics.EvidenceGateResult,
@@ -449,6 +543,34 @@ func logRefusalReason(logEntry *model.KBRetrieveLog) string {
 		return ""
 	}
 	return logEntry.RefusalReason
+}
+
+func logSemanticCacheSimilarity(logEntry *model.KBRetrieveLog) float64 {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.SemanticCacheSimilarity
+}
+
+func logSemanticCacheLookupMs(logEntry *model.KBRetrieveLog) int64 {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.SemanticCacheLookupMs
+}
+
+func logEmbeddingCacheLookupMs(logEntry *model.KBRetrieveLog) int64 {
+	if logEntry == nil {
+		return 0
+	}
+	return logEntry.EmbeddingCacheLookupMs
+}
+
+func boolValue(primary bool, fallback bool) bool {
+	if primary {
+		return true
+	}
+	return fallback
 }
 
 func logParentFillStrategy(logEntry *model.KBRetrieveLog) string {

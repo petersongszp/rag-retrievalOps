@@ -224,6 +224,145 @@ func TestValidateRAGPrerequisites_CitationConsistencyMissingVersion(t *testing.T
 	}
 }
 
+func TestValidateRAGPrerequisites_SemanticCacheDisabledAllowsZeroValueConfig(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Redis.Addr = ""
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{}
+	if err := cfg.ValidateRAGPrerequisites(); err != nil {
+		t.Fatalf("expected semantic cache zero values to be ignored when feature is disabled, got: %v", err)
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheMissingRedis(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = ""
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when semantic cache is enabled and redis addr is empty")
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheThresholdInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = "localhost:6379"
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{
+		SimilarityThreshold: 1.2,
+		TTLSeconds:          900,
+		MaxCandidates:       20,
+		MaxEntriesPerScope:  200,
+	}
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when semantic cache similarity threshold is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheTTLInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = "localhost:6379"
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{
+		SimilarityThreshold: 0.92,
+		TTLSeconds:          0,
+		MaxCandidates:       20,
+		MaxEntriesPerScope:  200,
+	}
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when semantic cache ttl is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheMaxCandidatesInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = "localhost:6379"
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{
+		SimilarityThreshold: 0.92,
+		TTLSeconds:          900,
+		MaxCandidates:       0,
+		MaxEntriesPerScope:  200,
+	}
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when semantic cache max_candidates is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheMaxEntriesPerScopeInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = "localhost:6379"
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{
+		SimilarityThreshold: 0.92,
+		TTLSeconds:          900,
+		MaxCandidates:       20,
+		MaxEntriesPerScope:  0,
+	}
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when semantic cache max_entries_per_scope is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_SemanticCacheValid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.RAG.FeatureFlags.EnableSemanticCache = true
+	cfg.Redis.Addr = "localhost:6379"
+	cfg.RAG.SemanticCache = RAGSemanticCacheConfig{
+		SimilarityThreshold: 0.92,
+		TTLSeconds:          900,
+		MaxCandidates:       20,
+		MaxEntriesPerScope:  200,
+	}
+	if err := cfg.ValidateRAGPrerequisites(); err != nil {
+		t.Fatalf("expected valid semantic cache config, got: %v", err)
+	}
+}
+
+func TestValidateRAGPrerequisites_EmbeddingCacheDisabledAllowsZeroValueConfig(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = false
+	cfg.Embedding.CacheTTLSeconds = 0
+	cfg.Embedding.CacheMaxEntries = 0
+	if err := cfg.ValidateRAGPrerequisites(); err != nil {
+		t.Fatalf("expected embedding cache zero values to be ignored when feature is disabled, got: %v", err)
+	}
+}
+
+func TestValidateRAGPrerequisites_EmbeddingCacheTTLInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = -1
+	cfg.Embedding.CacheMaxEntries = 1000
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when embedding cache ttl is invalid")
+	}
+}
+
+func TestValidateRAGPrerequisites_EmbeddingCacheMaxEntriesInvalid(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = 1800
+	cfg.Embedding.CacheMaxEntries = -1
+	if err := cfg.ValidateRAGPrerequisites(); err == nil {
+		t.Fatal("expected error when embedding cache max entries is invalid")
+	}
+}
+
+func TestApplyRAGDefaults_EmbeddingCacheDefaultsWhenEnabled(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	cfg.Embedding.EnableCache = true
+	cfg.Embedding.CacheTTLSeconds = 0
+	cfg.Embedding.CacheMaxEntries = 0
+
+	cfg.applyRAGDefaults()
+
+	if cfg.Embedding.CacheTTLSeconds != 1800 {
+		t.Fatalf("expected embedding cache ttl default to 1800, got %d", cfg.Embedding.CacheTTLSeconds)
+	}
+	if cfg.Embedding.CacheMaxEntries != 2000 {
+		t.Fatalf("expected embedding cache max entries default to 2000, got %d", cfg.Embedding.CacheMaxEntries)
+	}
+}
+
 func TestLoadConfig_EnvOverlayAndOverride(t *testing.T) {
 	tempDir := t.TempDir()
 	basePath := filepath.Join(tempDir, "config.yaml")
@@ -237,11 +376,17 @@ rag:
     enable_prod_guard: false
     enable_ingest_retry: false
     enable_retrieve_audit: true
+    enable_semantic_cache: false
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
     retrieve_timeout_ms: 3000
     user_qps_limit: 20
+  semantic_cache:
+    similarity_threshold: 0.92
+    ttl_seconds: 900
+    max_candidates: 20
+    max_entries_per_scope: 200
 Milvus:
   Address: localhost:19530
   CollectionName: documents
@@ -276,6 +421,11 @@ rag:
 	t.Setenv("RAG_ENABLE_PARENT_CHILD_RETRIEVAL", "true")
 	t.Setenv("RAG_PARENT_CHILD_FILL_STRATEGY", "section_window")
 	t.Setenv("RAG_STRATEGIC_TOPK_BUDGET_RATIO", "0.75")
+	t.Setenv("RAG_ENABLE_SEMANTIC_CACHE", "true")
+	t.Setenv("RAG_SEMANTIC_CACHE_SIMILARITY_THRESHOLD", "0.95")
+	t.Setenv("RAG_SEMANTIC_CACHE_TTL_SECONDS", "1200")
+	t.Setenv("RAG_SEMANTIC_CACHE_MAX_CANDIDATES", "16")
+	t.Setenv("RAG_SEMANTIC_CACHE_MAX_ENTRIES_PER_SCOPE", "80")
 
 	cfg, err := LoadConfig(basePath)
 	if err != nil {
@@ -305,6 +455,15 @@ rag:
 	}
 	if cfg.RAG.Phase3.StrategicTopKBudgetRatio != 0.75 {
 		t.Fatalf("expected strategic topk budget ratio override to apply, got %.2f", cfg.RAG.Phase3.StrategicTopKBudgetRatio)
+	}
+	if !cfg.RAG.FeatureFlags.EnableSemanticCache {
+		t.Fatalf("expected semantic cache flag to be enabled from env override")
+	}
+	if cfg.RAG.SemanticCache.SimilarityThreshold != 0.95 ||
+		cfg.RAG.SemanticCache.TTLSeconds != 1200 ||
+		cfg.RAG.SemanticCache.MaxCandidates != 16 ||
+		cfg.RAG.SemanticCache.MaxEntriesPerScope != 80 {
+		t.Fatalf("expected semantic cache env overrides to apply, got %+v", cfg.RAG.SemanticCache)
 	}
 
 	snapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase1", "baseline_snapshot.json")
@@ -416,6 +575,46 @@ Embedding:
 
 	if cfg.Embedding.ArkAPIType != "" {
 		t.Fatalf("expected generic EMBEDDING_API_TYPE to be ignored, got %q", cfg.Embedding.ArkAPIType)
+	}
+}
+
+func TestLoadConfig_EmbeddingCacheEnvOverrides(t *testing.T) {
+	tempDir := t.TempDir()
+	configPath := filepath.Join(tempDir, "config.yaml")
+	baseConfig := `
+rag:
+  enabled: false
+  environment: dev
+Embedding:
+  APIKey: "test-key"
+  Model: "bge-m3"
+  BaseURL: "https://example.com/v1"
+  Dimensions: 1024
+  EnableCache: false
+  CacheTTLSeconds: 300
+  CacheMaxEntries: 50
+`
+	if err := os.WriteFile(configPath, []byte(baseConfig), 0644); err != nil {
+		t.Fatalf("failed to write config: %v", err)
+	}
+
+	t.Setenv("EMBEDDING_ENABLE_CACHE", "true")
+	t.Setenv("EMBEDDING_CACHE_TTL_SECONDS", "2400")
+	t.Setenv("EMBEDDING_CACHE_MAX_ENTRIES", "1500")
+
+	cfg, err := LoadConfig(configPath)
+	if err != nil {
+		t.Fatalf("LoadConfig failed: %v", err)
+	}
+
+	if !cfg.Embedding.EnableCache {
+		t.Fatalf("expected embedding cache flag to be enabled from env override")
+	}
+	if cfg.Embedding.CacheTTLSeconds != 2400 {
+		t.Fatalf("expected embedding cache ttl override to apply, got %d", cfg.Embedding.CacheTTLSeconds)
+	}
+	if cfg.Embedding.CacheMaxEntries != 1500 {
+		t.Fatalf("expected embedding cache max entries override to apply, got %d", cfg.Embedding.CacheMaxEntries)
 	}
 }
 
@@ -550,5 +749,22 @@ Embedding:
 		!cfg.RAG.FeatureFlags.EnableMilvusOpsTooling ||
 		!cfg.RAG.FeatureFlags.EnableExperimentPlatform {
 		t.Fatalf("expected canonical flags to normalize legacy aliases, got %+v", cfg.RAG.FeatureFlags)
+	}
+}
+
+func TestSemanticCacheContract(t *testing.T) {
+	cfg := baseValidRAGConfig()
+	contract := cfg.SemanticCacheContract()
+	if contract.ResultPayload != "retrieve_result_only" {
+		t.Fatalf("expected retrieve result payload contract, got %q", contract.ResultPayload)
+	}
+	if contract.TopKPolicy != "exact_topk_only" {
+		t.Fatalf("expected exact topk policy, got %q", contract.TopKPolicy)
+	}
+	if len(contract.ScopeDimensions) != 4 {
+		t.Fatalf("expected 4 scope dimensions, got %d", len(contract.ScopeDimensions))
+	}
+	if len(contract.BypassReasons) != 4 {
+		t.Fatalf("expected 4 bypass reasons, got %d", len(contract.BypassReasons))
 	}
 }

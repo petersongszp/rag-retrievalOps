@@ -13,6 +13,9 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG API_PROXY_TARGET
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8899/api}
 ENV API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:8899/api}
+RUN apk add --no-cache libc6-compat && \
+    npm cache clean --force && \
+    npm install --no-save @next/swc-linux-x64-musl
 RUN npm run build
 
 FROM node:18-alpine AS runner

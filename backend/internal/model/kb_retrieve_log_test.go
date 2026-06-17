@@ -101,49 +101,59 @@ func TestKBRetrieveLogTableName(t *testing.T) {
 
 func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	log := KBRetrieveLog{
-		RequestID:              "test-req-001",
-		ExperimentID:           "exp-001",
-		ExperimentGroup:        "candidate",
-		StrategyVersion:        "p3-baseline-v1",
-		IndexVersion:           "idx-v1",
-		CollectionVersion:      "col-v1",
-		CostTraceID:            "cost-001",
-		AuditTraceID:           "audit-001",
-		ReleaseID:              "release-001",
-		UserID:                 1,
-		KBIDs:                  "1,2,3",
-		Query:                  "Go语言特点",
-		Expr:                   `metadata["user_id"] == 1`,
-		TopK:                   5,
-		ContextTokens:          256,
-		QueryType:              "entity",
-		Rewrite:                "",
-		Routes:                 "dense",
-		Collection:             "knowledge",
-		RetrieverVersion:       "v1",
-		EvidenceGateResult:     "pass",
-		CitationSupported:      true,
-		CitationSupportScore:   1,
-		UnsupportedClaimCount:  0,
-		CitationCheckVersion:   "phase3-citation-v1",
-		CitationCheckLatencyMs: 12,
-		FinalCount:             3,
-		TruncatedCount:         0,
-		ResultStatus:           RetrieveResultStatusSuccess,
-		ErrorCode:              "",
-		ErrorMsg:               "",
-		EmbeddingMs:            50,
-		SearchMs:               120,
-		PostprocessMs:          10,
-		DurationMs:             180,
-		TimeoutMs:              3000,
-		TenantID:               7,
-		AppID:                  "support-bot",
-		APIKeyID:               9,
-		AuthType:               "api_key",
-		SourceAPI:              "v1",
-		PermissionResult:       "allowed",
-		IsLegacy:               false,
+		RequestID:               "test-req-001",
+		ExperimentID:            "exp-001",
+		ExperimentGroup:         "candidate",
+		StrategyVersion:         "p3-baseline-v1",
+		IndexVersion:            "idx-v1",
+		CollectionVersion:       "col-v1",
+		CostTraceID:             "cost-001",
+		AuditTraceID:            "audit-001",
+		ReleaseID:               "release-001",
+		UserID:                  1,
+		KBIDs:                   "1,2,3",
+		Query:                   "Go语言特点",
+		Expr:                    `metadata["user_id"] == 1`,
+		TopK:                    5,
+		ContextTokens:           256,
+		QueryType:               "entity",
+		Rewrite:                 "",
+		Routes:                  "dense",
+		Collection:              "knowledge",
+		RetrieverVersion:        "v1",
+		EvidenceGateResult:      "pass",
+		CitationSupported:       true,
+		CitationSupportScore:    1,
+		UnsupportedClaimCount:   0,
+		CitationCheckVersion:    "phase3-citation-v1",
+		CitationCheckLatencyMs:  12,
+		SemanticCacheEnabled:    true,
+		SemanticCacheHit:        true,
+		SemanticCacheLookupMs:   9,
+		SemanticCacheSimilarity: 0.97,
+		SemanticCacheEntryID:    "entry-1",
+		SemanticCacheReason:     "hit",
+		EmbeddingCacheEnabled:   true,
+		EmbeddingCacheHit:       true,
+		EmbeddingCacheLookupMs:  2,
+		EmbeddingCacheReason:    "hit",
+		FinalCount:              3,
+		TruncatedCount:          0,
+		ResultStatus:            RetrieveResultStatusSuccess,
+		ErrorCode:               "",
+		ErrorMsg:                "",
+		EmbeddingMs:             50,
+		SearchMs:                120,
+		PostprocessMs:           10,
+		DurationMs:              180,
+		TimeoutMs:               3000,
+		TenantID:                7,
+		AppID:                   "support-bot",
+		APIKeyID:                9,
+		AuthType:                "api_key",
+		SourceAPI:               "v1",
+		PermissionResult:        "allowed",
+		IsLegacy:                false,
 	}
 
 	if log.RequestID != "test-req-001" {
@@ -169,6 +179,18 @@ func TestKBRetrieveLogFieldCompleteness(t *testing.T) {
 	}
 	if log.CitationCheckLatencyMs != 12 {
 		t.Errorf("CitationCheckLatencyMs = %d, want 12", log.CitationCheckLatencyMs)
+	}
+	if !log.SemanticCacheEnabled || !log.SemanticCacheHit {
+		t.Errorf("unexpected semantic cache flags: enabled=%v hit=%v", log.SemanticCacheEnabled, log.SemanticCacheHit)
+	}
+	if log.SemanticCacheLookupMs != 9 || log.SemanticCacheEntryID != "entry-1" {
+		t.Errorf("unexpected semantic cache trace fields: %+v", log)
+	}
+	if !log.EmbeddingCacheEnabled || !log.EmbeddingCacheHit {
+		t.Errorf("unexpected embedding cache flags: enabled=%v hit=%v", log.EmbeddingCacheEnabled, log.EmbeddingCacheHit)
+	}
+	if log.EmbeddingCacheLookupMs != 2 || log.EmbeddingCacheReason != "hit" {
+		t.Errorf("unexpected embedding cache trace fields: %+v", log)
 	}
 	if log.EmbeddingMs != 50 {
 		t.Errorf("EmbeddingMs = %d, want 50", log.EmbeddingMs)

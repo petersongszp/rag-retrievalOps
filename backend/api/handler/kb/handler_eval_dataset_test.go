@@ -17,9 +17,12 @@ import (
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/ut"
 	"github.com/cloudwego/hertz/pkg/protocol"
-	"github.com/glebarez/sqlite"
+	mysqldriver "github.com/go-sql-driver/mysql"
+	gormmysql "gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
+
+const defaultEvalTestMySQLAdminDSN = "root:root@tcp(127.0.0.1:3307)/mysql?charset=utf8mb4&parseTime=True&loc=Local"
 
 func TestEvalDatasetL1Flow(t *testing.T) {
 	db := setupEvalDatasetTestDB(t)
@@ -162,10 +165,23 @@ func TestEvalDatasetL1Flow(t *testing.T) {
 func setupEvalDatasetTestDB(t *testing.T) *gorm.DB {
 	t.Helper()
 
-	dsn := fmt.Sprintf("file:%s?mode=memory&cache=shared", t.Name())
-	db, err := gorm.Open(sqlite.Open(dsn), &gorm.Config{})
+	adminDSN := resolveEvalTestMySQLAdminDSN()
+	adminDB, err := openMySQLWithRetry(adminDSN)
 	if err != nil {
-		t.Fatalf("failed to open sqlite test database: %v", err)
+		t.Skipf("skipping eval mysql integration tests: failed to open mysql admin db: %v", err)
+	}
+
+	testDBName := fmt.Sprintf("interview_agent_eval_l1_test_%d", time.Now().UnixNano())
+	if err := adminDB.Exec("CREATE DATABASE IF NOT EXISTS " + testDBName + " CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci").Error; err != nil {
+		t.Fatalf("failed to create test database: %v", err)
+	}
+	t.Cleanup(func() {
+		_ = adminDB.Exec("DROP DATABASE IF EXISTS " + testDBName).Error
+	})
+
+	db, err := openMySQLWithRetry(buildEvalTestDatabaseDSN(adminDSN, testDBName))
+	if err != nil {
+		t.Fatalf("failed to open test database: %v", err)
 	}
 	if err := db.AutoMigrate(&model.KBKnowledgeBase{}, &model.KBEvalDataset{}, &model.KBEvalCase{}, &model.KBEvalRun{}, &model.KBRetrieveLog{}); err != nil {
 		t.Fatalf("failed to migrate test database: %v", err)
@@ -222,4 +238,45 @@ func decodeJSONResponse(t *testing.T, body []byte, target interface{}) {
 
 func toString(value uint64) string {
 	return fmt.Sprintf("%d", value)
+}
+
+func openMySQLWithRetry(dsn string) (*gorm.DB, error) {
+	var lastErr error
+	for attempt := 0; attempt < 5; attempt++ {
+		db, err := gorm.Open(gormmysql.Open(dsn), &gorm.Config{})
+		if err == nil {
+			sqlDB, sqlErr := db.DB()
+			if sqlErr == nil {
+				if pingErr := sqlDB.Ping(); pingErr == nil {
+					return db, nil
+				} else {
+					lastErr = pingErr
+				}
+			} else {
+				lastErr = sqlErr
+			}
+		} else {
+			lastErr = err
+		}
+		time.Sleep(500 * time.Millisecond)
+	}
+	return nil, lastErr
+}
+
+func resolveEvalTestMySQLAdminDSN() string {
+	for _, key := range []string{"KB_EVAL_TEST_MYSQL_ADMIN_DSN", "KB_TEST_MYSQL_ADMIN_DSN"} {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+	}
+	return defaultEvalTestMySQLAdminDSN
+}
+
+func buildEvalTestDatabaseDSN(adminDSN string, databaseName string) string {
+	cfg, err := mysqldriver.ParseDSN(adminDSN)
+	if err != nil {
+		return adminDSN
+	}
+	cfg.DBName = databaseName
+	return cfg.FormatDSN()
 }

@@ -76,6 +76,12 @@ rag:
     enable_audit_center: false
     enable_vector_ops: false
     enable_governance_alerts: false
+    enable_semantic_cache: true
+  semantic_cache:
+    similarity_threshold: 0.92
+    ttl_seconds: 900
+    max_candidates: 20
+    max_entries_per_scope: 200
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
@@ -132,6 +138,9 @@ Embedding:
   Dimensions: 2048
   BatchSize: 10
   User: ""
+  EnableCache: true
+  CacheTTLSeconds: 1800
+  CacheMaxEntries: 2000
 
 Milvus:
   Address: "${MILVUS_ADDRESS}"

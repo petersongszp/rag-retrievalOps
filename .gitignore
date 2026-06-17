@@ -15,6 +15,16 @@ doc/营销/
 backend/studyDocs/
 # 忽略 TRAE 生成的文档
 .trae
+# 忽略 autoclaw 相关文件
+.autoclaw-attachments/
+.openclaw/
+.vscode/
+SOUL.md
+USER.md
+TOOLS.md
+IDENTITY.md
+HEARTBEAT.md
+AGENTS.md
 # 忽略 phase1 记录文档
 admin/docs/phase1-记录/
 # 忽略 phase2 记录文档
@@ -28,6 +38,30 @@ backend/runtime/eval-reports/*.json
 .gocache/
 backend/.tmp/
 gaoerDocs/
+
+# 生成的二进制文档文件
+*.pdf
+
+go.work
+go.work.sum
+
+# 临时文件
+temp_doc.txt
+temp*.txt
+
+# 编译的可执行文件
+*.exe
+
+# 后端运行时目录
+backend/runtime/
+
+# 本地工具和测试脚本
+tools/
+
+# 本地调试产物
+check_fix.py
+test_embedding_cache.py
+debug*.json
 
 test-repo/
 .worktrees/

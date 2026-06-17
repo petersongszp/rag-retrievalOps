@@ -9,95 +9,110 @@ import (
 	"github.com/cloudwego/eino/schema"
 	milvusClient "github.com/milvus-io/milvus-sdk-go/v2/client"
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
+
+	"interview-agents/internal/milvus/storage"
 )
 
 const DenseRetrieverVersion = "phase1-dense-v1"
 
 // SearchMetrics carries retrieve-stage observability fields used across L4-L8.
 type SearchMetrics struct {
-	ExperimentID           string
-	StrategyVersion        string
-	FusionStrategy         string
-	RRFK                   int
-	IndexVersion           string
-	CollectionVersion      string
-	CostTraceID            string
-	AuditTraceID           string
-	ReleaseID              string
-	EmbeddingMs            int64
-	SearchMs               int64
-	PostprocessMs          int64
-	HitCount               int
-	TruncatedCount         int
-	CandidateTopK          int
-	FinalTopK              int
-	TokenBudget            int
-	TruncateReason         string
-	Strategy               string
-	ReleaseStage           string
-	ReleaseReason          string
-	RetrieverVersion       string
-	RewriteStrategy        string
-	RewriteApplied         bool
-	EmptyReason            string
-	RerankMs               int64
-	RerankModel            string
-	RerankVersion          string
-	RerankFallback         bool
-	RerankReason           string
-	DenseHits              int
-	SparseHits             int
-	DenseParticipation     int
-	SparseParticipation    int
-	PrimaryDenseCount      int
-	PrimarySparseCount     int
-	DualRouteFinalCount    int
-	DenseContribution      int
-	SparseContribution     int
-	SparseTerms            []string
-	SparseFallbackReason   string
-	TermSources            map[string]string
-	DroppedTerms           map[string]string
-	SparseCandidateBefore  int
-	SparseCandidateAfter   int
-	TopKPolicyVersion      string
-	ScoreDistribution      string
-	RerankGap              float64
-	EvidenceDensity        float64
-	TopKDecisionReason     string
-	TokenBudgetRemain      int
-	ContextTokens          int
-	OriginalQuery          string
-	RewriteQuery           string
-	FinalQuery             string
-	QueryType              string
-	DenseQuery             string
-	SparseQuery            string
-	RouteRewriteDense      string
-	RouteRewriteSparse     string
-	TermDictScope          string
-	TermDictVersion        string
-	TermHits               []string
-	ModelRewriteApplied    bool
-	ModelRewriteShadow     bool
-	ModelRewriteRiskLevel  string
-	ModelRewriteTerms      []string
-	ParentChildEnabled     bool
-	ParentFillStrategy     string
-	ParentFillCount        int
-	ParentFillFallback     int
-	ParentFillTokens       int
-	EvidenceGateResult     string
-	RefusalReason          string
-	CitationSupportScore   float64
-	CitationSupported      bool
-	UnsupportedClaims      []string
-	UnsupportedClaimCount  int
-	CitationCheckVersion   string
-	CitationCheckLatencyMs int64
-	EvidenceGateError      string
-	CitationCheckError     string
-	ExperimentGroup        string
+	ExperimentID                   string
+	StrategyVersion                string
+	FusionStrategy                 string
+	RRFK                           int
+	IndexVersion                   string
+	CollectionVersion              string
+	CostTraceID                    string
+	AuditTraceID                   string
+	ReleaseID                      string
+	EmbeddingMs                    int64
+	SearchMs                       int64
+	PostprocessMs                  int64
+	HitCount                       int
+	TruncatedCount                 int
+	CandidateTopK                  int
+	FinalTopK                      int
+	TokenBudget                    int
+	TruncateReason                 string
+	Strategy                       string
+	ReleaseStage                   string
+	ReleaseReason                  string
+	RetrieverVersion               string
+	RewriteStrategy                string
+	RewriteApplied                 bool
+	EmptyReason                    string
+	RerankMs                       int64
+	RerankModel                    string
+	RerankVersion                  string
+	RerankFallback                 bool
+	RerankReason                   string
+	DenseHits                      int
+	SparseHits                     int
+	DenseParticipation             int
+	SparseParticipation            int
+	PrimaryDenseCount              int
+	PrimarySparseCount             int
+	DualRouteFinalCount            int
+	DenseContribution              int
+	SparseContribution             int
+	SparseTerms                    []string
+	SparseFallbackReason           string
+	TermSources                    map[string]string
+	DroppedTerms                   map[string]string
+	SparseCandidateBefore          int
+	SparseCandidateAfter           int
+	TopKPolicyVersion              string
+	ScoreDistribution              string
+	RerankGap                      float64
+	EvidenceDensity                float64
+	TopKDecisionReason             string
+	TokenBudgetRemain              int
+	ContextTokens                  int
+	OriginalQuery                  string
+	RewriteQuery                   string
+	FinalQuery                     string
+	QueryType                      string
+	DenseQuery                     string
+	SparseQuery                    string
+	RouteRewriteDense              string
+	RouteRewriteSparse             string
+	TermDictScope                  string
+	TermDictVersion                string
+	TermHits                       []string
+	ModelRewriteApplied            bool
+	ModelRewriteShadow             bool
+	ModelRewriteRiskLevel          string
+	ModelRewriteTerms              []string
+	ParentChildEnabled             bool
+	ParentFillStrategy             string
+	ParentFillCount                int
+	ParentFillFallback             int
+	ParentFillTokens               int
+	EvidenceGateResult             string
+	RefusalReason                  string
+	CitationSupportScore           float64
+	CitationSupported              bool
+	UnsupportedClaims              []string
+	UnsupportedClaimCount          int
+	CitationCheckVersion           string
+	CitationCheckLatencyMs         int64
+	EvidenceGateError              string
+	CitationCheckError             string
+	ExperimentGroup                string
+	SemanticCacheEnabled           bool
+	SemanticCacheHit               bool
+	SemanticCacheLookupMs          int64
+	SemanticCacheSimilarity        float64
+	SemanticCacheEntryID           string
+	SemanticCacheReason            string
+	SemanticCacheCandidateCount    int
+	SemanticCacheThreshold         float64
+	SemanticCacheHighestSimilarity float64
+	EmbeddingCacheEnabled          bool
+	EmbeddingCacheHit              bool
+	EmbeddingCacheLookupMs         int64
+	EmbeddingCacheReason           string
 }
 
 // SearchResult bundles documents with observable metrics.
@@ -135,14 +150,32 @@ func SearchWithExprAndMetrics(
 		return nil, fmt.Errorf("embedding is nil")
 	}
 
+	traceCtx := storage.WithEmbeddingCacheTrace(ctx)
 	embedStart := time.Now()
-	vectors, err := embedder.EmbedStrings(ctx, []string{query})
+	vectors, err := embedder.EmbedStrings(traceCtx, []string{query})
 	embeddingMs := time.Since(embedStart).Milliseconds()
+	embeddingCacheTrace := storage.ConsumeEmbeddingCacheTrace(traceCtx)
 	if err != nil {
-		return nil, fmt.Errorf("failed to embed query: %w", err)
+		return &SearchResult{
+			Metrics: SearchMetrics{
+				EmbeddingMs:            embeddingMs,
+				EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+				EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+				EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+				EmbeddingCacheReason:   embeddingCacheTrace.Reason,
+			},
+		}, fmt.Errorf("failed to embed query: %w", err)
 	}
 	if len(vectors) == 0 {
-		return nil, fmt.Errorf("empty embedding result")
+		return &SearchResult{
+			Metrics: SearchMetrics{
+				EmbeddingMs:            embeddingMs,
+				EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+				EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+				EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+				EmbeddingCacheReason:   firstNonEmptyString(embeddingCacheTrace.Reason, "embed_empty"),
+			},
+		}, fmt.Errorf("empty embedding result")
 	}
 
 	queryVector := make([]float32, len(vectors[0]))
@@ -248,19 +281,23 @@ func SearchWithExprAndMetrics(
 	return &SearchResult{
 		Documents: documents,
 		Metrics: SearchMetrics{
-			EmbeddingMs:        embeddingMs,
-			SearchMs:           searchMs,
-			PostprocessMs:      postprocessMs,
-			HitCount:           rawHitCount,
-			TruncatedCount:     rawHitCount - len(documents),
-			CandidateTopK:      topK,
-			FinalTopK:          len(documents),
-			Strategy:           "phase1",
-			RetrieverVersion:   DenseRetrieverVersion,
-			DenseHits:          len(documents),
-			DenseParticipation: len(documents),
-			PrimaryDenseCount:  len(documents),
-			DenseContribution:  len(documents),
+			EmbeddingMs:            embeddingMs,
+			SearchMs:               searchMs,
+			PostprocessMs:          postprocessMs,
+			HitCount:               rawHitCount,
+			TruncatedCount:         rawHitCount - len(documents),
+			CandidateTopK:          topK,
+			FinalTopK:              len(documents),
+			Strategy:               "phase1",
+			RetrieverVersion:       DenseRetrieverVersion,
+			DenseHits:              len(documents),
+			DenseParticipation:     len(documents),
+			PrimaryDenseCount:      len(documents),
+			DenseContribution:      len(documents),
+			EmbeddingCacheEnabled:  embeddingCacheTrace.Enabled,
+			EmbeddingCacheHit:      embeddingCacheTrace.Hit,
+			EmbeddingCacheLookupMs: embeddingCacheTrace.LookupMs,
+			EmbeddingCacheReason:   embeddingCacheTrace.Reason,
 		},
 	}, nil
 }
