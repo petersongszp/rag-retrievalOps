@@ -115,6 +115,39 @@ func TestApplyTokenBudgetGuard_TracksRemainingBudget(t *testing.T) {
 	}
 }
 
+func TestApplyScoreCliffGuard_ShortPreciseQueryKeepsOnlyStrongMatch(t *testing.T) {
+	docs := []*schema.Document{
+		makeStrategicDocWithContent("doc-1", "p-1", 0.70, "### 1.3 消息收发TPS计算规则\n\n针对高级特性消息，事务消息的调用次数需要在普通消息基础上乘以5倍倍率。"),
+		makeStrategicDocWithContent("doc-2", "p-1", 0.38, "### 1.2 超过规格限制后行为\n\n超过弹性能力上限后，实例还是会被限流。"),
+		makeStrategicDocWithContent("doc-3", "p-2", 0.37, "购买实例时，选择指定的计算规格即可创建实例，此时无需支付费用。"),
+	}
+	for _, doc := range docs {
+		doc.MetaData["rerank_score"] = 0.0
+	}
+	decision := TopKDecision{
+		FinalTopK:      3,
+		DecisionReason: "short_precise_query",
+	}
+
+	filtered, out := ApplyScoreCliffGuard("高级特性消息", docs, decision)
+
+	if len(filtered) != 1 {
+		t.Fatalf("expected score cliff guard to keep only the strong title/content match, got %d", len(filtered))
+	}
+	if filtered[0].ID != "doc-1" {
+		t.Fatalf("expected doc-1 to be retained, got %s", filtered[0].ID)
+	}
+	if out.FinalTopK != 1 {
+		t.Fatalf("expected final topk to shrink to 1, got %d", out.FinalTopK)
+	}
+	if out.TruncateReason != TruncateReasonScoreCliff {
+		t.Fatalf("expected score cliff truncate reason, got %q", out.TruncateReason)
+	}
+	if !strings.Contains(out.DecisionReason, "score_cliff") {
+		t.Fatalf("expected decision reason to include score_cliff, got %q", out.DecisionReason)
+	}
+}
+
 func makeStrategicDoc(id string, parentID string, score float64, contentLen int) *schema.Document {
 	return &schema.Document{
 		ID:      id,
@@ -126,4 +159,10 @@ func makeStrategicDoc(id string, parentID string, score float64, contentLen int)
 			"score":        score,
 		},
 	}
+}
+
+func makeStrategicDocWithContent(id string, parentID string, score float64, content string) *schema.Document {
+	doc := makeStrategicDoc(id, parentID, score, len(content))
+	doc.Content = content
+	return doc
 }

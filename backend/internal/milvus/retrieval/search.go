@@ -275,6 +275,7 @@ func SearchWithExprAndMetrics(
 			documents = append(documents, doc)
 		}
 	}
+	documents = applyTitleMatchBoost(query, documents)
 	postprocessMs := time.Since(postprocessStart).Milliseconds()
 
 	return &SearchResult{

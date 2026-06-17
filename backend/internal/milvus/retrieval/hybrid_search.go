@@ -64,20 +64,20 @@ type HybridRetriever struct {
 }
 
 type HybridRetrieverConfig struct {
-	CandidateTopK int
-	FusionStrategy string
-	RRFK          int
-	RRFDenseWeight float64
+	CandidateTopK   int
+	FusionStrategy  string
+	RRFK            int
+	RRFDenseWeight  float64
 	RRFSparseWeight float64
-	DenseWeight   float64
-	SparseWeight  float64
-	SparseConfig  *SparseRetrieverConfig
-	RerankerImpl  Reranker
-	QueryRewriter QueryRewriter
-	DynamicTopK   DynamicTopKConfig
-	ParentChild   ParentChildConfig
-	EvidenceGate  EvidenceGateConfig
-	CitationCheck CitationConsistencyConfig
+	DenseWeight     float64
+	SparseWeight    float64
+	SparseConfig    *SparseRetrieverConfig
+	RerankerImpl    Reranker
+	QueryRewriter   QueryRewriter
+	DynamicTopK     DynamicTopKConfig
+	ParentChild     ParentChildConfig
+	EvidenceGate    EvidenceGateConfig
+	CitationCheck   CitationConsistencyConfig
 }
 
 func NewHybridRetriever(retriever *RetrieverService, config *HybridRetrieverConfig) (*HybridRetriever, error) {
@@ -444,11 +444,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	fusionBefore := append(append([]*schema.Document(nil), denseDocs...), sparseDocs...)
 	fused := FuseRouteCandidates(denseDocs, sparseDocs, FusionConfig{
-		FusionStrategy: h.config.FusionStrategy,
-		RRFK:           h.config.RRFK,
-		DenseWeight:    h.config.DenseWeight,
-		SparseWeight:   h.config.SparseWeight,
-		RRFDenseWeight: h.config.RRFDenseWeight,
+		FusionStrategy:  h.config.FusionStrategy,
+		RRFK:            h.config.RRFK,
+		DenseWeight:     h.config.DenseWeight,
+		SparseWeight:    h.config.SparseWeight,
+		RRFDenseWeight:  h.config.RRFDenseWeight,
 		RRFSparseWeight: h.config.RRFSparseWeight,
 	})
 	debugTrace.Fusion = FusionDebugInfo{
@@ -465,7 +465,7 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		return h.buildHybridResultMetrics(req, denseMetric, sparseMetric, len(denseDocs), len(sparseDocs), sparseMS, topKDecision, totalMS, nil, EmptyReasonAfterFusion, evidenceOutcome, debugTrace), nil
 	}
 
-	merged := DeduplicateFusedDocuments(fused)
+	merged := applyTitleMatchBoost(req.FinalQuery, DeduplicateFusedDocuments(fused))
 	debugTrace.Dedupe = DedupeDebugInfo{
 		BeforeCount: len(fused),
 		AfterCount:  len(merged),
@@ -511,6 +511,9 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 		Reason:        rerankReason,
 	}
 	topKDecision = DecideStrategicTopK(req.FinalQuery, req.CandidateTopK, req.TopK, merged, h.config.DynamicTopK)
+	beforeScoreCliff := append([]*schema.Document(nil), merged...)
+	merged, topKDecision = ApplyScoreCliffGuard(req.FinalQuery, merged, topKDecision)
+	scoreCliffTruncatedCount := len(beforeScoreCliff) - len(merged)
 
 	emptyReason := EmptyReasonNone
 	if len(merged) == 0 {
@@ -532,8 +535,11 @@ func (h *HybridRetriever) SearchWithRequestAndMetrics(ctx context.Context, req *
 
 	beforeTruncateCount := len(merged)
 	beforeFilter := append([]*schema.Document(nil), merged...)
+	if scoreCliffTruncatedCount > 0 {
+		beforeFilter = beforeScoreCliff
+	}
 	merged, topKDecision = ApplyTokenBudgetGuard(merged, topKDecision, h.config.DynamicTopK)
-	truncatedCount := beforeTruncateCount - len(merged)
+	truncatedCount := scoreCliffTruncatedCount + beforeTruncateCount - len(merged)
 	if len(merged) == 0 && emptyReason == EmptyReasonNone {
 		if h.parentChild != nil && beforeTruncateCount > 0 {
 			emptyReason = EmptyReasonAfterParentBudget

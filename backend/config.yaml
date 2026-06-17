@@ -29,6 +29,17 @@ security:
 rag:
   enabled: true
   environment: dev
+  document_parser:
+    provider: http
+    engine: docling
+    endpoint: ""
+    timeout_ms: 60000
+    strict_mode: true
+    save_sidecar: true
+    ocr:
+      provider: http
+      endpoint: ""
+      timeout_ms: 30000
   auth:
     dev_admin_bypass_enabled: true  # 仅 dev 环境可用
     jwt_secret: "your-jwt-secret-key-here"
@@ -119,6 +130,7 @@ Embedding:
   APIKey: "${EMBEDDING_API_KEY}"
   Provider: "${EMBEDDING_PROVIDER}"
   Model: "${EMBEDDING_MODEL}"
+  ArkAPIType: "${ARK_EMBEDDING_API_TYPE}"
   BaseURL: "${EMBEDDING_BASE_URL}"
   Region: "${EMBEDDING_REGION}"
   Timeout: 30s

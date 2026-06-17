@@ -64,3 +64,5 @@ test_embedding_cache.py
 debug*.json
 
 test-repo/
+.worktrees/
+testFile/

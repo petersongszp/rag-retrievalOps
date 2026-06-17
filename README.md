@@ -84,6 +84,36 @@ rag-admin → rag-server → MySQL
 - Attu: `http://localhost:8001`
 - API 健康检查: `http://localhost:8899/healthz`
 
+**可选：启动本地 Docling 文档解析栈**
+
+PDF、DOCX、HTML、HTM 入库需要 `DOCUMENT_PARSER_ENDPOINT` 指向项目约定的 `/parse` 服务。Docling Serve 原生接口是 `/v1/convert/file`，所以仓库提供了一个轻量 `parser-provider` adapter 做格式转换。
+
+```bash
+# 启动 Docling Serve + parser-provider
+bash backend/scripts/start-docling-parser-stack.sh
+
+# 验证 adapter
+curl http://localhost:9000/healthz
+```
+
+Docker Compose 内的 `rag-server` 默认会使用：
+
+```env
+DOCUMENT_PARSER_ENDPOINT=http://parser-provider:9000/parse
+```
+
+如果你只想先拉起原生 Docling Serve 看 UI：
+
+```bash
+bash backend/scripts/start-docling-serve.sh
+```
+
+启动后访问：
+
+- Docling UI: `http://localhost:5001/ui`
+- Docling API docs: `http://localhost:5001/docs`
+- Parser Provider: `http://localhost:9000/parse`
+
 ### 方式二：本地开发
 
 **环境要求**
@@ -110,6 +140,25 @@ npm run dev
 ```
 
 前端默认运行在 `http://localhost:3001`。
+
+本地开发如果要解析 PDF/DOCX/HTML，先启动 Docling Serve 和 adapter：
+
+```bash
+bash backend/scripts/start-docling-serve.sh
+
+cd backend
+DOCLING_BASE_URL=http://localhost:5001 \
+PARSER_PROVIDER_PORT=9000 \
+go run ./cmd/parser-provider
+```
+
+另一个终端启动后端时设置：
+
+```bash
+cd backend
+DOCUMENT_PARSER_ENDPOINT=http://localhost:9000/parse \
+go run ./cmd/rag-server
+```
 
 ---
 

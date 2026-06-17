@@ -167,6 +167,82 @@ func TestParentChildFetchCandidatesMergesFallbackExprs(t *testing.T) {
 	}
 }
 
+func TestParentChildPostProcessorDeduplicatesFilledSameParent(t *testing.T) {
+	processor := &parentChildPostProcessor{
+		defaultCollection: "kb_chunks",
+		config: ParentChildConfig{
+			Enabled:      true,
+			FillStrategy: parentFillStrategySectionWindow,
+			WindowSize:   2,
+			MaxTokens:    200,
+		},
+		query: func(ctx context.Context, collection string, expr string, limit int) ([]*schema.Document, error) {
+			return []*schema.Document{
+				makeParentChildDoc("doc-1-child-004", 4, "Billing rules introduction."),
+				makeParentChildDoc("doc-1-child-005", 5, "Billing formula table continuation."),
+				makeParentChildDoc("doc-1-child-006", 6, "Billing cycle details."),
+			}, nil
+		},
+	}
+
+	first := makeParentChildDoc("doc-1-child-004", 4, "Billing rules introduction.")
+	second := makeParentChildDoc("doc-1-child-005", 5, "Billing formula table continuation.")
+	second.MetaData["score"] = 0.4
+
+	filled, _ := processor.Fill(context.Background(), []*schema.Document{first, second})
+	if len(filled) != 1 {
+		t.Fatalf("expected duplicate filled parent results to collapse to one, got %d", len(filled))
+	}
+	if filled[0].ID != "doc-1-child-004" {
+		t.Fatalf("expected highest scored child to be retained, got %q", filled[0].ID)
+	}
+	if filled[0].MetaData["parent_fill_applied"] != true {
+		t.Fatalf("expected retained doc to keep parent fill metadata, got %v", filled[0].MetaData["parent_fill_applied"])
+	}
+}
+
+func TestParentChildPostProcessorTrimsLegacyTableRowsDuplication(t *testing.T) {
+	processor := &parentChildPostProcessor{
+		defaultCollection: "kb_chunks",
+		config: ParentChildConfig{
+			Enabled:      true,
+			FillStrategy: parentFillStrategySectionWindow,
+			WindowSize:   1,
+			MaxTokens:    200,
+		},
+	}
+	doc := &schema.Document{
+		ID: "doc-1-child-007",
+		Content: strings.TrimSpace(`Table table-001
+
+| 项目 | 按量付费 |
+| --- | --- |
+| 计费公式 | 计算规格费用=实例购买后的服务时长（小时）×规格单价（元/小时） |
+
+Rows:
+项目: 计费公式 | 按量付费: 计算规格费用=实例购买后的服务时长（小时）×规格单价（元/小时）`),
+		MetaData: map[string]interface{}{
+			"document_id":            uint64(1),
+			"chunk_id":               "doc-1-child-007",
+			"child_id":               "doc-1-child-007",
+			"chunking_unit":          "table",
+			"parent_child_available": false,
+			"score":                  0.58,
+		},
+	}
+
+	filled, _ := processor.Fill(context.Background(), []*schema.Document{doc})
+	if len(filled) != 1 {
+		t.Fatalf("expected one table doc, got %d", len(filled))
+	}
+	if strings.Contains(filled[0].Content, "\nRows:\n") {
+		t.Fatalf("expected legacy rendered Rows block to be trimmed, got %q", filled[0].Content)
+	}
+	if count := strings.Count(filled[0].Content, "计算规格费用=实例购买后的服务时长"); count != 1 {
+		t.Fatalf("expected formula to appear once after trim, got %d in %q", count, filled[0].Content)
+	}
+}
+
 func makeParentChildDoc(childID string, chunkIndex int, content string) *schema.Document {
 	documentID := uint64(1)
 	return &schema.Document{

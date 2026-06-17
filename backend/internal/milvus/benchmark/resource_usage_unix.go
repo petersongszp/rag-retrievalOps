@@ -22,9 +22,13 @@ func captureResourceSnapshot() resourceSnapshot {
 	_ = syscall.Getrusage(syscall.RUSAGE_SELF, &usage)
 
 	return resourceSnapshot{
-		userMS:  usage.Utime.Sec*1000 + usage.Utime.Usec/1000,
-		sysMS:   usage.Stime.Sec*1000 + usage.Stime.Usec/1000,
+		userMS:  timevalMilliseconds(usage.Utime),
+		sysMS:   timevalMilliseconds(usage.Stime),
 		allocMB: float64(mem.Alloc) / 1024.0 / 1024.0,
 		sysMB:   float64(mem.Sys) / 1024.0 / 1024.0,
 	}
+}
+
+func timevalMilliseconds(tv syscall.Timeval) int64 {
+	return tv.Sec*1000 + int64(tv.Usec)/1000
 }

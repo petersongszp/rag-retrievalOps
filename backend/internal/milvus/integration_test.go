@@ -16,10 +16,7 @@ func TestFullWorkflowWithMarkdown(t *testing.T) {
 
 	// 1. 初始化 Milvus 管理器
 	t.Log("=== Step 1: 初始化 Milvus 管理器 ===")
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 健康检查
@@ -362,10 +359,7 @@ func TestImportDirectory(t *testing.T) {
 	cfg := getTestConfig()
 
 	// 初始化 Milvus 管理器
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 创建 Markdown 导入器

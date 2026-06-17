@@ -274,34 +274,34 @@ type retrieveDebugCitationView struct {
 }
 
 type retrieveDebugTrace struct {
-	RequestID          string                       `json:"request_id"`
-	Strategy           string                       `json:"strategy,omitempty"`
-	FusionStrategy     string                       `json:"fusion_strategy,omitempty"`
-	RRFK               int                          `json:"rrf_k,omitempty"`
-	ReleaseStage       string                       `json:"release_stage,omitempty"`
-	ReleaseReason      string                       `json:"release_reason,omitempty"`
-	ResultStatus       string                       `json:"result_status,omitempty"`
-	EmptyReason        string                       `json:"empty_reason,omitempty"`
-	FinalCount         int                          `json:"final_count"`
-	Query              retrieveDebugQueryView       `json:"query"`
-	Routes             []retrieveDebugRouteView     `json:"routes"`
-	TopK               retrieveDebugTopKView        `json:"topk"`
-	ParentChild        retrieveDebugParentChildView `json:"parent_child"`
-	Rewrite            retrieveDebugRewriteView     `json:"rewrite"`
-	EvidenceGate       retrieveDebugEvidenceView    `json:"evidence_gate"`
-	CitationCheck      retrieveDebugCitationView    `json:"citation_check"`
-	FinalItems         []retrieveItem               `json:"final_items,omitempty"`
-	Collection         string                       `json:"collection,omitempty"`
-	RetrieverVersion   string                       `json:"retriever_version,omitempty"`
-	DenseHits          int                          `json:"dense_hits"`
-	SparseHits         int                          `json:"sparse_hits"`
-	DenseParticipation int                          `json:"dense_participation"`
-	SparseParticipation int                         `json:"sparse_participation"`
-	PrimaryDenseCount  int                          `json:"primary_dense_count"`
-	PrimarySparseCount int                          `json:"primary_sparse_count"`
-	DualRouteFinalCount int                         `json:"dual_route_final_count"`
-	DenseContribution  int                          `json:"dense_contribution"`
-	SparseContribution int                          `json:"sparse_contribution"`
+	RequestID           string                       `json:"request_id"`
+	Strategy            string                       `json:"strategy,omitempty"`
+	FusionStrategy      string                       `json:"fusion_strategy,omitempty"`
+	RRFK                int                          `json:"rrf_k,omitempty"`
+	ReleaseStage        string                       `json:"release_stage,omitempty"`
+	ReleaseReason       string                       `json:"release_reason,omitempty"`
+	ResultStatus        string                       `json:"result_status,omitempty"`
+	EmptyReason         string                       `json:"empty_reason,omitempty"`
+	FinalCount          int                          `json:"final_count"`
+	Query               retrieveDebugQueryView       `json:"query"`
+	Routes              []retrieveDebugRouteView     `json:"routes"`
+	TopK                retrieveDebugTopKView        `json:"topk"`
+	ParentChild         retrieveDebugParentChildView `json:"parent_child"`
+	Rewrite             retrieveDebugRewriteView     `json:"rewrite"`
+	EvidenceGate        retrieveDebugEvidenceView    `json:"evidence_gate"`
+	CitationCheck       retrieveDebugCitationView    `json:"citation_check"`
+	FinalItems          []retrieveItem               `json:"final_items,omitempty"`
+	Collection          string                       `json:"collection,omitempty"`
+	RetrieverVersion    string                       `json:"retriever_version,omitempty"`
+	DenseHits           int                          `json:"dense_hits"`
+	SparseHits          int                          `json:"sparse_hits"`
+	DenseParticipation  int                          `json:"dense_participation"`
+	SparseParticipation int                          `json:"sparse_participation"`
+	PrimaryDenseCount   int                          `json:"primary_dense_count"`
+	PrimarySparseCount  int                          `json:"primary_sparse_count"`
+	DualRouteFinalCount int                          `json:"dual_route_final_count"`
+	DenseContribution   int                          `json:"dense_contribution"`
+	SparseContribution  int                          `json:"sparse_contribution"`
 }
 
 func CreateKnowledgeBase(ctx context.Context, c *app.RequestContext) {
@@ -1263,7 +1263,6 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
 	searchResult.Metrics.QueryType = queryType
 	searchResult.Metrics.ExperimentID = experimentDecision.ExperimentID
-	searchResult.Metrics.StrategyVersion = searchResult.Metrics.StrategyVersion
 	switch experimentDecision.Group {
 	case experiment.GroupCandidate, experiment.GroupShadow:
 		searchResult.Metrics.StrategyVersion = firstNonEmptyString(experimentDecision.CandidateVersion, searchResult.Metrics.StrategyVersion)
@@ -1387,6 +1386,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	docs := searchResult.Documents
 	searchMetrics := searchResult.Metrics
 	annotateRetrieveDocs(docs, collection, searchMetrics.RetrieverVersion, useHybrid)
+	sortRetrieveDocsByDisplayScore(docs)
 
 	allowedKBs := make(map[uint64]struct{}, len(kbIDs))
 	for _, id := range kbIDs {
@@ -1415,7 +1415,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		route := firstNonEmptyString(getStringMetadata(doc.MetaData, "route"), resolvePrimaryRoute(useHybrid))
 		items = append(items, retrieveItem{
 			Content: doc.Content,
-			Score:   getFloat64Metadata(doc.MetaData, "score"),
+			Score:   resolveRetrieveItemScore(doc),
 			Citation: citation{
 				KBID:          storedDoc.KbID,
 				DocumentID:    documentID,
@@ -1669,6 +1669,10 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		CitationCheck:      citationCheck,
 		Refusal:            refusal,
 	})
+}
+
+func resolveRetrieveItemScore(doc *schema.Document) float64 {
+	return readRetrieveDocScore(doc)
 }
 
 func resolveAppErrorCode(err error, fallback string) string {
@@ -2233,8 +2237,14 @@ func validateKnowledgeFile(fileHeader *multipart.FileHeader) (string, error) {
 		return "md", nil
 	case ".markdown":
 		return "markdown", nil
+	case ".docx":
+		return "docx", nil
+	case ".html":
+		return "html", nil
+	case ".htm":
+		return "htm", nil
 	default:
-		return "", fmt.Errorf("only pdf/txt/md/markdown files are supported")
+		return "", fmt.Errorf("only pdf/txt/md/markdown/docx/html/htm files are supported")
 	}
 }
 

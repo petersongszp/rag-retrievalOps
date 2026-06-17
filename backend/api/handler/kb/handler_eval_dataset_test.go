@@ -188,6 +188,12 @@ func setupEvalDatasetTestDB(t *testing.T) *gorm.DB {
 		t.Fatalf("failed to migrate test database: %v", err)
 	}
 	model.SetDBGetter(func() *gorm.DB { return db })
+	t.Cleanup(func() {
+		model.SetDBGetter(nil)
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
 	return db
 }
 

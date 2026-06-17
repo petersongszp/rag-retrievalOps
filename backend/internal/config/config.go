@@ -228,17 +228,34 @@ type AuthConfig struct {
 	BootstrapTenantName    string `yaml:"bootstrap_tenant_name" env:"BOOTSTRAP_TENANT_NAME"`
 }
 
-// RAGConfig RAG 鑳藉姏鎬诲紑鍏?
+// RAGConfig RAG 能力总开关
 type RAGConfig struct {
-	Enabled       bool                   `yaml:"enabled"`
-	Environment   string                 `yaml:"environment"`
-	Auth          AuthConfig             `yaml:"auth"`
-	FeatureFlags  RAGFeatureFlags        `yaml:"feature_flags"`
-	Thresholds    RAGThresholds          `yaml:"thresholds"`
-	SemanticCache RAGSemanticCacheConfig `yaml:"semantic_cache"`
-	Phase2        RAGPhase2Config        `yaml:"phase2"`
-	Phase3        RAGPhase3Config        `yaml:"phase3"`
-	Release       RAGReleaseConfig       `yaml:"release"`
+	Enabled        bool                   `yaml:"enabled"`
+	Environment    string                 `yaml:"environment"`
+	Auth           AuthConfig             `yaml:"auth"`
+	DocumentParser DocumentParserConfig   `yaml:"document_parser"`
+	FeatureFlags   RAGFeatureFlags        `yaml:"feature_flags"`
+	Thresholds     RAGThresholds          `yaml:"thresholds"`
+	SemanticCache  RAGSemanticCacheConfig `yaml:"semantic_cache"`
+	Phase2         RAGPhase2Config        `yaml:"phase2"`
+	Phase3         RAGPhase3Config        `yaml:"phase3"`
+	Release        RAGReleaseConfig       `yaml:"release"`
+}
+
+type DocumentParserConfig struct {
+	Provider    string    `yaml:"provider" env:"DOCUMENT_PARSER_PROVIDER"`
+	Engine      string    `yaml:"engine" env:"DOCUMENT_PARSER_ENGINE"`
+	Endpoint    string    `yaml:"endpoint" env:"DOCUMENT_PARSER_ENDPOINT"`
+	TimeoutMS   int       `yaml:"timeout_ms" env:"DOCUMENT_PARSER_TIMEOUT_MS"`
+	StrictMode  bool      `yaml:"strict_mode" env:"DOCUMENT_PARSER_STRICT_MODE"`
+	SaveSidecar bool      `yaml:"save_sidecar" env:"DOCUMENT_PARSER_SAVE_SIDECAR"`
+	OCR         OCRConfig `yaml:"ocr"`
+}
+
+type OCRConfig struct {
+	Provider  string `yaml:"provider" env:"OCR_PROVIDER"`
+	Endpoint  string `yaml:"endpoint" env:"OCR_ENDPOINT"`
+	TimeoutMS int    `yaml:"timeout_ms" env:"OCR_TIMEOUT_MS"`
 }
 
 type RAGFeatureFlags struct {
@@ -494,8 +511,12 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := cfg.applyRAGEnvOverrides(); err != nil {
 		return nil, err
 	}
+	cfg.applyEmbeddingEnvOverrides()
 	cfg.RAG.FeatureFlags.normalizePhase4Aliases()
 	cfg.applyRAGDefaults()
+	if err := cfg.applyDocumentParserEnvOverrides(); err != nil {
+		return nil, err
+	}
 	cfg.ConfigVersion = cfg.buildConfigVersion()
 	if err := cfg.writePhase1BaselineSnapshot(configPath); err != nil {
 		return nil, err
@@ -757,6 +778,23 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if strings.TrimSpace(c.RAG.Environment) == "" {
 		c.RAG.Environment = "dev"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Provider) == "" {
+		c.RAG.DocumentParser.Provider = "http"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Engine) == "" {
+		c.RAG.DocumentParser.Engine = "docling"
+	}
+	if c.RAG.DocumentParser.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.TimeoutMS = 60000
+	}
+	c.RAG.DocumentParser.StrictMode = true
+	c.RAG.DocumentParser.SaveSidecar = true
+	if strings.TrimSpace(c.RAG.DocumentParser.OCR.Provider) == "" {
+		c.RAG.DocumentParser.OCR.Provider = "http"
+	}
+	if c.RAG.DocumentParser.OCR.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.OCR.TimeoutMS = 30000
 	}
 	if !c.RAG.FeatureFlags.EnableProdGuard || c.RAG.Environment != "prod" {
 		if c.RAG.Thresholds.MaxRetryCount <= 0 {
@@ -1275,6 +1313,69 @@ func (c *Config) applyRAGEnvOverrides() error {
 		c.RAG.Auth.BootstrapTenantName = strings.TrimSpace(value)
 	}
 	return nil
+}
+
+func (c *Config) applyDocumentParserEnvOverrides() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_PROVIDER"); ok {
+		c.RAG.DocumentParser.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENGINE"); ok {
+		c.RAG.DocumentParser.Engine = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENDPOINT"); ok {
+		c.RAG.DocumentParser.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("DOCUMENT_PARSER_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.TimeoutMS = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_STRICT_MODE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.StrictMode = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_SAVE_SIDECAR"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.SaveSidecar = value
+	}
+	if value, ok := os.LookupEnv("OCR_PROVIDER"); ok {
+		c.RAG.DocumentParser.OCR.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("OCR_ENDPOINT"); ok {
+		c.RAG.DocumentParser.OCR.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("OCR_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.OCR.TimeoutMS = value
+	}
+	return nil
+}
+
+func (c *Config) applyEmbeddingEnvOverrides() {
+	if c == nil {
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(c.Embedding.Provider))
+	if provider != "ark" {
+		return
+	}
+	if !isUnsetEnvPlaceholder(c.Embedding.ArkAPIType) {
+		return
+	}
+	if value := strings.TrimSpace(os.Getenv("ARK_EMBEDDING_API_TYPE")); value != "" {
+		c.Embedding.ArkAPIType = value
+	}
+}
+
+func isUnsetEnvPlaceholder(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed == "" || strings.Contains(trimmed, "$")
 }
 
 // GetAccessTokenTTL 解析 access token TTL 配置，返回 time.Duration
@@ -1892,10 +1993,11 @@ type EmbeddingConfig struct {
 	SecretKey string `yaml:"SecretKey"` // 使用 SK 认证 (ark 专用)
 
 	// 服务配置
-	Provider string `yaml:"Provider"` // 向量模型提供商: ark, openai, ollama (默认 ark)
-	Model    string `yaml:"Model"`    // 模型 ID
-	BaseURL  string `yaml:"BaseURL"`  // API 基础 URL
-	Region   string `yaml:"Region"`   // 服务区域 (ark 专用)
+	Provider   string `yaml:"Provider"`   // 向量模型提供商: ark, openai, ollama (默认 ark)
+	Model      string `yaml:"Model"`      // 模型 ID
+	ArkAPIType string `yaml:"ArkAPIType"` // Ark API 类型: text_api, multi_modal_api
+	BaseURL    string `yaml:"BaseURL"`    // API 基础 URL
+	Region     string `yaml:"Region"`     // 服务区域 (ark 专用)
 
 	// 高级配置
 	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
@@ -1953,6 +2055,7 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
 	c.Embedding.Provider = expandEnvVar(c.Embedding.Provider)
 	c.Embedding.Model = expandEnvVar(c.Embedding.Model)
+	c.Embedding.ArkAPIType = expandEnvVar(c.Embedding.ArkAPIType)
 	c.Embedding.BaseURL = expandEnvVar(c.Embedding.BaseURL)
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)
 	c.Embedding.User = expandEnvVar(c.Embedding.User)

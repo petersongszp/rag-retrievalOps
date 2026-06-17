@@ -115,6 +115,7 @@ func (p *parentChildPostProcessor) Fill(ctx context.Context, docs []*schema.Docu
 			stats.FallbackCount++
 			fallbackDoc := cloneDocumentWithMetadata(doc)
 			annotateParentFillMetadata(fallbackDoc, parentFillStrategyChildOnly, 0, 0, readDocScore(doc), false, ParentFillReasonQueryFailed)
+			normalizeRetrievedDocumentContent(fallbackDoc)
 			filled = append(filled, fallbackDoc)
 			continue
 		}
@@ -122,10 +123,80 @@ func (p *parentChildPostProcessor) Fill(ctx context.Context, docs []*schema.Docu
 			stats.FilledCount++
 			stats.FilledTokens += tokens
 		}
+		normalizeRetrievedDocumentContent(out)
 		filled = append(filled, out)
 	}
 
-	return filled, stats
+	return deduplicateFilledParentResults(filled), stats
+}
+
+func normalizeRetrievedDocumentContent(doc *schema.Document) {
+	trimLegacyTableRowsDuplication(doc)
+}
+
+func trimLegacyTableRowsDuplication(doc *schema.Document) {
+	if doc == nil || doc.MetaData == nil {
+		return
+	}
+	if strings.TrimSpace(readMetadataString(doc, "chunking_unit")) != "table" {
+		return
+	}
+	content := strings.TrimSpace(doc.Content)
+	rowsIndex := strings.Index(content, "\n\nRows:\n")
+	if rowsIndex < 0 {
+		return
+	}
+	tableContent := strings.TrimSpace(content[:rowsIndex])
+	if !looksLikeMarkdownTable(tableContent) {
+		return
+	}
+	doc.Content = tableContent
+}
+
+func looksLikeMarkdownTable(content string) bool {
+	return strings.Contains(content, "\n|") &&
+		(strings.Contains(content, "| ---") || strings.Contains(content, "|---"))
+}
+
+func deduplicateFilledParentResults(docs []*schema.Document) []*schema.Document {
+	if len(docs) <= 1 {
+		return docs
+	}
+
+	out := make([]*schema.Document, 0, len(docs))
+	indexByKey := make(map[string]int, len(docs))
+	for _, doc := range docs {
+		key := filledParentDedupeKey(doc)
+		if key == "" {
+			out = append(out, doc)
+			continue
+		}
+		existingIndex, exists := indexByKey[key]
+		if !exists {
+			indexByKey[key] = len(out)
+			out = append(out, doc)
+			continue
+		}
+		if readDocScore(doc) > readDocScore(out[existingIndex]) {
+			out[existingIndex] = doc
+		}
+	}
+	return out
+}
+
+func filledParentDedupeKey(doc *schema.Document) string {
+	if doc == nil || doc.MetaData == nil {
+		return ""
+	}
+	if !castBool(doc.MetaData["parent_fill_applied"]) {
+		return ""
+	}
+	parentID := strings.TrimSpace(readMetadataString(doc, "parent_id"))
+	if parentID == "" {
+		return ""
+	}
+	documentID := strings.TrimSpace(readMetadataString(doc, "document_id"))
+	return documentID + ":parent:" + parentID
 }
 
 func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema.Document) (*schema.Document, bool, int, error) {
