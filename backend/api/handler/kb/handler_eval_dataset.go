@@ -548,21 +548,39 @@ func normalizeStringList(items []string) model.StringList {
 
 func readEvalCaseImportPayload(c *app.RequestContext) ([]evaluation.DatasetCase, error) {
 	if fileHeader, err := c.FormFile("file"); err == nil && fileHeader != nil {
-		return readEvalCaseImportFile(fileHeader)
+		content, readErr := readMultipartFile(fileHeader)
+		if readErr != nil {
+			return nil, readErr
+		}
+		return decodeEvalCaseImportPayload(content)
 	}
 
 	body := c.GetRequest().Body()
 	if len(body) == 0 {
 		return nil, fmt.Errorf("request body is empty")
 	}
-	var items []evaluation.DatasetCase
-	if err := json.Unmarshal(body, &items); err != nil {
-		return nil, fmt.Errorf("invalid import JSON: %w", err)
-	}
-	return items, nil
+	return decodeEvalCaseImportPayload(body)
 }
 
-func readEvalCaseImportFile(fileHeader *multipart.FileHeader) ([]evaluation.DatasetCase, error) {
+func decodeEvalCaseImportPayload(content []byte) ([]evaluation.DatasetCase, error) {
+	trimmed := strings.TrimSpace(string(content))
+	if trimmed == "" {
+		return nil, fmt.Errorf("request body is empty")
+	}
+
+	var items []evaluation.DatasetCase
+	if err := json.Unmarshal([]byte(trimmed), &items); err == nil {
+		return items, nil
+	}
+
+	var bundle evaluation.DatasetBundle
+	if err := json.Unmarshal([]byte(trimmed), &bundle); err != nil {
+		return nil, fmt.Errorf("invalid import JSON: %w", err)
+	}
+	return bundle.Cases, nil
+}
+
+func readMultipartFile(fileHeader *multipart.FileHeader) ([]byte, error) {
 	file, err := fileHeader.Open()
 	if err != nil {
 		return nil, fmt.Errorf("failed to open import file: %w", err)
@@ -573,12 +591,7 @@ func readEvalCaseImportFile(fileHeader *multipart.FileHeader) ([]evaluation.Data
 	if err != nil {
 		return nil, fmt.Errorf("failed to read import file: %w", err)
 	}
-
-	var items []evaluation.DatasetCase
-	if err := json.Unmarshal(content, &items); err != nil {
-		return nil, fmt.Errorf("invalid import JSON: %w", err)
-	}
-	return items, nil
+	return content, nil
 }
 
 func syncEvalDatasetCaseCount(datasetID uint64) error {

@@ -31,13 +31,14 @@ func init() {
 func getTestConfig() *config.Config {
 	return &config.Config{
 		Embedding: config.EmbeddingConfig{
-			APIKey:     os.Getenv("EMBEDDING_API_KEY"),
-			Model:      getEnvOrDefault("EMBEDDING_MODEL", "doubao-embedding-text-240715"), // 默认使用 embedding 模型
-			BaseURL:    "https://ark.cn-beijing.volces.com/api/v3/",
-			Region:     getEnvOrDefault("EMBEDDING_REGION", "cn-beijing"),
+			APIKey:     firstNonEmptyEnv("MILVUS_TEST_EMBEDDING_API_KEY", "EMBEDDING_API_KEY"),
+			Provider:   getEnvOrDefault("MILVUS_TEST_EMBEDDING_PROVIDER", "mock"),
+			Model:      getEnvOrDefault("MILVUS_TEST_EMBEDDING_MODEL", "mock-embedding-v1"), // 本地测试默认走 mock embedding
+			BaseURL:    firstNonEmptyEnv("MILVUS_TEST_EMBEDDING_BASE_URL", "EMBEDDING_BASE_URL"),
+			Region:     getEnvOrDefault("MILVUS_TEST_EMBEDDING_REGION", getEnvOrDefault("EMBEDDING_REGION", "cn-beijing")),
 			Timeout:    30 * time.Second,
 			RetryTimes: 3,
-			Dimensions: 2560, // 向量维度（doubao-embedding-text-240715 实际输出维度）
+			Dimensions: 2560, // mock embedding 也使用固定维度，方便复用现有 Milvus 集合逻辑
 		},
 		DocumentSplitter: config.SplitterConfig{
 			ChunkSize:   500,
@@ -46,12 +47,12 @@ func getTestConfig() *config.Config {
 			KeepType:    0, // 0=不保留, 1=保留在开头, 2=保留在结尾
 		},
 		Milvus: config.MilvusConfig{
-			Address:        getEnvOrDefault("MILVUS_ADDRESS", "localhost:19530"),
+			Address:        firstNonEmptyString(getEnvOrDefault("MILVUS_TEST_ADDRESS", ""), getEnvOrDefault("MILVUS_ADDRESS", "localhost:19530")),
 			CollectionName: "knowledge",
-			DatabaseName:   getEnvOrDefault("MILVUS_DATABASE", "default"),
+			DatabaseName:   firstNonEmptyString(getEnvOrDefault("MILVUS_TEST_DATABASE", ""), getEnvOrDefault("MILVUS_DATABASE", "default")),
 			MetricType:     "COSINE",
-			Username:       getEnvOrDefault("MILVUS_USERNAME", "minioadmin"),
-			Password:       getEnvOrDefault("MILVUS_PASSWORD", "minioadmin"),
+			Username:       firstNonEmptyEnv("MILVUS_TEST_USERNAME", "MILVUS_USERNAME"),
+			Password:       firstNonEmptyEnv("MILVUS_TEST_PASSWORD", "MILVUS_PASSWORD"),
 			TopK:           5,
 			ConnectTimeout: 10 * time.Second,
 			SearchTimeout:  30 * time.Second,
@@ -65,6 +66,24 @@ func getEnvOrDefault(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
 }
 
 // TestMilvusManagerInit 测试 MilvusManager 初始化

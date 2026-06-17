@@ -8,8 +8,8 @@ import (
 	"interview-agents/internal/milvus/retrieval"
 	"interview-agents/internal/model"
 
-	"github.com/cloudwego/hertz/pkg/app"
 	"github.com/cloudwego/eino/schema"
+	"github.com/cloudwego/hertz/pkg/app"
 )
 
 func TestMergeKnowledgeBaseSearchResultsRecomputesFinalRouteMetrics(t *testing.T) {
@@ -221,29 +221,38 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 		RewriteGainBucket: "route_gain_candidate",
 	}
 	metrics := retrieval.SearchMetrics{
-		OriginalQuery:          "java lock",
-		RewriteQuery:           "java lock aqs",
-		RewriteStrategy:        "rule_based+domain_terms",
-		FinalQuery:             "java lock aqs",
-		DenseQuery:             "java lock",
-		SparseQuery:            "java lock aqs",
-		TermHits:               []string{"aqs", "lock"},
-		CandidateTopK:          10,
-		FinalTopK:              4,
-		TokenBudget:            800,
-		TokenBudgetRemain:      120,
-		TopKPolicyVersion:      "phase3-strategic-v1",
-		TopKDecisionReason:     "high_evidence_density",
-		EvidenceGateResult:     retrieval.EvidenceGateResultPass,
-		CitationSupported:      true,
-		CitationSupportScore:   0.94,
-		CitationCheckVersion:   "citation-v1",
-		CitationCheckLatencyMs: 18,
-		UnsupportedClaims:      []string{"claim-a"},
-		ParentChildEnabled:     true,
-		ParentFillStrategy:     "section_window",
-		ParentFillCount:        2,
-		ParentFillTokens:       60,
+		OriginalQuery:                  "java lock",
+		RewriteQuery:                   "java lock aqs",
+		RewriteStrategy:                "rule_based+domain_terms",
+		FinalQuery:                     "java lock aqs",
+		DenseQuery:                     "java lock",
+		SparseQuery:                    "java lock aqs",
+		TermHits:                       []string{"aqs", "lock"},
+		CandidateTopK:                  10,
+		FinalTopK:                      4,
+		TokenBudget:                    800,
+		TokenBudgetRemain:              120,
+		TopKPolicyVersion:              "phase3-strategic-v1",
+		TopKDecisionReason:             "high_evidence_density",
+		EvidenceGateResult:             retrieval.EvidenceGateResultPass,
+		CitationSupported:              true,
+		CitationSupportScore:           0.94,
+		CitationCheckVersion:           "citation-v1",
+		CitationCheckLatencyMs:         18,
+		UnsupportedClaims:              []string{"claim-a"},
+		ParentChildEnabled:             true,
+		ParentFillStrategy:             "section_window",
+		ParentFillCount:                2,
+		ParentFillTokens:               60,
+		SemanticCacheEnabled:           true,
+		SemanticCacheHit:               true,
+		SemanticCacheLookupMs:          7,
+		SemanticCacheSimilarity:        0.98,
+		SemanticCacheEntryID:           "entry-1",
+		SemanticCacheReason:            "hit",
+		SemanticCacheCandidateCount:    3,
+		SemanticCacheThreshold:         0.95,
+		SemanticCacheHighestSimilarity: 0.98,
 	}
 	debugTrace := &retrieval.DebugTrace{
 		RouteHits: []retrieval.RouteDebugHit{
@@ -289,6 +298,9 @@ func TestBuildRetrievalDebugTraceResponseUsesStructuredDebugTrace(t *testing.T) 
 	if trace.TopKDecision.TopKPolicyVersion != "phase3-strategic-v1" {
 		t.Fatalf("TopKPolicyVersion = %q", trace.TopKDecision.TopKPolicyVersion)
 	}
+	if !trace.SemanticCache.Hit || trace.SemanticCache.EntryID != "entry-1" {
+		t.Fatalf("SemanticCache = %#v", trace.SemanticCache)
+	}
 	if len(trace.ParentChild.ParentContexts) != 1 || trace.ParentChild.ParentContexts[0].ParentID != "p1" {
 		t.Fatalf("ParentContexts = %#v", trace.ParentChild.ParentContexts)
 	}
@@ -324,6 +336,8 @@ func TestBuildRetrievalDebugTraceResponseFallbackMarksContractGaps(t *testing.T)
 		EvidenceGateResult:    retrieval.EvidenceGateResultDisabled,
 		CitationSupported:     false,
 		CitationSupportScore: 0,
+		SemanticCacheEnabled:  true,
+		SemanticCacheReason:   "miss",
 		DenseHits:             6,
 		SparseHits:            4,
 		DenseParticipation:    2,
@@ -349,6 +363,9 @@ func TestBuildRetrievalDebugTraceResponseFallbackMarksContractGaps(t *testing.T)
 	}
 	if len(trace.RouteHits) != 2 {
 		t.Fatalf("fallback RouteHits len = %d, want 2", len(trace.RouteHits))
+	}
+	if trace.SemanticCache.Reason != "miss" {
+		t.Fatalf("SemanticCache.Reason = %q, want miss", trace.SemanticCache.Reason)
 	}
 	if trace.RouteHits[0].HitsCount != 6 || trace.RouteHits[0].ParticipationCount != 2 {
 		t.Fatalf("fallback dense route = %#v", trace.RouteHits[0])

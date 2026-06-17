@@ -111,6 +111,16 @@ export interface KBRetrieveLog {
   citation_check_latency_ms?: number;
   evidence_gate_error?: string;
   citation_check_error?: string;
+  semantic_cache_enabled?: boolean;
+  semantic_cache_hit?: boolean;
+  semantic_cache_lookup_ms?: number;
+  semantic_cache_similarity?: number;
+  semantic_cache_entry_id?: string;
+  semantic_cache_reason?: string;
+  embedding_cache_enabled?: boolean;
+  embedding_cache_hit?: boolean;
+  embedding_cache_lookup_ms?: number;
+  embedding_cache_reason?: string;
   final_count: number;
   truncated_count: number;
   dense_hits: number;

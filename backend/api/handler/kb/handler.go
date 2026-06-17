@@ -984,6 +984,7 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	}
 	experimentDecision := experiment.Decide(&config.Global, userID, middleware.GetUserRole(c), kbIDs, req.Query, requestID, topK)
 	queryType := firstNonEmptyString(experimentDecision.Override.QueryType, "general")
+	semanticCacheStrategyVersion := resolveSemanticCacheStrategyVersion(experimentDecision, releaseDecision)
 
 	targets, collection, err := buildKnowledgeBaseRetrieveTargets(kbIDs)
 	if err != nil {
@@ -996,6 +997,210 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	retrieveTimeout := resolveRetrieveTimeout()
 	retrieveCtx, cancel := context.WithTimeout(ctx, retrieveTimeout)
 	defer cancel()
+
+	semanticCacheEnabled := config.Global.RAG.FeatureFlags.EnableSemanticCache
+	hit, semanticCacheTrace, hitErr := trySemanticCacheHit(
+		retrieveCtx,
+		semanticCacheLookupInput{
+			RequestID:          requestID,
+			TenantID:           getCurrentTenantID(c),
+			UserID:             userID,
+			Query:              req.Query,
+			TopK:               topK,
+			KBIDs:              kbIDs,
+			QueryType:          queryType,
+			StrategyVersion:    semanticCacheStrategyVersion,
+			ExperimentDecision: experimentDecision,
+			DebugRequested:     isSemanticCacheDebugRequest(c),
+		},
+		resolveSemanticCacheStore(),
+		resolveSemanticCacheEmbedder(manager),
+	)
+	metrics.ObserveSemanticCacheLookup(
+		semanticCacheTrace.Enabled,
+		semanticCacheTrace.Hit,
+		semanticCacheTrace.Reason,
+		time.Duration(semanticCacheTrace.LookupMs)*time.Millisecond,
+		maxFloat64(semanticCacheTrace.Similarity, semanticCacheTrace.HighestSimilarity),
+	)
+	if hitErr != nil {
+		log.Printf("[Semantic Cache] request_id=%s reason=%s err=%v", requestID, semanticCacheTrace.Reason, hitErr)
+	} else if hit != nil {
+		searchMetrics := retrieval.SearchMetrics{
+			OriginalQuery:                  req.Query,
+			FinalQuery:                     req.Query,
+			QueryType:                      queryType,
+			Strategy:                       releaseDecision.Strategy,
+			ReleaseStage:                   releaseDecision.Stage,
+			ReleaseReason:                  releaseDecision.Reason,
+			ExperimentID:                   experimentDecision.ExperimentID,
+			ExperimentGroup:                experimentDecision.Group,
+			StrategyVersion:                semanticCacheStrategyVersion,
+			ReleaseID:                      firstNonEmptyString(experimentDecision.ExperimentID),
+			CollectionVersion:              collection,
+			RetrieverVersion:               firstNonEmptyString(hit.RetrieverVersion, retrieval.DenseRetrieverVersion),
+			CandidateTopK:                  topK,
+			FinalTopK:                      len(hit.Response.Items),
+			TopKDecisionReason:             "semantic_cache_hit",
+			TopKPolicyVersion:              semanticCacheTopKPolicyVersion,
+			EmptyReason:                    retrieval.EmptyReasonNone,
+			EvidenceGateResult:             firstNonEmptyString(hit.Response.EvidenceGateResult, retrieval.EvidenceGateResultDisabled),
+			CitationSupported:              hit.Response.CitationCheck != nil && hit.Response.CitationCheck.Supported,
+			SemanticCacheEnabled:           semanticCacheEnabled,
+			SemanticCacheHit:               true,
+			SemanticCacheLookupMs:          semanticCacheTrace.LookupMs,
+			SemanticCacheSimilarity:        semanticCacheTrace.Similarity,
+			SemanticCacheEntryID:           semanticCacheTrace.EntryID,
+			SemanticCacheReason:            semanticCacheTrace.Reason,
+			SemanticCacheCandidateCount:    semanticCacheTrace.CandidateCount,
+			SemanticCacheThreshold:         semanticCacheTrace.Threshold,
+			SemanticCacheHighestSimilarity: maxFloat64(semanticCacheTrace.HighestSimilarity, semanticCacheTrace.Similarity),
+			EmbeddingCacheEnabled:          semanticCacheTrace.EmbeddingCache.Enabled,
+			EmbeddingCacheHit:              semanticCacheTrace.EmbeddingCache.Hit,
+			EmbeddingCacheLookupMs:         semanticCacheTrace.EmbeddingCache.LookupMs,
+			EmbeddingCacheReason:           semanticCacheTrace.EmbeddingCache.Reason,
+			CitationSupportScore: func() float64 {
+				if hit.Response.CitationCheck != nil {
+					return hit.Response.CitationCheck.SupportScore
+				}
+				return 0
+			}(),
+			UnsupportedClaims: func() []string {
+				if hit.Response.CitationCheck != nil {
+					return append([]string(nil), hit.Response.CitationCheck.UnsupportedClaims...)
+				}
+				return nil
+			}(),
+			UnsupportedClaimCount: func() int {
+				if hit.Response.CitationCheck != nil {
+					return hit.Response.CitationCheck.UnsupportedClaimCount
+				}
+				return 0
+			}(),
+			CitationCheckVersion: func() string {
+				if hit.Response.CitationCheck != nil {
+					return hit.Response.CitationCheck.Version
+				}
+				return ""
+			}(),
+			CitationCheckLatencyMs: func() int64 {
+				if hit.Response.CitationCheck != nil {
+					return hit.Response.CitationCheck.LatencyMs
+				}
+				return 0
+			}(),
+			CitationCheckError: func() string {
+				if hit.Response.CitationCheck != nil {
+					return hit.Response.CitationCheck.Error
+				}
+				return ""
+			}(),
+			EmbeddingMs:       hit.EmbeddingMs,
+			PostprocessMs:     hit.LookupMs - hit.EmbeddingMs,
+			DenseHits:         len(hit.Response.Items),
+			DenseContribution: len(hit.Response.Items),
+		}
+		if hit.Response.Refusal != nil {
+			searchMetrics.RefusalReason = hit.Response.Refusal.Reason
+			searchMetrics.CitationSupportScore = hit.Response.Refusal.CitationSupportScore
+		}
+
+		retrieveLog := &model.KBRetrieveLog{
+			RequestID:               requestID,
+			ExperimentID:            searchMetrics.ExperimentID,
+			ExperimentGroup:         searchMetrics.ExperimentGroup,
+			StrategyVersion:         searchMetrics.StrategyVersion,
+			CollectionVersion:       searchMetrics.CollectionVersion,
+			ReleaseID:               searchMetrics.ReleaseID,
+			UserID:                  userID,
+			KBIDs:                   formatKBIDs(kbIDs),
+			Query:                   req.Query,
+			FinalQuery:              req.Query,
+			Expr:                    expr,
+			TopK:                    topK,
+			CandidateTopK:           searchMetrics.CandidateTopK,
+			FinalTopK:               searchMetrics.FinalTopK,
+			QueryType:               queryType,
+			Strategy:                searchMetrics.Strategy,
+			ReleaseStage:            searchMetrics.ReleaseStage,
+			ReleaseReason:           searchMetrics.ReleaseReason,
+			Routes:                  "semantic_cache",
+			Collection:              collection,
+			RetrieverVersion:        searchMetrics.RetrieverVersion,
+			EmptyReason:             searchMetrics.EmptyReason,
+			TopKDecisionReason:      searchMetrics.TopKDecisionReason,
+			FinalCount:              len(hit.Response.Items),
+			DenseHits:               searchMetrics.DenseHits,
+			DenseContribution:       searchMetrics.DenseContribution,
+			EvidenceGateResult:      searchMetrics.EvidenceGateResult,
+			RefusalReason:           searchMetrics.RefusalReason,
+			CitationSupported:       searchMetrics.CitationSupported,
+			CitationSupportScore:    searchMetrics.CitationSupportScore,
+			RewriteGainBucket:       "not_applied",
+			UnsupportedClaimCount:   searchMetrics.UnsupportedClaimCount,
+			CitationCheckVersion:    searchMetrics.CitationCheckVersion,
+			CitationCheckLatencyMs:  searchMetrics.CitationCheckLatencyMs,
+			CitationCheckError:      searchMetrics.CitationCheckError,
+			SemanticCacheEnabled:    searchMetrics.SemanticCacheEnabled,
+			SemanticCacheHit:        searchMetrics.SemanticCacheHit,
+			SemanticCacheLookupMs:   searchMetrics.SemanticCacheLookupMs,
+			SemanticCacheSimilarity: searchMetrics.SemanticCacheSimilarity,
+			SemanticCacheEntryID:    searchMetrics.SemanticCacheEntryID,
+			SemanticCacheReason:     searchMetrics.SemanticCacheReason,
+			EmbeddingCacheEnabled:   searchMetrics.EmbeddingCacheEnabled,
+			EmbeddingCacheHit:       searchMetrics.EmbeddingCacheHit,
+			EmbeddingCacheLookupMs:  searchMetrics.EmbeddingCacheLookupMs,
+			EmbeddingCacheReason:    searchMetrics.EmbeddingCacheReason,
+			ResultStatus:            model.RetrieveResultStatusSuccess,
+			EmbeddingMs:             searchMetrics.EmbeddingMs,
+			PostprocessMs:           searchMetrics.PostprocessMs,
+			DurationMs:              hit.LookupMs,
+			TimeoutMs:               retrieveTimeout.Milliseconds(),
+		}
+		enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
+		retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
+			retrieveLog,
+			searchMetrics,
+			hit.Response.Items,
+			nil,
+		))
+		persistRetrieveLog(retrieveLog)
+		costTrace := buildRetrieveCostTrace(retrieveLog)
+		persistCostTrace(costTrace)
+		if costTrace != nil {
+			metrics.ObserveSemanticCacheSavedCost(costTrace.CacheSavedRetrievalCost, costTrace.CacheSavedRerankCost)
+		}
+
+		if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
+			log.Printf(
+				"[KB Retrieve] source_api=legacy_kb request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q semantic_cache_enabled=%t semantic_cache_hit=%t semantic_cache_reason=%q semantic_cache_entry_id=%s semantic_cache_similarity=%.4f semantic_cache_lookup_ms=%d semantic_cache_candidates=%d user_id=%d kb_ids=%v expr=%q topk=%d final_count=%d duration_ms=%d result_status=%s",
+				requestID,
+				retrieveLog.Strategy,
+				retrieveLog.ReleaseStage,
+				retrieveLog.ReleaseReason,
+				req.Query,
+				retrieveLog.FinalQuery,
+				retrieveLog.SemanticCacheEnabled,
+				true,
+				retrieveLog.SemanticCacheReason,
+				retrieveLog.SemanticCacheEntryID,
+				retrieveLog.SemanticCacheSimilarity,
+				retrieveLog.SemanticCacheLookupMs,
+				semanticCacheTrace.CandidateCount,
+				userID,
+				kbIDs,
+				expr,
+				topK,
+				len(hit.Response.Items),
+				hit.LookupMs,
+				string(retrieveLog.ResultStatus),
+			)
+		}
+
+		metricsResultCount = len(hit.Response.Items)
+		response.Success(ctx, c, hit.Response)
+		return
+	}
 
 	start := time.Now()
 	var (
@@ -1044,6 +1249,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	if searchResult == nil {
 		searchResult = &retrieval.SearchResult{}
 	}
+	searchResult.Metrics.SemanticCacheEnabled = semanticCacheEnabled
+	searchResult.Metrics.SemanticCacheHit = semanticCacheTrace.Hit
+	searchResult.Metrics.SemanticCacheLookupMs = semanticCacheTrace.LookupMs
+	searchResult.Metrics.SemanticCacheSimilarity = semanticCacheTrace.Similarity
+	searchResult.Metrics.SemanticCacheEntryID = semanticCacheTrace.EntryID
+	searchResult.Metrics.SemanticCacheReason = semanticCacheTrace.Reason
+	searchResult.Metrics.SemanticCacheCandidateCount = semanticCacheTrace.CandidateCount
+	searchResult.Metrics.SemanticCacheThreshold = semanticCacheTrace.Threshold
+	searchResult.Metrics.SemanticCacheHighestSimilarity = semanticCacheTrace.HighestSimilarity
 	searchResult.Metrics.Strategy = releaseDecision.Strategy
 	searchResult.Metrics.ReleaseStage = releaseDecision.Stage
 	searchResult.Metrics.ReleaseReason = releaseDecision.Reason
@@ -1072,76 +1286,86 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		metrics.ObserveRetrieveEmptyReason(searchResult.Metrics.Strategy, searchResult.Metrics.ReleaseStage, firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve))
 		errorStatus := classifyRetrieveResultStatus(metricsStatus)
 		retrieveLog := &model.KBRetrieveLog{
-			RequestID:              requestID,
-			ExperimentID:           searchResult.Metrics.ExperimentID,
-			ExperimentGroup:        searchResult.Metrics.ExperimentGroup,
-			StrategyVersion:        searchResult.Metrics.StrategyVersion,
-			FusionStrategy:         searchResult.Metrics.FusionStrategy,
-			RRFK:                   searchResult.Metrics.RRFK,
-			IndexVersion:           searchResult.Metrics.IndexVersion,
-			CollectionVersion:      searchResult.Metrics.CollectionVersion,
-			CostTraceID:            searchResult.Metrics.CostTraceID,
-			AuditTraceID:           searchResult.Metrics.AuditTraceID,
-			ReleaseID:              searchResult.Metrics.ReleaseID,
-			UserID:                 userID,
-			KBIDs:                  formatKBIDs(kbIDs),
-			Query:                  req.Query,
-			FinalQuery:             firstNonEmptyString(searchResult.Metrics.FinalQuery, req.Query),
-			Expr:                   expr,
-			TopK:                   topK,
-			CandidateTopK:          searchResult.Metrics.CandidateTopK,
-			FinalTopK:              searchResult.Metrics.FinalTopK,
-			TokenBudget:            searchResult.Metrics.TokenBudget,
-			ContextTokens:          searchResult.Metrics.ContextTokens,
-			QueryType:              queryType,
-			TruncateReason:         searchResult.Metrics.TruncateReason,
-			Rewrite:                searchResult.Metrics.RewriteQuery,
-			RewriteStrategy:        searchResult.Metrics.RewriteStrategy,
-			RewriteApplied:         searchResult.Metrics.RewriteApplied,
-			Strategy:               searchResult.Metrics.Strategy,
-			ReleaseStage:           searchResult.Metrics.ReleaseStage,
-			ReleaseReason:          searchResult.Metrics.ReleaseReason,
-			Routes:                 resolveRetrieveRoutes(useHybrid),
-			Collection:             collection,
-			RetrieverVersion:       searchResult.Metrics.RetrieverVersion,
-			EmptyReason:            firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
-			ParentChildEnabled:     searchResult.Metrics.ParentChildEnabled,
-			ParentFillStrategy:     searchResult.Metrics.ParentFillStrategy,
-			ParentFillCount:        searchResult.Metrics.ParentFillCount,
-			ParentFillFallback:     searchResult.Metrics.ParentFillFallback,
-			ParentFillTokens:       searchResult.Metrics.ParentFillTokens,
-			TopKDecisionReason:     searchResult.Metrics.TopKDecisionReason,
-			EvidenceGateResult:     searchResult.Metrics.EvidenceGateResult,
-			RefusalReason:          searchResult.Metrics.RefusalReason,
-			CitationSupported:      searchResult.Metrics.CitationSupported,
-			CitationSupportScore:   searchResult.Metrics.CitationSupportScore,
-			RewriteGainBucket:      classifyRewriteGainBucket(searchResult.Metrics, 0, errorStatus),
-			UnsupportedClaimCount:  searchResult.Metrics.UnsupportedClaimCount,
-			CitationCheckVersion:   searchResult.Metrics.CitationCheckVersion,
-			CitationCheckLatencyMs: searchResult.Metrics.CitationCheckLatencyMs,
-			EvidenceGateError:      searchResult.Metrics.EvidenceGateError,
-			CitationCheckError:     searchResult.Metrics.CitationCheckError,
-			ResultStatus:           errorStatus,
-			ErrorCode:              metricsErrorCode,
-			ErrorMsg:               searchErr.Error(),
-			EmbeddingMs:            searchResult.Metrics.EmbeddingMs,
-			SearchMs:               searchResult.Metrics.SearchMs,
-			PostprocessMs:          searchResult.Metrics.PostprocessMs,
-			RerankMs:               searchResult.Metrics.RerankMs,
-			RerankModel:            searchResult.Metrics.RerankModel,
-			DenseHits:              searchResult.Metrics.DenseHits,
-			SparseHits:             searchResult.Metrics.SparseHits,
-			DenseParticipation:     searchResult.Metrics.DenseParticipation,
-			SparseParticipation:    searchResult.Metrics.SparseParticipation,
-			PrimaryDenseCount:      searchResult.Metrics.PrimaryDenseCount,
-			PrimarySparseCount:     searchResult.Metrics.PrimarySparseCount,
-			DualRouteFinalCount:    searchResult.Metrics.DualRouteFinalCount,
-			DenseContribution:      searchResult.Metrics.DenseContribution,
-			SparseContribution:     searchResult.Metrics.SparseContribution,
-			SparseCandidateBefore:  searchResult.Metrics.SparseCandidateBefore,
-			SparseCandidateAfter:   searchResult.Metrics.SparseCandidateAfter,
-			DurationMs:             durationMs,
-			TimeoutMs:              retrieveTimeout.Milliseconds(),
+			RequestID:               requestID,
+			ExperimentID:            searchResult.Metrics.ExperimentID,
+			ExperimentGroup:         searchResult.Metrics.ExperimentGroup,
+			StrategyVersion:         searchResult.Metrics.StrategyVersion,
+			FusionStrategy:          searchResult.Metrics.FusionStrategy,
+			RRFK:                    searchResult.Metrics.RRFK,
+			IndexVersion:            searchResult.Metrics.IndexVersion,
+			CollectionVersion:       searchResult.Metrics.CollectionVersion,
+			CostTraceID:             searchResult.Metrics.CostTraceID,
+			AuditTraceID:            searchResult.Metrics.AuditTraceID,
+			ReleaseID:               searchResult.Metrics.ReleaseID,
+			UserID:                  userID,
+			KBIDs:                   formatKBIDs(kbIDs),
+			Query:                   req.Query,
+			FinalQuery:              firstNonEmptyString(searchResult.Metrics.FinalQuery, req.Query),
+			Expr:                    expr,
+			TopK:                    topK,
+			CandidateTopK:           searchResult.Metrics.CandidateTopK,
+			FinalTopK:               searchResult.Metrics.FinalTopK,
+			TokenBudget:             searchResult.Metrics.TokenBudget,
+			ContextTokens:           searchResult.Metrics.ContextTokens,
+			QueryType:               queryType,
+			TruncateReason:          searchResult.Metrics.TruncateReason,
+			Rewrite:                 searchResult.Metrics.RewriteQuery,
+			RewriteStrategy:         searchResult.Metrics.RewriteStrategy,
+			RewriteApplied:          searchResult.Metrics.RewriteApplied,
+			Strategy:                searchResult.Metrics.Strategy,
+			ReleaseStage:            searchResult.Metrics.ReleaseStage,
+			ReleaseReason:           searchResult.Metrics.ReleaseReason,
+			Routes:                  resolveRetrieveRoutes(useHybrid),
+			Collection:              collection,
+			RetrieverVersion:        searchResult.Metrics.RetrieverVersion,
+			EmptyReason:             firstNonEmptyString(searchResult.Metrics.EmptyReason, retrieval.EmptyReasonAfterRetrieve),
+			ParentChildEnabled:      searchResult.Metrics.ParentChildEnabled,
+			ParentFillStrategy:      searchResult.Metrics.ParentFillStrategy,
+			ParentFillCount:         searchResult.Metrics.ParentFillCount,
+			ParentFillFallback:      searchResult.Metrics.ParentFillFallback,
+			ParentFillTokens:        searchResult.Metrics.ParentFillTokens,
+			TopKDecisionReason:      searchResult.Metrics.TopKDecisionReason,
+			EvidenceGateResult:      searchResult.Metrics.EvidenceGateResult,
+			RefusalReason:           searchResult.Metrics.RefusalReason,
+			CitationSupported:       searchResult.Metrics.CitationSupported,
+			CitationSupportScore:    searchResult.Metrics.CitationSupportScore,
+			RewriteGainBucket:       classifyRewriteGainBucket(searchResult.Metrics, 0, errorStatus),
+			UnsupportedClaimCount:   searchResult.Metrics.UnsupportedClaimCount,
+			CitationCheckVersion:    searchResult.Metrics.CitationCheckVersion,
+			CitationCheckLatencyMs:  searchResult.Metrics.CitationCheckLatencyMs,
+			EvidenceGateError:       searchResult.Metrics.EvidenceGateError,
+			CitationCheckError:      searchResult.Metrics.CitationCheckError,
+			SemanticCacheEnabled:    searchResult.Metrics.SemanticCacheEnabled,
+			SemanticCacheHit:        searchResult.Metrics.SemanticCacheHit,
+			SemanticCacheLookupMs:   searchResult.Metrics.SemanticCacheLookupMs,
+			SemanticCacheSimilarity: searchResult.Metrics.SemanticCacheSimilarity,
+			SemanticCacheEntryID:    searchResult.Metrics.SemanticCacheEntryID,
+			SemanticCacheReason:     searchResult.Metrics.SemanticCacheReason,
+			EmbeddingCacheEnabled:   searchResult.Metrics.EmbeddingCacheEnabled,
+			EmbeddingCacheHit:       searchResult.Metrics.EmbeddingCacheHit,
+			EmbeddingCacheLookupMs:  searchResult.Metrics.EmbeddingCacheLookupMs,
+			EmbeddingCacheReason:    searchResult.Metrics.EmbeddingCacheReason,
+			ResultStatus:            errorStatus,
+			ErrorCode:               metricsErrorCode,
+			ErrorMsg:                searchErr.Error(),
+			EmbeddingMs:             searchResult.Metrics.EmbeddingMs,
+			SearchMs:                searchResult.Metrics.SearchMs,
+			PostprocessMs:           searchResult.Metrics.PostprocessMs,
+			RerankMs:                searchResult.Metrics.RerankMs,
+			RerankModel:             searchResult.Metrics.RerankModel,
+			DenseHits:               searchResult.Metrics.DenseHits,
+			SparseHits:              searchResult.Metrics.SparseHits,
+			DenseParticipation:      searchResult.Metrics.DenseParticipation,
+			SparseParticipation:     searchResult.Metrics.SparseParticipation,
+			PrimaryDenseCount:       searchResult.Metrics.PrimaryDenseCount,
+			PrimarySparseCount:      searchResult.Metrics.PrimarySparseCount,
+			DualRouteFinalCount:     searchResult.Metrics.DualRouteFinalCount,
+			DenseContribution:       searchResult.Metrics.DenseContribution,
+			SparseContribution:      searchResult.Metrics.SparseContribution,
+			SparseCandidateBefore:   searchResult.Metrics.SparseCandidateBefore,
+			SparseCandidateAfter:    searchResult.Metrics.SparseCandidateAfter,
+			DurationMs:              durationMs,
+			TimeoutMs:               retrieveTimeout.Milliseconds(),
 		}
 		enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 		retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
@@ -1151,7 +1375,11 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			searchResult.Debug,
 		))
 		persistRetrieveLog(retrieveLog)
-		persistCostTrace(buildRetrieveCostTrace(retrieveLog))
+		costTrace := buildRetrieveCostTrace(retrieveLog)
+		persistCostTrace(costTrace)
+		if costTrace != nil {
+			metrics.ObserveSemanticCacheSavedCost(costTrace.CacheSavedRetrievalCost, costTrace.CacheSavedRerankCost)
+		}
 		response.ErrorFromErr(ctx, c, myerrors.NewMilvusError("knowledge retrieve failed", searchErr))
 		return
 	}
@@ -1251,76 +1479,86 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	metrics.ObserveRetrieveRouteContribution("sparse", searchMetrics.Strategy, searchMetrics.ReleaseStage, countRoute(items, "sparse"))
 
 	retrieveLog := &model.KBRetrieveLog{
-		RequestID:              requestID,
-		ExperimentID:           searchMetrics.ExperimentID,
-		ExperimentGroup:        searchMetrics.ExperimentGroup,
-		StrategyVersion:        searchMetrics.StrategyVersion,
-		FusionStrategy:         searchMetrics.FusionStrategy,
-		RRFK:                   searchMetrics.RRFK,
-		IndexVersion:           searchMetrics.IndexVersion,
-		CollectionVersion:      searchMetrics.CollectionVersion,
-		CostTraceID:            searchMetrics.CostTraceID,
-		AuditTraceID:           searchMetrics.AuditTraceID,
-		ReleaseID:              searchMetrics.ReleaseID,
-		UserID:                 userID,
-		KBIDs:                  formatKBIDs(kbIDs),
-		Query:                  req.Query,
-		FinalQuery:             firstNonEmptyString(searchMetrics.FinalQuery, extractFinalQuery(docs), req.Query),
-		Expr:                   expr,
-		TopK:                   topK,
-		CandidateTopK:          searchMetrics.CandidateTopK,
-		FinalTopK:              searchMetrics.FinalTopK,
-		TokenBudget:            searchMetrics.TokenBudget,
-		ContextTokens:          searchMetrics.ContextTokens,
-		QueryType:              queryType,
-		TruncateReason:         searchMetrics.TruncateReason,
-		Rewrite:                firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
-		RewriteStrategy:        firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),
-		RewriteApplied:         searchMetrics.RewriteApplied || extractRewriteApplied(docs),
-		Strategy:               searchMetrics.Strategy,
-		ReleaseStage:           searchMetrics.ReleaseStage,
-		ReleaseReason:          searchMetrics.ReleaseReason,
-		Routes:                 resolveRetrieveRoutes(useHybrid),
-		Collection:             collection,
-		RetrieverVersion:       searchMetrics.RetrieverVersion,
-		EmptyReason:            emptyReason,
-		ParentChildEnabled:     searchMetrics.ParentChildEnabled,
-		ParentFillStrategy:     searchMetrics.ParentFillStrategy,
-		ParentFillCount:        searchMetrics.ParentFillCount,
-		ParentFillFallback:     searchMetrics.ParentFillFallback,
-		ParentFillTokens:       searchMetrics.ParentFillTokens,
-		TopKDecisionReason:     searchMetrics.TopKDecisionReason,
-		FinalCount:             len(items),
-		TruncatedCount:         searchMetrics.TruncatedCount,
-		DenseHits:              searchMetrics.DenseHits,
-		SparseHits:             searchMetrics.SparseHits,
-		DenseParticipation:     searchMetrics.DenseParticipation,
-		SparseParticipation:    searchMetrics.SparseParticipation,
-		PrimaryDenseCount:      searchMetrics.PrimaryDenseCount,
-		PrimarySparseCount:     searchMetrics.PrimarySparseCount,
-		DualRouteFinalCount:    searchMetrics.DualRouteFinalCount,
-		DenseContribution:      searchMetrics.DenseContribution,
-		SparseContribution:     searchMetrics.SparseContribution,
-		SparseCandidateBefore:  searchMetrics.SparseCandidateBefore,
-		SparseCandidateAfter:   searchMetrics.SparseCandidateAfter,
-		EvidenceGateResult:     searchMetrics.EvidenceGateResult,
-		RefusalReason:          searchMetrics.RefusalReason,
-		CitationSupported:      searchMetrics.CitationSupported,
-		CitationSupportScore:   searchMetrics.CitationSupportScore,
-		RewriteGainBucket:      classifyRewriteGainBucket(searchMetrics, len(items), resultStatus),
-		UnsupportedClaimCount:  searchMetrics.UnsupportedClaimCount,
-		CitationCheckVersion:   searchMetrics.CitationCheckVersion,
-		CitationCheckLatencyMs: searchMetrics.CitationCheckLatencyMs,
-		EvidenceGateError:      searchMetrics.EvidenceGateError,
-		CitationCheckError:     searchMetrics.CitationCheckError,
-		ResultStatus:           resultStatus,
-		EmbeddingMs:            searchMetrics.EmbeddingMs,
-		SearchMs:               searchMetrics.SearchMs,
-		PostprocessMs:          searchMetrics.PostprocessMs,
-		RerankMs:               searchMetrics.RerankMs,
-		RerankModel:            searchMetrics.RerankModel,
-		DurationMs:             durationMs,
-		TimeoutMs:              retrieveTimeout.Milliseconds(),
+		RequestID:               requestID,
+		ExperimentID:            searchMetrics.ExperimentID,
+		ExperimentGroup:         searchMetrics.ExperimentGroup,
+		StrategyVersion:         searchMetrics.StrategyVersion,
+		FusionStrategy:          searchMetrics.FusionStrategy,
+		RRFK:                    searchMetrics.RRFK,
+		IndexVersion:            searchMetrics.IndexVersion,
+		CollectionVersion:       searchMetrics.CollectionVersion,
+		CostTraceID:             searchMetrics.CostTraceID,
+		AuditTraceID:            searchMetrics.AuditTraceID,
+		ReleaseID:               searchMetrics.ReleaseID,
+		UserID:                  userID,
+		KBIDs:                   formatKBIDs(kbIDs),
+		Query:                   req.Query,
+		FinalQuery:              firstNonEmptyString(searchMetrics.FinalQuery, extractFinalQuery(docs), req.Query),
+		Expr:                    expr,
+		TopK:                    topK,
+		CandidateTopK:           searchMetrics.CandidateTopK,
+		FinalTopK:               searchMetrics.FinalTopK,
+		TokenBudget:             searchMetrics.TokenBudget,
+		ContextTokens:           searchMetrics.ContextTokens,
+		QueryType:               queryType,
+		TruncateReason:          searchMetrics.TruncateReason,
+		Rewrite:                 firstNonEmptyString(searchMetrics.RewriteQuery, extractRewriteQuery(docs)),
+		RewriteStrategy:         firstNonEmptyString(searchMetrics.RewriteStrategy, extractRewriteStrategy(docs)),
+		RewriteApplied:          searchMetrics.RewriteApplied || extractRewriteApplied(docs),
+		Strategy:                searchMetrics.Strategy,
+		ReleaseStage:            searchMetrics.ReleaseStage,
+		ReleaseReason:           searchMetrics.ReleaseReason,
+		Routes:                  resolveRetrieveRoutes(useHybrid),
+		Collection:              collection,
+		RetrieverVersion:        searchMetrics.RetrieverVersion,
+		EmptyReason:             emptyReason,
+		ParentChildEnabled:      searchMetrics.ParentChildEnabled,
+		ParentFillStrategy:      searchMetrics.ParentFillStrategy,
+		ParentFillCount:         searchMetrics.ParentFillCount,
+		ParentFillFallback:      searchMetrics.ParentFillFallback,
+		ParentFillTokens:        searchMetrics.ParentFillTokens,
+		TopKDecisionReason:      searchMetrics.TopKDecisionReason,
+		FinalCount:              len(items),
+		TruncatedCount:          searchMetrics.TruncatedCount,
+		DenseHits:               searchMetrics.DenseHits,
+		SparseHits:              searchMetrics.SparseHits,
+		DenseParticipation:      searchMetrics.DenseParticipation,
+		SparseParticipation:     searchMetrics.SparseParticipation,
+		PrimaryDenseCount:       searchMetrics.PrimaryDenseCount,
+		PrimarySparseCount:      searchMetrics.PrimarySparseCount,
+		DualRouteFinalCount:     searchMetrics.DualRouteFinalCount,
+		DenseContribution:       searchMetrics.DenseContribution,
+		SparseContribution:      searchMetrics.SparseContribution,
+		SparseCandidateBefore:   searchMetrics.SparseCandidateBefore,
+		SparseCandidateAfter:    searchMetrics.SparseCandidateAfter,
+		EvidenceGateResult:      searchMetrics.EvidenceGateResult,
+		RefusalReason:           searchMetrics.RefusalReason,
+		CitationSupported:       searchMetrics.CitationSupported,
+		CitationSupportScore:    searchMetrics.CitationSupportScore,
+		RewriteGainBucket:       classifyRewriteGainBucket(searchMetrics, len(items), resultStatus),
+		UnsupportedClaimCount:   searchMetrics.UnsupportedClaimCount,
+		CitationCheckVersion:    searchMetrics.CitationCheckVersion,
+		CitationCheckLatencyMs:  searchMetrics.CitationCheckLatencyMs,
+		EvidenceGateError:       searchMetrics.EvidenceGateError,
+		CitationCheckError:      searchMetrics.CitationCheckError,
+		SemanticCacheEnabled:    searchMetrics.SemanticCacheEnabled,
+		SemanticCacheHit:        searchMetrics.SemanticCacheHit,
+		SemanticCacheLookupMs:   searchMetrics.SemanticCacheLookupMs,
+		SemanticCacheSimilarity: searchMetrics.SemanticCacheSimilarity,
+		SemanticCacheEntryID:    searchMetrics.SemanticCacheEntryID,
+		SemanticCacheReason:     searchMetrics.SemanticCacheReason,
+		EmbeddingCacheEnabled:   searchMetrics.EmbeddingCacheEnabled,
+		EmbeddingCacheHit:       searchMetrics.EmbeddingCacheHit,
+		EmbeddingCacheLookupMs:  searchMetrics.EmbeddingCacheLookupMs,
+		EmbeddingCacheReason:    searchMetrics.EmbeddingCacheReason,
+		ResultStatus:            resultStatus,
+		EmbeddingMs:             searchMetrics.EmbeddingMs,
+		SearchMs:                searchMetrics.SearchMs,
+		PostprocessMs:           searchMetrics.PostprocessMs,
+		RerankMs:                searchMetrics.RerankMs,
+		RerankModel:             searchMetrics.RerankModel,
+		DurationMs:              durationMs,
+		TimeoutMs:               retrieveTimeout.Milliseconds(),
 	}
 	enrichRetrieveLogWithPlatformContext(ctx, c, retrieveLog, "allowed")
 	retrieveLog.DebugTrace = encodeRetrievalDebugTraceResponse(buildRetrievalDebugTraceResponse(
@@ -1330,11 +1568,15 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 		searchResult.Debug,
 	))
 	persistRetrieveLog(retrieveLog)
-	persistCostTrace(buildRetrieveCostTrace(retrieveLog))
+	costTrace := buildRetrieveCostTrace(retrieveLog)
+	persistCostTrace(costTrace)
+	if costTrace != nil {
+		metrics.ObserveSemanticCacheSavedCost(costTrace.CacheSavedRetrievalCost, costTrace.CacheSavedRerankCost)
+	}
 
 	if config.Global.RAG.FeatureFlags.EnableRetrieveAudit {
 		log.Printf(
-			"[KB Retrieve] source_api=legacy_kb request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t rewrite_gain_bucket=%q user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_decision_reason=%q parent_child_enabled=%t parent_fill_strategy=%q parent_fill_count=%d evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
+			"[KB Retrieve] source_api=legacy_kb request_id=%s strategy=%s release_stage=%s release_reason=%q query=%q final_query=%q rewrite=%q rewrite_strategy=%q rewrite_applied=%t rewrite_gain_bucket=%q semantic_cache_enabled=%t semantic_cache_hit=%t semantic_cache_reason=%q semantic_cache_entry_id=%s semantic_cache_similarity=%.4f semantic_cache_lookup_ms=%d user_id=%d kb_ids=%v kb_scope=%q expr=%q topk=%d candidate_topk=%d final_topk=%d token_budget=%d truncate_reason=%q topk_decision_reason=%q parent_child_enabled=%t parent_fill_strategy=%q parent_fill_count=%d evidence_gate_result=%q refusal_reason=%q citation_supported=%t citation_support_score=%.4f unsupported_claim_count=%d citation_check_version=%q citation_check_latency_ms=%d citation_check_error=%q evidence_gate_error=%q routes=%q final_count=%d hit_count=%d truncated_count=%d empty_reason=%s dense_hits=%d sparse_hits=%d dense_contrib=%d sparse_contrib=%d rerank_ms=%d duration_ms=%d embedding_ms=%d search_ms=%d postprocess_ms=%d timeout_ms=%d result_status=%s",
 			requestID,
 			retrieveLog.Strategy,
 			retrieveLog.ReleaseStage,
@@ -1345,6 +1587,12 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 			retrieveLog.RewriteStrategy,
 			retrieveLog.RewriteApplied,
 			retrieveLog.RewriteGainBucket,
+			retrieveLog.SemanticCacheEnabled,
+			retrieveLog.SemanticCacheHit,
+			retrieveLog.SemanticCacheReason,
+			retrieveLog.SemanticCacheEntryID,
+			retrieveLog.SemanticCacheSimilarity,
+			retrieveLog.SemanticCacheLookupMs,
 			userID,
 			kbIDs,
 			"global",
@@ -1387,6 +1635,33 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 	}
 
 	metricsResultCount = len(items)
+
+	// L3: 语义缓存回填（异步）
+	scheduleSemanticCacheBackfill(
+		semanticCacheBackfillInput{
+			RequestID:          requestID,
+			TenantID:           getCurrentTenantID(c),
+			Query:              req.Query,
+			TopK:               topK,
+			KBIDs:              kbIDs,
+			QueryType:          queryType,
+			StrategyVersion:    semanticCacheStrategyVersion,
+			ExperimentDecision: experimentDecision,
+			DebugRequested:     isSemanticCacheDebugRequest(c),
+			RetrieverVersion:   searchMetrics.RetrieverVersion,
+			Response: retrieveResponse{
+				RequestID:          requestID,
+				Items:              items,
+				EvidenceGateResult: searchMetrics.EvidenceGateResult,
+				CitationCheck:      citationCheck,
+				Refusal:            refusal,
+			},
+			ResultStatus: resultStatus,
+		},
+		resolveSemanticCacheStore(),
+		resolveSemanticCacheEmbedder(manager),
+	)
+
 	response.Success(ctx, c, retrieveResponse{
 		RequestID:          requestID,
 		Items:              items,
@@ -2245,6 +2520,13 @@ func maxInt64(a int64, b int64) int64 {
 	return a
 }
 
+func maxFloat64(a float64, b float64) float64 {
+	if b > a {
+		return b
+	}
+	return a
+}
+
 func getOperationReason(c *app.RequestContext) string {
 	reason := strings.TrimSpace(string(c.Query("operation_reason")))
 	if reason != "" {
@@ -2421,11 +2703,21 @@ func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
 	kbID := firstKBIDFromCSV(logEntry.KBIDs)
 	embeddingTokens := maxInt(logEntry.CandidateTopK*24, 0)
 	completionTokens := maxInt(logEntry.FinalCount*48, 0)
-	retrievalCost := float64(logEntry.DenseHits+logEntry.SparseHits) * 0.00002
-	rerankCost := float64(maxInt(logEntry.CandidateTopK, logEntry.FinalTopK)) * 0.00003
+	retrievalCostEstimate := float64(logEntry.DenseHits+logEntry.SparseHits) * 0.00002
+	rerankCostEstimate := float64(maxInt(logEntry.CandidateTopK, logEntry.FinalTopK)) * 0.00003
 	embeddingCost := float64(embeddingTokens) * 0.0000008
 	llmCost := float64(logEntry.ContextTokens+completionTokens) * 0.0000015
 	vectorStorageCost := float64(maxInt(logEntry.FinalCount, 1)) * 0.000005
+	retrievalCost := retrievalCostEstimate
+	rerankCost := rerankCostEstimate
+	cacheSavedRetrievalCost := 0.0
+	cacheSavedRerankCost := 0.0
+	if logEntry.SemanticCacheHit {
+		cacheSavedRetrievalCost = retrievalCostEstimate
+		cacheSavedRerankCost = rerankCostEstimate
+		retrievalCost = 0
+		rerankCost = 0
+	}
 	totalCost := embeddingCost + retrievalCost + rerankCost + llmCost + vectorStorageCost
 
 	return &model.KBCostTrace{
@@ -2445,6 +2737,8 @@ func buildRetrieveCostTrace(logEntry *model.KBRetrieveLog) *model.KBCostTrace {
 		EmbeddingCost:           embeddingCost,
 		RetrievalCost:           retrievalCost,
 		RerankCost:              rerankCost,
+		CacheSavedRetrievalCost: cacheSavedRetrievalCost,
+		CacheSavedRerankCost:    cacheSavedRerankCost,
 		LLMCost:                 llmCost,
 		VectorStorageCost:       vectorStorageCost,
 		TotalCost:               totalCost,

@@ -22,8 +22,8 @@ import {
   Typography,
 } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import apiClient from '@/services/api/client';
 import { KB_ADMIN_API } from '@/config/api';
+import apiClient from '@/services/api/client';
 import type { KBRetrieveLog, ListResponse, RetrieveResultStatus } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
@@ -46,18 +46,18 @@ type RetrievalLogFilters = {
   end_time?: string;
 };
 
-const PAGE_SIZE = 20;
-
 type RetrievalLogWithP3Summary = KBRetrieveLog & {
   topk_policy_version?: string;
 };
 
+const PAGE_SIZE = 20;
+
 const statusOptions: Array<{ label: string; value: RetrieveResultStatus }> = [
-  { label: '成功', value: 'success' },
-  { label: '无结果', value: 'no_result' },
-  { label: '被过滤', value: 'filtered_out' },
-  { label: '错误', value: 'error' },
-  { label: '超时', value: 'timeout' },
+  { label: 'Success', value: 'success' },
+  { label: 'No Result', value: 'no_result' },
+  { label: 'Filtered Out', value: 'filtered_out' },
+  { label: 'Error', value: 'error' },
+  { label: 'Timeout', value: 'timeout' },
 ];
 
 function buildFilters(values: RetrievalLogFormValues): RetrievalLogFilters {
@@ -109,6 +109,13 @@ function renderField(value: string | number | boolean | null | undefined) {
     return value ? 'true' : 'false';
   }
   return String(value);
+}
+
+function renderCacheHitTag(hit: boolean | null | undefined) {
+  if (hit === undefined || hit === null) {
+    return <Tag color="warning">Contract gap</Tag>;
+  }
+  return hit ? <Tag color="success">Hit</Tag> : <Tag>Miss</Tag>;
 }
 
 function buildRetrievalDebugHref(requestId: string) {
@@ -163,7 +170,7 @@ export function RetrievalLogsPage() {
         render: (value: string) => <Text code>{value || 'Contract gap'}</Text>,
       },
       {
-        title: 'KB',
+        title: 'KB IDs',
         dataIndex: 'kb_ids',
         key: 'kb_ids',
         width: 120,
@@ -176,10 +183,10 @@ export function RetrievalLogsPage() {
         width: 90,
       },
       {
-        title: 'Final',
+        title: 'Final Count',
         dataIndex: 'final_count',
         key: 'final_count',
-        width: 90,
+        width: 110,
       },
       {
         title: 'Duration',
@@ -196,14 +203,28 @@ export function RetrievalLogsPage() {
         render: (value: RetrieveResultStatus) => <Tag color={statusColor(value)}>{value}</Tag>,
       },
       {
-        title: 'Created',
+        title: 'Semantic Cache',
+        dataIndex: 'semantic_cache_hit',
+        key: 'semantic_cache_hit',
+        width: 140,
+        render: (value: boolean | undefined) => renderCacheHitTag(value),
+      },
+      {
+        title: 'Embedding Cache',
+        dataIndex: 'embedding_cache_hit',
+        key: 'embedding_cache_hit',
+        width: 140,
+        render: (value: boolean | undefined) => renderCacheHitTag(value),
+      },
+      {
+        title: 'Created At',
         dataIndex: 'created_at',
         key: 'created_at',
         width: 190,
         render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
       },
       {
-        title: '操作',
+        title: 'Actions',
         key: 'actions',
         width: 120,
         render: (_, record) => (
@@ -219,7 +240,7 @@ export function RetrievalLogsPage() {
               router.push(buildRetrievalDebugHref(record.request_id));
             }}
           >
-            调试视图
+            Debug View
           </Button>
         ),
       },
@@ -238,7 +259,7 @@ export function RetrievalLogsPage() {
       setTotal(data.total ?? 0);
       setPage(data.page ?? nextPage);
     } catch (err) {
-      setError(err instanceof Error ? err.message : '加载检索日志失败');
+      setError(err instanceof Error ? err.message : 'Failed to load retrieval logs');
       setItems([]);
       setTotal(0);
     } finally {
@@ -256,7 +277,7 @@ export function RetrievalLogsPage() {
       )) as RetrievalLogWithP3Summary;
       setDetail(data);
     } catch (err) {
-      setDetailError(err instanceof Error ? err.message : '加载检索详情失败');
+      setDetailError(err instanceof Error ? err.message : 'Failed to load retrieval detail');
       setDetail(null);
     } finally {
       setDetailLoading(false);
@@ -304,14 +325,15 @@ export function RetrievalLogsPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Title level={2} style={{ marginBottom: 8 }}>
-            检索日志
+            Retrieval Logs
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            查看结构化检索日志，按 request_id、知识库、状态和时间范围筛选，并下钻单次 trace 详情。
+            Review structured retrieval traces, filter by request ID, knowledge base, status, and
+            time range, then drill into a single request.
           </Paragraph>
         </div>
         <Button icon={<ReloadOutlined />} onClick={() => void loadList(filters, page)}>
-          刷新
+          Refresh
         </Button>
       </div>
 
@@ -327,29 +349,29 @@ export function RetrievalLogsPage() {
           }}
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Form.Item label="知识库" name="kb_id">
+            <Form.Item label="Knowledge Base" name="kb_id">
               <Select
                 allowClear
-                placeholder="全部知识库"
+                placeholder="All knowledge bases"
                 options={bases.map((base) => ({ label: base.name, value: base.id }))}
               />
             </Form.Item>
-            <Form.Item label="状态" name="result_status">
-              <Select allowClear placeholder="全部状态" options={statusOptions} />
+            <Form.Item label="Status" name="result_status">
+              <Select allowClear placeholder="All statuses" options={statusOptions} />
             </Form.Item>
             <Form.Item label="Request ID" name="request_id">
-              <Input placeholder="精确查找 request_id" />
+              <Input placeholder="Exact request_id" />
             </Form.Item>
-            <Form.Item label="Query 关键词" name="query_keyword">
-              <Input placeholder="模糊搜索 query" />
+            <Form.Item label="Query Keyword" name="query_keyword">
+              <Input placeholder="Fuzzy search query text" />
             </Form.Item>
-            <Form.Item label="时间范围" name="range">
+            <Form.Item label="Time Range" name="range">
               <DatePicker.RangePicker showTime className="w-full" />
             </Form.Item>
           </div>
           <Space>
             <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={isLoading}>
-              查询日志
+              Search Logs
             </Button>
             <Button
               onClick={() => {
@@ -360,7 +382,7 @@ export function RetrievalLogsPage() {
                 void loadList(nextFilters, 1);
               }}
             >
-              重置
+              Reset
             </Button>
           </Space>
         </Form>
@@ -372,7 +394,7 @@ export function RetrievalLogsPage() {
         {items.length === 0 && !isLoading ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="当前筛选条件下没有检索日志"
+            description="No retrieval logs matched the current filters"
           />
         ) : (
           <Table<KBRetrieveLog>
@@ -395,7 +417,7 @@ export function RetrievalLogsPage() {
       </Card>
 
       <Drawer
-        title={detail?.request_id ? `Trace 详情 · ${detail.request_id}` : 'Trace 详情'}
+        title={detail?.request_id ? `Trace Detail - ${detail.request_id}` : 'Trace Detail'}
         width={560}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
@@ -412,11 +434,12 @@ export function RetrievalLogsPage() {
               <Alert
                 type="warning"
                 showIcon
-                message="该请求暂无 P3 调试字段"
-                description="当前仍可查看基础 trace 详情；如需完整 P3 摘要，请确认日志链路已返回 parent-child、TopK、evidence 与 citation 相关字段。"
+                message="P3 summary fields are not fully available yet"
+                description="The base trace is still visible. For a full P3 summary, make sure the logging pipeline has returned parent-child, top-k, evidence gate, and citation fields."
               />
             ) : null}
-            <Descriptions title="请求信息" column={1} size="small" bordered>
+
+            <Descriptions title="Request" column={1} size="small" bordered>
               <Descriptions.Item label="Request ID">{renderField(detail.request_id)}</Descriptions.Item>
               <Descriptions.Item label="KB IDs">{renderField(detail.kb_ids)}</Descriptions.Item>
               <Descriptions.Item label="Query">{renderField(detail.query)}</Descriptions.Item>
@@ -429,7 +452,7 @@ export function RetrievalLogsPage() {
               <Descriptions.Item label="Final Top K">{renderField(detail.final_topk)}</Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="阶段耗时" column={1} size="small" bordered>
+            <Descriptions title="Stage Latency" column={1} size="small" bordered>
               <Descriptions.Item label="Embedding">{renderField(detail.embedding_ms)} ms</Descriptions.Item>
               <Descriptions.Item label="Search">{renderField(detail.search_ms)} ms</Descriptions.Item>
               <Descriptions.Item label="Postprocess">
@@ -439,7 +462,7 @@ export function RetrievalLogsPage() {
               <Descriptions.Item label="Duration">{renderField(detail.duration_ms)} ms</Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="结果与路由" column={1} size="small" bordered>
+            <Descriptions title="Routing & Result" column={1} size="small" bordered>
               <Descriptions.Item label="Routes">{renderField(detail.routes)}</Descriptions.Item>
               <Descriptions.Item label="Collection">{renderField(detail.collection)}</Descriptions.Item>
               <Descriptions.Item label="Retriever">{renderField(detail.retriever_version)}</Descriptions.Item>
@@ -460,7 +483,48 @@ export function RetrievalLogsPage() {
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="错误与补充信息" column={1} size="small" bordered>
+            <Descriptions title="Semantic Cache" column={1} size="small" bordered>
+              <Descriptions.Item label="Enabled">
+                {renderField(detail.semantic_cache_enabled)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Cache Hit">
+                {renderCacheHitTag(detail.semantic_cache_hit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Lookup">
+                {renderField(detail.semantic_cache_lookup_ms)} ms
+              </Descriptions.Item>
+              <Descriptions.Item label="Similarity">
+                {detail.semantic_cache_similarity === null ||
+                detail.semantic_cache_similarity === undefined ? (
+                  <Tag color="warning">Contract gap</Tag>
+                ) : (
+                  detail.semantic_cache_similarity.toFixed(4)
+                )}
+              </Descriptions.Item>
+              <Descriptions.Item label="Reason">
+                {renderField(detail.semantic_cache_reason)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Entry ID">
+                {renderField(detail.semantic_cache_entry_id)}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Descriptions title="Embedding Cache" column={1} size="small" bordered>
+              <Descriptions.Item label="Enabled">
+                {renderField(detail.embedding_cache_enabled)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Cache Hit">
+                {renderCacheHitTag(detail.embedding_cache_hit)}
+              </Descriptions.Item>
+              <Descriptions.Item label="Lookup">
+                {renderField(detail.embedding_cache_lookup_ms)} ms
+              </Descriptions.Item>
+              <Descriptions.Item label="Reason">
+                {renderField(detail.embedding_cache_reason)}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <Descriptions title="Error & Context" column={1} size="small" bordered>
               <Descriptions.Item label="Tenant ID">{renderField(detail.tenant_id)}</Descriptions.Item>
               <Descriptions.Item label="App ID">{renderField(detail.app_id)}</Descriptions.Item>
               <Descriptions.Item label="API Key ID">{renderField(detail.api_key_id)}</Descriptions.Item>
@@ -470,7 +534,7 @@ export function RetrievalLogsPage() {
                 {renderField(detail.permission_result)}
               </Descriptions.Item>
               <Descriptions.Item label="Legacy Path">{renderField(detail.is_legacy)}</Descriptions.Item>
-              <Descriptions.Item label="P3 摘要">
+              <Descriptions.Item label="P3 Summary">
                 <Space direction="vertical" size="middle" className="w-full">
                   <div>
                     <Text strong>parent_child_enabled: </Text>
@@ -481,7 +545,7 @@ export function RetrievalLogsPage() {
                     {detail.topk_policy_version ? (
                       detail.topk_policy_version
                     ) : (
-                      <Text type="secondary">当前日志未返回 topk_policy_version</Text>
+                      <Text type="secondary">topk_policy_version is not returned in this log yet</Text>
                     )}
                   </div>
                   <div>
@@ -514,7 +578,7 @@ export function RetrievalLogsPage() {
             </Descriptions>
           </Space>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一条日志查看详情" />
+          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Select a log row to inspect detail" />
         )}
       </Drawer>
     </div>

@@ -67,11 +67,17 @@ rag:
     enable_domain_terms: false
     enable_route_specific_rewrite: false
     enable_model_assisted_rewrite: false
+    enable_semantic_cache: false
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
     retrieve_timeout_ms: 3000
     user_qps_limit: 20
+  semantic_cache:
+    similarity_threshold: 0.92
+    ttl_seconds: 900
+    max_candidates: 20
+    max_entries_per_scope: 200
   phase2:
     fusion_strategy: minmax_v1
     rrf_k: 60
@@ -121,6 +127,9 @@ Embedding:
   RetryTimes: 3
   Dimensions: 2048
   BatchSize: 10
+  EnableCache: false
+  CacheTTLSeconds: 1800
+  CacheMaxEntries: 2000
   User: ""
 
 Milvus:
