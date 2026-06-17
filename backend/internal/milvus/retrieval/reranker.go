@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"interview-agents/internal/milvus/chunkmeta"
 
@@ -43,7 +44,7 @@ type JaccardRerankerConfig struct {
 	Version             string
 }
 
-// JaccardReranker reranks by mixing original score with Jaccard similarity.
+// JaccardReranker reranks by mixing original score with lexical query match.
 type JaccardReranker struct {
 	config *JaccardRerankerConfig
 }
@@ -58,7 +59,7 @@ func NewJaccardReranker(config *JaccardRerankerConfig) *JaccardReranker {
 			Version:             DefaultRerankVersion,
 		}
 	}
-	if config.OriginalScoreWeight < 0 || config.OriginalScoreWeight > 1 {
+	if config.OriginalScoreWeight <= 0 || config.OriginalScoreWeight > 1 {
 		config.OriginalScoreWeight = 0.7
 	}
 	if config.TopK <= 0 {
@@ -193,14 +194,14 @@ func (r *JaccardReranker) Rerank(ctx context.Context, query string, docs []*sche
 			return nil, err
 		}
 		contentTokens := tokenize(doc.Content)
-		jaccardScore := calculateJaccardSimilarity(queryTokens, contentTokens)
+		lexicalScore := calculateLexicalRerankScore(queryTokens, contentTokens)
 
 		originalScore := readDocScore(doc)
 		if originalScore <= 0 {
 			originalScore = 0.5
 		}
 
-		finalScore := (originalScore * r.config.OriginalScoreWeight) + (jaccardScore * (1 - r.config.OriginalScoreWeight))
+		finalScore := (originalScore * r.config.OriginalScoreWeight) + (lexicalScore * (1 - r.config.OriginalScoreWeight))
 		annotateRerankMetadata(doc, finalScore, r.config.Version, 0, preRanks[doc.ID], 0)
 
 		scoredDocs = append(scoredDocs, scoredDoc{
@@ -382,14 +383,59 @@ func castBool(value interface{}) bool {
 
 func tokenize(text string) map[string]struct{} {
 	tokens := make(map[string]struct{})
-	parts := strings.Fields(strings.ToLower(text))
-	for _, p := range parts {
-		p = strings.Trim(p, ".,!?-;\"'()[]{}")
-		if len(p) > 0 {
-			tokens[p] = struct{}{}
+	var builder strings.Builder
+	flush := func() {
+		if builder.Len() == 0 {
+			return
+		}
+		token := strings.ToLower(builder.String())
+		tokens[token] = struct{}{}
+		builder.Reset()
+	}
+
+	var previousHan rune
+	for _, r := range text {
+		switch {
+		case unicode.Is(unicode.Han, r):
+			flush()
+			token := strings.ToLower(string(r))
+			tokens[token] = struct{}{}
+			if previousHan != 0 {
+				tokens[strings.ToLower(string([]rune{previousHan, r}))] = struct{}{}
+			}
+			previousHan = r
+		case unicode.IsLetter(r) || unicode.IsDigit(r):
+			builder.WriteRune(unicode.ToLower(r))
+			previousHan = 0
+		default:
+			flush()
+			previousHan = 0
 		}
 	}
+	flush()
 	return tokens
+}
+
+func calculateLexicalRerankScore(queryTokens, contentTokens map[string]struct{}) float64 {
+	jaccardScore := calculateJaccardSimilarity(queryTokens, contentTokens)
+	coverageScore := calculateQueryCoverage(queryTokens, contentTokens)
+	if coverageScore > jaccardScore {
+		return coverageScore
+	}
+	return jaccardScore
+}
+
+func calculateQueryCoverage(queryTokens, contentTokens map[string]struct{}) float64 {
+	if len(queryTokens) == 0 || len(contentTokens) == 0 {
+		return 0
+	}
+	matched := 0
+	for token := range queryTokens {
+		if _, exists := contentTokens[token]; exists {
+			matched++
+		}
+	}
+	return float64(matched) / float64(len(queryTokens))
 }
 
 func calculateJaccardSimilarity(set1, set2 map[string]struct{}) float64 {

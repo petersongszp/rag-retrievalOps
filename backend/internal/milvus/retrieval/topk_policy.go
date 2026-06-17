@@ -13,6 +13,7 @@ const (
 	TruncateReasonNone        = ""
 	TruncateReasonFinalTopK   = "final_topk"
 	TruncateReasonTokenBudget = "token_budget"
+	TruncateReasonScoreCliff  = "score_cliff"
 
 	TopKPolicyVersionRule      = "phase2-rule-v1"
 	TopKPolicyVersionStrategic = "phase3-strategic-v1"
@@ -264,6 +265,98 @@ func ApplyTokenBudgetGuard(docs []*schema.Document, decision TopKDecision, cfg D
 	decision.EstimatedContextTokens = totalTokens
 	decision.FinalTopK = len(budgeted)
 	return budgeted, decision
+}
+
+func ApplyScoreCliffGuard(query string, docs []*schema.Document, decision TopKDecision) ([]*schema.Document, TopKDecision) {
+	if len(docs) <= 1 || !isShortPreciseQuery(query) {
+		return docs, decision
+	}
+
+	normalizedQuery := normalizeTitleMatchText(query)
+	if utf8.RuneCountInString(normalizedQuery) < 3 {
+		return docs, decision
+	}
+	if !documentHasPreciseQueryMatch(normalizedQuery, docs[0]) {
+		return docs, decision
+	}
+
+	topScore := readScoreCliffScore(docs[0])
+	if topScore < 0.55 {
+		return docs, decision
+	}
+
+	cutoff := scoreCliffKeepCutoff(topScore)
+	keepCount := 1
+	for idx := 1; idx < len(docs); idx++ {
+		if readScoreCliffScore(docs[idx]) < cutoff {
+			break
+		}
+		keepCount = idx + 1
+	}
+	if keepCount >= len(docs) {
+		return docs, decision
+	}
+
+	filtered := append([]*schema.Document(nil), docs[:keepCount]...)
+	if decision.FinalTopK <= 0 || decision.FinalTopK > len(filtered) {
+		decision.FinalTopK = len(filtered)
+	}
+	decision.TruncateReason = TruncateReasonScoreCliff
+	decision.DecisionReason = appendTopKDecisionReason(decision.DecisionReason, "score_cliff")
+	return filtered, decision
+}
+
+func scoreCliffKeepCutoff(topScore float64) float64 {
+	return maxFloat64(topScore*0.72, topScore-0.18)
+}
+
+func readScoreCliffScore(doc *schema.Document) float64 {
+	if doc == nil || doc.MetaData == nil {
+		return 0
+	}
+	for _, key := range []string{"score", "fusion_score", "rerank_score"} {
+		if value, ok := doc.MetaData[key]; ok {
+			if score, ok := castScore(value); ok && score > 0 {
+				return score
+			}
+		}
+	}
+	return 0
+}
+
+func documentHasPreciseQueryMatch(normalizedQuery string, doc *schema.Document) bool {
+	if doc == nil {
+		return false
+	}
+	if strings.Contains(normalizeTitleMatchText(doc.Content), normalizedQuery) {
+		return true
+	}
+	if doc.MetaData == nil {
+		return false
+	}
+	for _, key := range []string{"section_title", "hierarchy_path"} {
+		if strings.Contains(normalizeTitleMatchText(readMetadataString(doc, key)), normalizedQuery) {
+			return true
+		}
+	}
+	return false
+}
+
+func appendTopKDecisionReason(existing string, reason string) string {
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		return strings.TrimSpace(existing)
+	}
+	parts := strings.Split(existing, "+")
+	for _, part := range parts {
+		if strings.TrimSpace(part) == reason {
+			return strings.TrimSpace(existing)
+		}
+	}
+	if strings.TrimSpace(existing) == "" {
+		return reason
+	}
+	return strings.TrimSpace(existing) + "+" + reason
 }
 
 type strategicTopKSignals struct {

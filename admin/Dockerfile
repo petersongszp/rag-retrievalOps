@@ -1,10 +1,7 @@
-# syntax=docker/dockerfile:1
-
 FROM node:18-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm,id=npm-cache \
-    npm install
+RUN npm install
 
 FROM node:18-alpine AS builder
 
@@ -16,8 +13,10 @@ ARG NEXT_PUBLIC_API_BASE_URL
 ARG API_PROXY_TARGET
 ENV NEXT_PUBLIC_API_BASE_URL=${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8899/api}
 ENV API_PROXY_TARGET=${API_PROXY_TARGET:-http://localhost:8899/api}
-RUN --mount=type=cache,target=/app/.next/cache,id=next-cache \
-    npm run build
+RUN apk add --no-cache libc6-compat && \
+    npm cache clean --force && \
+    npm install --no-save @next/swc-linux-x64-musl
+RUN npm run build
 
 FROM node:18-alpine AS runner
 RUN apk add --no-cache curl

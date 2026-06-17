@@ -27,7 +27,8 @@
 - API Key 模式下，服务端会使用 API Key 记录上的 `app_id`，不依赖请求体里的 `app_id`。
 - `/v1/retrieve` 实际最终返回是复用 `kb.Retrieve` 的结果，不是“计划文档里定义但未真正返回”的完整契约。
 - 知识库创建后，会自动给当前租户写入一条 `rag_tenant_kb_permission` 的 `admin` 权限记录。
-- 文档上传接口当前支持 `pdf/txt/md/markdown`，单文件最大 `20MB`。
+- 文档上传接口当前支持 `pdf/txt/md/markdown/docx/html/htm`，单文件最大 `20MB`。
+- `pdf/docx/html/htm` 需要配置 HTTP Parser Provider；`txt/md/markdown` 由 Go 后端本地归一化。
 
 ### 2.2 面试吧项目结论
 
@@ -442,9 +443,10 @@ curl -X GET "$RAG_BASE_URL/api/admin/kb/jobs/202" \
 
 ### 7.4 上传限制
 
-- 支持格式：`pdf`、`txt`、`md`、`markdown`
+- 支持格式：`pdf`、`txt`、`md`、`markdown`、`docx`、`html`、`htm`
 - 最大大小：`20MB`
 - 重复文件会按内容 hash 复用已有文档记录
+- `pdf/docx/html/htm` 需要配置 HTTP Parser Provider；`txt/md/markdown` 由 Go 后端本地归一化为 Markdown 后继续入库
 
 ## 8. 知识库授权说明
 

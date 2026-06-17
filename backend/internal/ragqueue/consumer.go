@@ -9,19 +9,20 @@ import (
 	"math"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
 
 	"interview-agents/internal/config"
+	"interview-agents/internal/documentparser"
+	"interview-agents/internal/documentparser/canonical"
 	"interview-agents/internal/milvus"
+	"interview-agents/internal/milvus/chunking"
 	"interview-agents/internal/milvus/chunkmeta"
 	"interview-agents/internal/model"
 	"interview-agents/internal/observability/metrics"
 
 	"github.com/cloudwego/eino/schema"
-	"github.com/ledongthuc/pdf"
 )
 
 type knowledgeIngestErrorType string
@@ -161,16 +162,11 @@ func shouldHandleKnowledgeJob(jobID uint64) bool {
 }
 
 func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload) (int, knowledgeIngestStats, error) {
-	rawText, err := extractKnowledgeRawText(ctx, payload.FilePath, payload.FileType)
-	if err != nil {
-		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "failed to extract source text", err)
-	}
-
 	manager, err := milvus.GetMilvusManager()
 	if err != nil {
 		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to get milvus manager", err)
 	}
-	if manager.GetSplitterService() == nil || manager.GetIndexerService() == nil {
+	if manager.GetChunkingStrategy() == nil || manager.GetIndexerService() == nil {
 		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
 	}
 
@@ -178,6 +174,11 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	if err != nil {
 		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
+	normalizedDoc, normalizedPath, err := extractNormalizedKnowledgeDocument(ctx, payload.FilePath, payload.FileType, docRecord.FileName)
+	if err != nil {
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "failed to normalize source document", err)
+	}
+
 	kbRecord, err := model.KBKnowledgeBaseDao.GetByID(payload.KBID)
 	if err != nil {
 		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load knowledge base", err)
@@ -198,11 +199,12 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	baseMeta.SplitStrategy = chunkmeta.DefaultSplitStrategyForSourceType(sourceFileType)
 	baseMeta.SplitVersion = chunkmeta.VersionForStrategy(baseMeta.SplitStrategy)
 	baseMeta.Extra["collection"] = collection
-	doc := &schema.Document{
-		Content:  rawText,
-		MetaData: baseMeta.ToMap(),
-	}
-	chunks, err := splitKnowledgeDocument(ctx, manager.GetSplitterService(), doc, sourceFileType)
+	baseMeta.Extra["normalized_path"] = normalizedPath
+	chunks, err := manager.GetChunkingStrategy().Split(ctx, chunking.Request{
+		Document:       normalizedDoc,
+		BaseMeta:       baseMeta.ToMap(),
+		NormalizedPath: normalizedPath,
+	})
 	if err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
 		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
@@ -229,7 +231,6 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 		StoredContentMaxChars: config.Global.DocumentSplitter.EmbeddingContentMaxLength,
 	})
 	ingestStats := summarizeKnowledgeChunks(chunks)
-
 	indexerService := manager.GetIndexerService()
 	if strings.TrimSpace(collection) != "" {
 		indexerService, err = manager.NewIndexerServiceForCollection(ctx, collection)
@@ -676,37 +677,91 @@ func calculateKnowledgeRetryBackoff(retryCount int) time.Duration {
 	return jittered
 }
 
-func extractKnowledgeRawText(ctx context.Context, filePath, fileType string) (string, error) {
-	_ = ctx
-
+func extractNormalizedKnowledgeDocument(ctx context.Context, filePath, fileType, fileName string) (*documentparser.NormalizedDocument, string, error) {
 	if strings.TrimSpace(filePath) == "" {
-		return "", fmt.Errorf("file path is empty")
+		return nil, "", fmt.Errorf("file path is empty")
 	}
-	if _, err := os.Stat(filePath); err != nil {
-		return "", fmt.Errorf("failed to access file: %w", err)
+	content, err := os.ReadFile(filePath)
+	if err != nil {
+		return nil, "", fmt.Errorf("failed to read source file: %w", err)
 	}
 
-	normalizedType := strings.ToLower(strings.TrimSpace(fileType))
+	normalizedType := documentparser.NormalizeFileType(fileType)
 	if normalizedType == "" {
-		normalizedType = strings.TrimPrefix(strings.ToLower(filepath.Ext(filePath)), ".")
+		return nil, "", fmt.Errorf("file type is empty")
 	}
 
-	switch normalizedType {
-	case "txt", "md", "markdown":
-		data, err := os.ReadFile(filePath)
-		if err != nil {
-			return "", fmt.Errorf("failed to read text file: %w", err)
+	var doc *documentparser.NormalizedDocument
+	if documentparser.IsLocalType(normalizedType) {
+		doc, err = documentparser.NormalizeLocal(ctx, documentparser.LocalRequest{
+			FileName:   fileName,
+			FileType:   normalizedType,
+			SourcePath: filePath,
+			Content:    content,
+		})
+	} else if documentparser.IsProviderType(normalizedType) {
+		timeout := time.Duration(config.Global.RAG.DocumentParser.TimeoutMS) * time.Millisecond
+		provider, providerErr := documentparser.NewProvider(documentparser.ProviderConfig{
+			Provider: config.Global.RAG.DocumentParser.Provider,
+			Endpoint: config.Global.RAG.DocumentParser.Endpoint,
+			Timeout:  timeout,
+		})
+		if providerErr != nil {
+			_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(providerErr))
+			return nil, "", providerErr
 		}
-		text := strings.TrimSpace(string(data))
-		if text == "" {
-			return "", fmt.Errorf("empty text content")
+		options := map[string]interface{}{
+			"engine":      config.Global.RAG.DocumentParser.Engine,
+			"strict_mode": config.Global.RAG.DocumentParser.StrictMode,
+			"ocr": map[string]interface{}{
+				"provider":   config.Global.RAG.DocumentParser.OCR.Provider,
+				"endpoint":   config.Global.RAG.DocumentParser.OCR.Endpoint,
+				"timeout_ms": config.Global.RAG.DocumentParser.OCR.TimeoutMS,
+			},
 		}
-		return text, nil
-	case "pdf":
-		return extractTextFromPDF(filePath)
-	default:
-		return "", fmt.Errorf("unsupported file type: %s", normalizedType)
+		if normalizedType == "pdf" {
+			options["pdf_backend"] = "pypdfium2"
+		}
+		doc, err = provider.Parse(ctx, documentparser.ProviderRequest{
+			FileName: fileName,
+			FileType: normalizedType,
+			Content:  content,
+			Options:  options,
+		})
+	} else {
+		return nil, "", fmt.Errorf("unsupported file type: %s", normalizedType)
 	}
+	if err != nil {
+		_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(err))
+		return nil, "", err
+	}
+	doc, err = canonical.Normalize(doc)
+	if err != nil {
+		_, _ = documentparser.SaveErrorSidecar(ctx, filePath, buildParseErrorSidecar(err))
+		return nil, "", err
+	}
+
+	sidecarPath, err := documentparser.SaveNormalizedSidecar(ctx, filePath, doc)
+	if err != nil {
+		return nil, "", err
+	}
+	return doc, sidecarPath, nil
+}
+
+func buildParseErrorSidecar(err error) documentparser.ErrorSidecar {
+	sidecar := documentparser.ErrorSidecar{
+		ErrorCode: "parse_error",
+		Message:   err.Error(),
+	}
+
+	var providerErr *documentparser.ProviderError
+	if errors.As(err, &providerErr) {
+		sidecar.ErrorCode = providerErr.Code
+		sidecar.Message = providerErr.Message
+		sidecar.Stage = providerErr.Stage
+		sidecar.Page = providerErr.Page
+	}
+	return sidecar
 }
 
 func resolveKnowledgeBaseCollectionForIngest(kbID uint64, preferred string) (string, error) {
@@ -740,37 +795,4 @@ func resolveKnowledgeBaseCollectionNameForRetry(kbID uint64) string {
 		return ""
 	}
 	return collection
-}
-
-func extractTextFromPDF(filePath string) (string, error) {
-	f, r, err := pdf.Open(filePath)
-	if err != nil {
-		return "", fmt.Errorf("failed to open pdf: %w", err)
-	}
-	defer func() {
-		_ = f.Close()
-	}()
-
-	var builder strings.Builder
-	totalPages := r.NumPage()
-
-	for pageIndex := 1; pageIndex <= totalPages; pageIndex++ {
-		p := r.Page(pageIndex)
-		if p.V.IsNull() {
-			continue
-		}
-
-		pageText, err := p.GetPlainText(nil)
-		if err != nil {
-			return "", fmt.Errorf("failed to extract pdf text on page %d: %w", pageIndex, err)
-		}
-		builder.WriteString(pageText)
-		builder.WriteString("\n")
-	}
-
-	text := strings.TrimSpace(builder.String())
-	if text == "" {
-		return "", errors.New("empty text extracted from pdf")
-	}
-	return text, nil
 }

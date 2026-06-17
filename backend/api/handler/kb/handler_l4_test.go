@@ -5,14 +5,16 @@ import (
 	"testing"
 
 	"interview-agents/internal/model"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 func TestComputeSnippetOffset(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
-		queryLower  string
-		expected    int
+		name       string
+		content    string
+		queryLower string
+		expected   int
 	}{
 		{
 			name:       "exact match at start",
@@ -114,6 +116,45 @@ func TestClassifyRetrieveResultStatus(t *testing.T) {
 				t.Errorf("classifyRetrieveResultStatus(%q) = %v, want %v", tt.input, result, tt.expected)
 			}
 		})
+	}
+}
+
+func TestResolveRetrieveItemScorePrefersRerankScore(t *testing.T) {
+	doc := &schema.Document{
+		MetaData: map[string]interface{}{
+			"score":        0.2775,
+			"rerank_score": 0.8123,
+		},
+	}
+
+	got := resolveRetrieveItemScore(doc)
+	if got != 0.8123 {
+		t.Fatalf("resolveRetrieveItemScore() = %.4f, want rerank_score %.4f", got, 0.8123)
+	}
+}
+
+func TestSortRetrieveDocsByDisplayScoreOrdersByShownScore(t *testing.T) {
+	docs := []*schema.Document{
+		{
+			ID: "low-rerank-first",
+			MetaData: map[string]interface{}{
+				"score":        0.90,
+				"rerank_score": 0.0459,
+			},
+		},
+		{
+			ID: "high-rerank-second",
+			MetaData: map[string]interface{}{
+				"score":        0.10,
+				"rerank_score": 0.1318,
+			},
+		},
+	}
+
+	sortRetrieveDocsByDisplayScore(docs)
+
+	if docs[0].ID != "high-rerank-second" {
+		t.Fatalf("expected higher displayed score first, got %s", docs[0].ID)
 	}
 }
 

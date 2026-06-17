@@ -9,16 +9,20 @@ import (
 
 func TestSearchMetricsFields(t *testing.T) {
 	m := SearchMetrics{
-		EmbeddingMs:         50,
-		SearchMs:            120,
-		PostprocessMs:       10,
-		HitCount:            8,
-		TruncatedCount:      1,
-		DenseParticipation:  3,
-		SparseParticipation: 2,
-		PrimaryDenseCount:   2,
-		PrimarySparseCount:  1,
-		DualRouteFinalCount: 1,
+		EmbeddingMs:            50,
+		SearchMs:               120,
+		PostprocessMs:          10,
+		HitCount:               8,
+		TruncatedCount:         1,
+		EmbeddingCacheEnabled:  true,
+		EmbeddingCacheHit:      true,
+		EmbeddingCacheLookupMs: 3,
+		EmbeddingCacheReason:   "hit",
+		DenseParticipation:     3,
+		SparseParticipation:    2,
+		PrimaryDenseCount:      2,
+		PrimarySparseCount:     1,
+		DualRouteFinalCount:    1,
 	}
 
 	if m.EmbeddingMs != 50 {
@@ -35,6 +39,12 @@ func TestSearchMetricsFields(t *testing.T) {
 	}
 	if m.TruncatedCount != 1 {
 		t.Errorf("TruncatedCount = %d, want 1", m.TruncatedCount)
+	}
+	if !m.EmbeddingCacheEnabled || !m.EmbeddingCacheHit {
+		t.Errorf("unexpected embedding cache flags: enabled=%v hit=%v", m.EmbeddingCacheEnabled, m.EmbeddingCacheHit)
+	}
+	if m.EmbeddingCacheLookupMs != 3 || m.EmbeddingCacheReason != "hit" {
+		t.Errorf("unexpected embedding cache metrics: %+v", m)
 	}
 	if m.DenseParticipation != 3 || m.SparseParticipation != 2 {
 		t.Errorf("unexpected participation counts: dense=%d sparse=%d", m.DenseParticipation, m.SparseParticipation)
@@ -72,11 +82,15 @@ func TestSearchResultFields(t *testing.T) {
 
 func TestSearchMetricsJSONSerialization(t *testing.T) {
 	m := SearchMetrics{
-		EmbeddingMs:    50,
-		SearchMs:       120,
-		PostprocessMs:  10,
-		HitCount:       8,
-		TruncatedCount: 1,
+		EmbeddingMs:            50,
+		SearchMs:               120,
+		PostprocessMs:          10,
+		HitCount:               8,
+		TruncatedCount:         1,
+		EmbeddingCacheEnabled:  true,
+		EmbeddingCacheHit:      true,
+		EmbeddingCacheLookupMs: 3,
+		EmbeddingCacheReason:   "hit",
 	}
 
 	data, err := json.Marshal(m)
@@ -89,7 +103,7 @@ func TestSearchMetricsJSONSerialization(t *testing.T) {
 		t.Fatalf("Failed to unmarshal SearchMetrics: %v", err)
 	}
 
-	requiredFields := []string{"EmbeddingMs", "SearchMs", "PostprocessMs", "HitCount", "TruncatedCount"}
+	requiredFields := []string{"EmbeddingMs", "SearchMs", "PostprocessMs", "HitCount", "TruncatedCount", "EmbeddingCacheEnabled", "EmbeddingCacheHit", "EmbeddingCacheLookupMs", "EmbeddingCacheReason"}
 	for _, field := range requiredFields {
 		if _, ok := parsed[field]; !ok {
 			t.Errorf("SearchMetrics JSON missing field: %s", field)

@@ -52,6 +52,17 @@ llm:
 rag:
   enabled: true
   environment: dev
+  document_parser:
+    provider: http
+    engine: docling
+    endpoint: http://parser-provider:9000/parse
+    timeout_ms: 60000
+    strict_mode: true
+    save_sidecar: true
+    ocr:
+      provider: http
+      endpoint: http://paddleocr:9000/ocr
+      timeout_ms: 30000
   feature_flags:
     enable_prod_guard: false
     enable_ingest_retry: false
@@ -67,11 +78,17 @@ rag:
     enable_domain_terms: false
     enable_route_specific_rewrite: false
     enable_model_assisted_rewrite: false
+    enable_semantic_cache: false
   thresholds:
     max_retry_count: 3
     retry_backoff_ms: 500
     retrieve_timeout_ms: 3000
     user_qps_limit: 20
+  semantic_cache:
+    similarity_threshold: 0.92
+    ttl_seconds: 900
+    max_candidates: 20
+    max_entries_per_scope: 200
   phase2:
     fusion_strategy: minmax_v1
     rrf_k: 60
@@ -115,12 +132,16 @@ Embedding:
   APIKey: "${EMBEDDING_API_KEY}"
   Provider: "${EMBEDDING_PROVIDER}"
   Model: "${EMBEDDING_MODEL}"
+  ArkAPIType: "${ARK_EMBEDDING_API_TYPE}"
   BaseURL: "${EMBEDDING_BASE_URL}"
   Region: "${EMBEDDING_REGION}"
   Timeout: 30s
   RetryTimes: 3
   Dimensions: 2048
   BatchSize: 10
+  EnableCache: false
+  CacheTTLSeconds: 1800
+  CacheMaxEntries: 2000
   User: ""
 
 Milvus:

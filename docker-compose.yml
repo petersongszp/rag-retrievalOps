@@ -23,6 +23,15 @@ services:
       MILVUS_ADDRESS: milvus:19530
       MILVUS_USERNAME: ${MILVUS_USERNAME:-}
       MILVUS_PASSWORD: ${MILVUS_PASSWORD:-}
+      DOCUMENT_PARSER_PROVIDER: ${DOCUMENT_PARSER_PROVIDER:-http}
+      DOCUMENT_PARSER_ENGINE: ${DOCUMENT_PARSER_ENGINE:-docling}
+      DOCUMENT_PARSER_ENDPOINT: ${DOCUMENT_PARSER_ENDPOINT:-http://parser-provider:9000/parse}
+      DOCUMENT_PARSER_TIMEOUT_MS: ${DOCUMENT_PARSER_TIMEOUT_MS:-60000}
+      DOCUMENT_PARSER_STRICT_MODE: ${DOCUMENT_PARSER_STRICT_MODE:-true}
+      DOCUMENT_PARSER_SAVE_SIDECAR: ${DOCUMENT_PARSER_SAVE_SIDECAR:-true}
+      OCR_PROVIDER: ${OCR_PROVIDER:-http}
+      OCR_ENDPOINT: ${OCR_ENDPOINT:-}
+      OCR_TIMEOUT_MS: ${OCR_TIMEOUT_MS:-30000}
     depends_on:
       mysql:
         condition: service_healthy
@@ -33,6 +42,73 @@ services:
     volumes:
       - ./backend/config.yaml:/app/config.yaml:ro
       - ./backend/logs:/app/logs
+    networks:
+      - rag-network
+
+  docling-serve:
+    profiles: ["parser"]
+    image: ${DOCLING_SERVE_IMAGE:-quay.io/docling-project/docling-serve-cpu:latest}
+    restart: unless-stopped
+    # ports:
+    #   - "${DOCLING_SERVE_PORT:-5001}:5001"  # 容器内部网络访问即可，无需暴露到宿主机
+    environment:
+      DOCLING_SERVE_ENABLE_UI: ${DOCLING_SERVE_ENABLE_UI:-1}
+    networks:
+      - rag-network
+
+  parser-provider:
+    profiles: ["parser"]
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.parser-provider
+    restart: unless-stopped
+    # ports:
+    #   - "${PARSER_PROVIDER_PORT:-9000}:9000"  # 容器内部网络访问即可，无需暴露到宿主机
+    environment:
+      PARSER_PROVIDER_HOST: 0.0.0.0
+      PARSER_PROVIDER_PORT: 9000
+      DOCLING_BASE_URL: http://docling-serve:5001
+      DOCLING_CONVERT_PATH: /v1/convert/file
+      DOCLING_TIMEOUT_MS: ${DOCLING_TIMEOUT_MS:-120000}
+    depends_on:
+      - docling-serve
+    networks:
+      - rag-network
+
+  rag-mcp-server:
+    env_file:
+      - .env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8898}:${MCP_PORT:-8898}"
+    environment:
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-http}
+      MCP_HOST: ${MCP_HOST:-0.0.0.0}
+      MCP_PORT: ${MCP_PORT:-8898}
+      MCP_ENDPOINT: ${MCP_ENDPOINT:-/mcp}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      MCP_UPSTREAM_TIMEOUT_MS: ${MCP_UPSTREAM_TIMEOUT_MS:-5000}
+      MCP_ENABLE_LEGACY_APP_ID: ${MCP_ENABLE_LEGACY_APP_ID:-false}
+      RAG_BASE_URL: ${RAG_BASE_URL:-http://rag-server:8899}
+      # Keep a local-debug fallback so stdio-based binaries can still boot when needed.
+      RAG_ACCESS_TOKEN: ${RAG_ACCESS_TOKEN:-rag_local_debug_token}
+    depends_on:
+      rag-server:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ \"$${MCP_TRANSPORT:-http}\" = \"http\" ]; then curl -fsS \"http://127.0.0.1:$${MCP_PORT:-8898}/healthz\" >/dev/null; else pgrep -f rag-mcp-server >/dev/null; fi",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
     networks:
       - rag-network
 

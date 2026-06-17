@@ -27,13 +27,7 @@ func TestHybridSearchRealWorld(t *testing.T) {
 	cfg := getTestConfig()
 
 	// 初始化 Milvus Manager
-	// 如果连接失败（例如没有 Milvus 服务），记录日志并跳过
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Logf("Failed to init manager (is Milvus running?): %v", err)
-		t.Skip("skipping test due to milvus connection failure")
-		return
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 2. 准备测试数据 (确保有一些数据可供检索)
@@ -67,7 +61,7 @@ func TestHybridSearchRealWorld(t *testing.T) {
 		docsToIndex = append(docsToIndex, doc)
 	}
 
-	_, err = manager.IndexerService.Store(ctx, docsToIndex)
+	_, err := manager.IndexerService.Store(ctx, docsToIndex)
 	if err != nil {
 		t.Fatalf("Failed to store docs: %v", err)
 	}
@@ -137,11 +131,7 @@ func TestHybridSearchWithFilters(t *testing.T) {
 	defer cancel()
 
 	cfg := getTestConfig()
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Skip("skipping test due to milvus connection failure")
-		return
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 1. 准备不同语言的文档
@@ -157,7 +147,7 @@ func TestHybridSearchWithFilters(t *testing.T) {
 			MetaData: map[string]interface{}{"language": "java"},
 		},
 	}
-	_, err = manager.IndexerService.Store(ctx, docs)
+	_, err := manager.IndexerService.Store(ctx, docs)
 	if err != nil {
 		t.Fatalf("Failed to store docs: %v", err)
 	}
@@ -192,11 +182,7 @@ func TestHybridSearchEdgeCases(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := getTestConfig()
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Skip("skipping test due to milvus connection failure")
-		return
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	hybridRetriever := manager.GetHybridRetriever()

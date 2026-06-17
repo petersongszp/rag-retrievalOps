@@ -3,6 +3,8 @@ package storage
 import (
 	"context"
 	"fmt"
+	"hash/fnv"
+	"math"
 	"strings"
 	"time"
 
@@ -15,8 +17,9 @@ import (
 
 // EmbeddingService Embedding服务包装，支持多种向量模型提供商
 type EmbeddingService struct {
-	embedder embedding.Embedder
-	model    string
+	embedder      embedding.Embedder
+	queryEmbedder embedding.Embedder
+	model         string
 }
 
 type batchingEmbedder struct {
@@ -25,7 +28,7 @@ type batchingEmbedder struct {
 }
 
 // NewEmbeddingService 根据配置中的 Provider 字段创建对应的 Embedding 服务
-// 支持: ark (火山引擎), openai (OpenAI 及兼容接口), ollama (本地)
+// 支持: ark (火山引擎), openai (OpenAI 及兼容接口), mock (本地测试)
 func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*EmbeddingService, error) {
 	if cfg == nil {
 		return nil, fmt.Errorf("embedding config is nil")
@@ -40,6 +43,8 @@ func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*Emb
 	switch cfg.Provider {
 	case "ark":
 		embedder, err = newArkEmbedder(ctx, cfg)
+	case "mock":
+		embedder, err = newMockEmbedder(cfg)
 	case "openai", "":
 		// openai 兼容接口，也是默认值
 		// 国内大多数 API (DashScope/阿里云、智谱、百度千帆等) 均兼容 OpenAI 接口
@@ -59,9 +64,19 @@ func NewEmbeddingService(ctx context.Context, cfg *config.EmbeddingConfig) (*Emb
 		}
 	}
 
+	queryEmbedder := embedder
+	if cfg.EnableCache {
+		queryEmbedder = newCachedQueryEmbedder(
+			embedder,
+			time.Duration(cfg.CacheTTLSeconds)*time.Second,
+			cfg.CacheMaxEntries,
+		)
+	}
+
 	return &EmbeddingService{
-		embedder: embedder,
-		model:    cfg.Model,
+		embedder:      embedder,
+		queryEmbedder: queryEmbedder,
+		model:         cfg.Model,
 	}, nil
 }
 
@@ -86,9 +101,14 @@ func newArkEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding
 	if retryTimes == 0 {
 		retryTimes = 3
 	}
+	apiType, err := resolveArkAPIType(cfg.ArkAPIType)
+	if err != nil {
+		return nil, err
+	}
 
 	arkCfg := &ark.EmbeddingConfig{
 		Model:      cfg.Model,
+		APIType:    apiType,
 		BaseURL:    baseURL,
 		Region:     region,
 		APIKey:     cfg.APIKey,
@@ -98,6 +118,24 @@ func newArkEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding
 		RetryTimes: &retryTimes,
 	}
 	return ark.NewEmbedder(ctx, arkCfg)
+}
+
+func resolveArkAPIType(value string) (*ark.APIType, error) {
+	normalized := strings.ToLower(strings.TrimSpace(value))
+	normalized = strings.ReplaceAll(normalized, "-", "_")
+
+	switch normalized {
+	case "", "text", "text_api":
+		return nil, nil
+	case "multi_modal", "multimodal", "multi_modal_api":
+		apiType := ark.APITypeMultiModal
+		return &apiType, nil
+	default:
+		if strings.Contains(normalized, "$") {
+			return nil, nil
+		}
+		return nil, fmt.Errorf("unsupported ark embedding API type %q, supported: text_api, multi_modal_api", value)
+	}
 }
 
 func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedding.Embedder, error) {
@@ -125,12 +163,58 @@ func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedd
 	return einoopenai.NewEmbedder(ctx, openaiCfg)
 }
 
+type mockEmbedder struct {
+	dimensions int
+}
+
+func newMockEmbedder(cfg *config.EmbeddingConfig) (embedding.Embedder, error) {
+	dimensions := cfg.Dimensions
+	if dimensions <= 0 {
+		dimensions = 256
+	}
+	return &mockEmbedder{dimensions: dimensions}, nil
+}
+
+func (m *mockEmbedder) EmbedStrings(_ context.Context, texts []string, _ ...embedding.Option) ([][]float64, error) {
+	if m == nil || m.dimensions <= 0 {
+		return nil, fmt.Errorf("mock embedder is not initialized")
+	}
+
+	result := make([][]float64, 0, len(texts))
+	for _, text := range texts {
+		result = append(result, buildMockEmbedding(text, m.dimensions))
+	}
+	return result, nil
+}
+
+func buildMockEmbedding(text string, dimensions int) []float64 {
+	vector := make([]float64, dimensions)
+	trimmed := strings.TrimSpace(text)
+	if trimmed == "" {
+		return vector
+	}
+
+	hasher := fnv.New64a()
+	_, _ = hasher.Write([]byte(trimmed))
+	seed := float64(hasher.Sum64()%104729 + 1)
+
+	for i := 0; i < dimensions; i++ {
+		angle := seed*float64(i+1) + float64(len(trimmed))
+		vector[i] = math.Sin(angle/97.0) + math.Cos(angle/57.0)
+	}
+	return vector
+}
+
 // EmbedBatch 批量将文本转换为向量
 func (s *EmbeddingService) EmbedBatch(ctx context.Context, texts []string) ([][]float64, error) {
 	if len(texts) == 0 {
 		return nil, fmt.Errorf("texts is empty")
 	}
-	vectors, err := s.embedder.EmbedStrings(ctx, texts)
+	embedder := s.embedder
+	if s != nil && s.queryEmbedder != nil {
+		embedder = s.queryEmbedder
+	}
+	vectors, err := embedder.EmbedStrings(ctx, texts)
 	if err != nil {
 		return nil, fmt.Errorf("failed to embed texts: %w", err)
 	}
@@ -145,6 +229,14 @@ func (s *EmbeddingService) GetModel() string {
 // GetEmbedder 获取底层的 Embedder 实例（用于 Retriever 等组件）
 func (s *EmbeddingService) GetEmbedder() embedding.Embedder {
 	return s.embedder
+}
+
+// GetQueryEmbedder 获取查询链路使用的 Embedder 实例（可带进程内缓存）
+func (s *EmbeddingService) GetQueryEmbedder() embedding.Embedder {
+	if s == nil || s.queryEmbedder == nil {
+		return nil
+	}
+	return s.queryEmbedder
 }
 
 // Close 关闭服务

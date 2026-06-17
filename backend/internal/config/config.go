@@ -228,16 +228,34 @@ type AuthConfig struct {
 	BootstrapTenantName    string `yaml:"bootstrap_tenant_name" env:"BOOTSTRAP_TENANT_NAME"`
 }
 
-// RAGConfig RAG 鑳藉姏鎬诲紑鍏?
+// RAGConfig RAG 能力总开关
 type RAGConfig struct {
-	Enabled      bool             `yaml:"enabled"`
-	Environment  string           `yaml:"environment"`
-	Auth         AuthConfig       `yaml:"auth"`
-	FeatureFlags RAGFeatureFlags  `yaml:"feature_flags"`
-	Thresholds   RAGThresholds    `yaml:"thresholds"`
-	Phase2       RAGPhase2Config  `yaml:"phase2"`
-	Phase3       RAGPhase3Config  `yaml:"phase3"`
-	Release      RAGReleaseConfig `yaml:"release"`
+	Enabled        bool                   `yaml:"enabled"`
+	Environment    string                 `yaml:"environment"`
+	Auth           AuthConfig             `yaml:"auth"`
+	DocumentParser DocumentParserConfig   `yaml:"document_parser"`
+	FeatureFlags   RAGFeatureFlags        `yaml:"feature_flags"`
+	Thresholds     RAGThresholds          `yaml:"thresholds"`
+	SemanticCache  RAGSemanticCacheConfig `yaml:"semantic_cache"`
+	Phase2         RAGPhase2Config        `yaml:"phase2"`
+	Phase3         RAGPhase3Config        `yaml:"phase3"`
+	Release        RAGReleaseConfig       `yaml:"release"`
+}
+
+type DocumentParserConfig struct {
+	Provider    string    `yaml:"provider" env:"DOCUMENT_PARSER_PROVIDER"`
+	Engine      string    `yaml:"engine" env:"DOCUMENT_PARSER_ENGINE"`
+	Endpoint    string    `yaml:"endpoint" env:"DOCUMENT_PARSER_ENDPOINT"`
+	TimeoutMS   int       `yaml:"timeout_ms" env:"DOCUMENT_PARSER_TIMEOUT_MS"`
+	StrictMode  bool      `yaml:"strict_mode" env:"DOCUMENT_PARSER_STRICT_MODE"`
+	SaveSidecar bool      `yaml:"save_sidecar" env:"DOCUMENT_PARSER_SAVE_SIDECAR"`
+	OCR         OCRConfig `yaml:"ocr"`
+}
+
+type OCRConfig struct {
+	Provider  string `yaml:"provider" env:"OCR_PROVIDER"`
+	Endpoint  string `yaml:"endpoint" env:"OCR_ENDPOINT"`
+	TimeoutMS int    `yaml:"timeout_ms" env:"OCR_TIMEOUT_MS"`
 }
 
 type RAGFeatureFlags struct {
@@ -266,6 +284,21 @@ type RAGFeatureFlags struct {
 	EnableAuditCenter           bool `yaml:"enable_audit_center"`
 	EnableVectorOps             bool `yaml:"enable_vector_ops"`
 	EnableGovernanceAlerts      bool `yaml:"enable_governance_alerts"`
+	EnableSemanticCache         bool `yaml:"enable_semantic_cache"`
+}
+
+type RAGSemanticCacheConfig struct {
+	SimilarityThreshold float64 `yaml:"similarity_threshold"`
+	TTLSeconds          int     `yaml:"ttl_seconds"`
+	MaxCandidates       int     `yaml:"max_candidates"`
+	MaxEntriesPerScope  int     `yaml:"max_entries_per_scope"`
+}
+
+type RAGSemanticCacheContract struct {
+	ScopeDimensions []string `json:"scope_dimensions"`
+	BypassReasons   []string `json:"bypass_reasons"`
+	ResultPayload   string   `json:"result_payload"`
+	TopKPolicy      string   `json:"topk_policy"`
 }
 
 func (f RAGFeatureFlags) Phase3StrategyFlags() map[string]bool {
@@ -478,8 +511,12 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := cfg.applyRAGEnvOverrides(); err != nil {
 		return nil, err
 	}
+	cfg.applyEmbeddingEnvOverrides()
 	cfg.RAG.FeatureFlags.normalizePhase4Aliases()
 	cfg.applyRAGDefaults()
+	if err := cfg.applyDocumentParserEnvOverrides(); err != nil {
+		return nil, err
+	}
 	cfg.ConfigVersion = cfg.buildConfigVersion()
 	if err := cfg.writePhase1BaselineSnapshot(configPath); err != nil {
 		return nil, err
@@ -531,6 +568,14 @@ func (c *Config) ValidateRAGPrerequisites() error {
 	}
 	if c.Embedding.Dimensions <= 0 {
 		return fmt.Errorf("rag enabled but Embedding.Dimensions must be > 0")
+	}
+	if c.Embedding.EnableCache {
+		if c.Embedding.CacheTTLSeconds <= 0 {
+			return fmt.Errorf("rag enabled but Embedding.CacheTTLSeconds must be > 0 when Embedding.EnableCache=true")
+		}
+		if c.Embedding.CacheMaxEntries <= 0 {
+			return fmt.Errorf("rag enabled but Embedding.CacheMaxEntries must be > 0 when Embedding.EnableCache=true")
+		}
 	}
 
 	if c.RAG.FeatureFlags.EnableProdGuard {
@@ -684,6 +729,23 @@ func (c *Config) ValidateRAGPrerequisites() error {
 			return fmt.Errorf("rag model-assisted rewrite enabled but rag.phase3.model_rewrite_shadow_ratio must be within [0,1], got %.4f", c.RAG.Phase3.ModelRewriteShadowRatio)
 		}
 	}
+	if c.RAG.FeatureFlags.EnableSemanticCache {
+		if strings.TrimSpace(c.Redis.Addr) == "" {
+			return fmt.Errorf("rag semantic cache enabled but redis.addr is empty")
+		}
+		if c.RAG.SemanticCache.SimilarityThreshold <= 0 || c.RAG.SemanticCache.SimilarityThreshold > 1 {
+			return fmt.Errorf("rag semantic cache enabled but rag.semantic_cache.similarity_threshold must be within (0,1], got %.4f", c.RAG.SemanticCache.SimilarityThreshold)
+		}
+		if c.RAG.SemanticCache.TTLSeconds <= 0 {
+			return fmt.Errorf("rag semantic cache enabled but rag.semantic_cache.ttl_seconds must be > 0")
+		}
+		if c.RAG.SemanticCache.MaxCandidates <= 0 {
+			return fmt.Errorf("rag semantic cache enabled but rag.semantic_cache.max_candidates must be > 0")
+		}
+		if c.RAG.SemanticCache.MaxEntriesPerScope <= 0 {
+			return fmt.Errorf("rag semantic cache enabled but rag.semantic_cache.max_entries_per_scope must be > 0")
+		}
+	}
 	if c.RAG.Release.Enabled {
 		if !isValidRAGReleaseStage(c.RAG.Release.Stage) {
 			return fmt.Errorf("rag release enabled but rag.release.stage must be one of phase1/internal/small_flow/batch/full, got %q", c.RAG.Release.Stage)
@@ -709,8 +771,33 @@ func (c *Config) applyRAGDefaults() {
 	if c == nil {
 		return
 	}
+	if c.Embedding.EnableCache {
+		if c.Embedding.CacheTTLSeconds == 0 {
+			c.Embedding.CacheTTLSeconds = 1800
+		}
+		if c.Embedding.CacheMaxEntries == 0 {
+			c.Embedding.CacheMaxEntries = 2000
+		}
+	}
 	if strings.TrimSpace(c.RAG.Environment) == "" {
 		c.RAG.Environment = "dev"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Provider) == "" {
+		c.RAG.DocumentParser.Provider = "http"
+	}
+	if strings.TrimSpace(c.RAG.DocumentParser.Engine) == "" {
+		c.RAG.DocumentParser.Engine = "docling"
+	}
+	if c.RAG.DocumentParser.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.TimeoutMS = 60000
+	}
+	c.RAG.DocumentParser.StrictMode = true
+	c.RAG.DocumentParser.SaveSidecar = true
+	if strings.TrimSpace(c.RAG.DocumentParser.OCR.Provider) == "" {
+		c.RAG.DocumentParser.OCR.Provider = "http"
+	}
+	if c.RAG.DocumentParser.OCR.TimeoutMS <= 0 {
+		c.RAG.DocumentParser.OCR.TimeoutMS = 30000
 	}
 	if !c.RAG.FeatureFlags.EnableProdGuard || c.RAG.Environment != "prod" {
 		if c.RAG.Thresholds.MaxRetryCount <= 0 {
@@ -765,6 +852,18 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if strings.TrimSpace(c.RAG.Phase2.RerankModel) == "" {
 		c.RAG.Phase2.RerankModel = "jaccard-v1"
+	}
+	if c.RAG.SemanticCache.SimilarityThreshold <= 0 {
+		c.RAG.SemanticCache.SimilarityThreshold = 0.92
+	}
+	if c.RAG.SemanticCache.TTLSeconds <= 0 {
+		c.RAG.SemanticCache.TTLSeconds = 900
+	}
+	if c.RAG.SemanticCache.MaxCandidates <= 0 {
+		c.RAG.SemanticCache.MaxCandidates = 20
+	}
+	if c.RAG.SemanticCache.MaxEntriesPerScope <= 0 {
+		c.RAG.SemanticCache.MaxEntriesPerScope = 200
 	}
 	if strings.TrimSpace(c.RAG.Phase2.FusionStrategy) == "" {
 		c.RAG.Phase2.FusionStrategy = "minmax_v1"
@@ -994,6 +1093,11 @@ func (c *Config) applyRAGEnvOverrides() error {
 		c.RAG.FeatureFlags.EnableCollectionSwitchGuard = value
 		c.RAG.FeatureFlags.EnableVectorOps = value
 	}
+	if value, ok, err := readEnvBool("RAG_ENABLE_SEMANTIC_CACHE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.FeatureFlags.EnableSemanticCache = value
+	}
 	if value, ok, err := readEnvInt("RAG_MAX_RETRY_COUNT"); err != nil {
 		return err
 	} else if ok {
@@ -1013,6 +1117,41 @@ func (c *Config) applyRAGEnvOverrides() error {
 		return err
 	} else if ok {
 		c.RAG.Thresholds.UserQPSLimit = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_SEMANTIC_CACHE_SIMILARITY_THRESHOLD"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.SemanticCache.SimilarityThreshold = value
+	}
+	if value, ok, err := readEnvInt("RAG_SEMANTIC_CACHE_TTL_SECONDS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.SemanticCache.TTLSeconds = value
+	}
+	if value, ok, err := readEnvInt("RAG_SEMANTIC_CACHE_MAX_CANDIDATES"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.SemanticCache.MaxCandidates = value
+	}
+	if value, ok, err := readEnvInt("RAG_SEMANTIC_CACHE_MAX_ENTRIES_PER_SCOPE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.SemanticCache.MaxEntriesPerScope = value
+	}
+	if value, ok, err := readEnvBool("EMBEDDING_ENABLE_CACHE"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.EnableCache = value
+	}
+	if value, ok, err := readEnvInt("EMBEDDING_CACHE_TTL_SECONDS"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.CacheTTLSeconds = value
+	}
+	if value, ok, err := readEnvInt("EMBEDDING_CACHE_MAX_ENTRIES"); err != nil {
+		return err
+	} else if ok {
+		c.Embedding.CacheMaxEntries = value
 	}
 	if value, ok := os.LookupEnv("RAG_FUSION_STRATEGY"); ok {
 		c.RAG.Phase2.FusionStrategy = normalizeFusionStrategy(value)
@@ -1212,6 +1351,69 @@ func (c *Config) applyRAGEnvOverrides() error {
 	return nil
 }
 
+func (c *Config) applyDocumentParserEnvOverrides() error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_PROVIDER"); ok {
+		c.RAG.DocumentParser.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENGINE"); ok {
+		c.RAG.DocumentParser.Engine = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("DOCUMENT_PARSER_ENDPOINT"); ok {
+		c.RAG.DocumentParser.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("DOCUMENT_PARSER_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.TimeoutMS = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_STRICT_MODE"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.StrictMode = value
+	}
+	if value, ok, err := readEnvBool("DOCUMENT_PARSER_SAVE_SIDECAR"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.SaveSidecar = value
+	}
+	if value, ok := os.LookupEnv("OCR_PROVIDER"); ok {
+		c.RAG.DocumentParser.OCR.Provider = strings.TrimSpace(value)
+	}
+	if value, ok := os.LookupEnv("OCR_ENDPOINT"); ok {
+		c.RAG.DocumentParser.OCR.Endpoint = strings.TrimSpace(value)
+	}
+	if value, ok, err := readEnvInt("OCR_TIMEOUT_MS"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.DocumentParser.OCR.TimeoutMS = value
+	}
+	return nil
+}
+
+func (c *Config) applyEmbeddingEnvOverrides() {
+	if c == nil {
+		return
+	}
+	provider := strings.ToLower(strings.TrimSpace(c.Embedding.Provider))
+	if provider != "ark" {
+		return
+	}
+	if !isUnsetEnvPlaceholder(c.Embedding.ArkAPIType) {
+		return
+	}
+	if value := strings.TrimSpace(os.Getenv("ARK_EMBEDDING_API_TYPE")); value != "" {
+		c.Embedding.ArkAPIType = value
+	}
+}
+
+func isUnsetEnvPlaceholder(value string) bool {
+	trimmed := strings.TrimSpace(value)
+	return trimmed == "" || strings.Contains(trimmed, "$")
+}
+
 // GetAccessTokenTTL 解析 access token TTL 配置，返回 time.Duration
 func (c *AuthConfig) GetAccessTokenTTL() time.Duration {
 	ttl := strings.TrimSpace(c.AccessTokenTTL)
@@ -1271,8 +1473,9 @@ func (c *Config) LogRAGSnapshot() {
 	if c == nil {
 		return
 	}
+	semanticCacheContract := c.SemanticCacheContract()
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t experiment_platform:%t index_lifecycle:%t cost_dashboard:%t compliance_audit:%t weekly_report:%t milvus_ops_tooling:%t collection_switch_guard:%t cost_governance:%t audit_center:%t vector_ops:%t governance_alerts:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} phase2={fusion_strategy:%s rrf_k:%d rrf_dense_weight:%.3f rrf_sparse_weight:%.3f hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} phase4_metrics=%s milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t experiment_platform:%t index_lifecycle:%t cost_dashboard:%t compliance_audit:%t weekly_report:%t milvus_ops_tooling:%t collection_switch_guard:%t cost_governance:%t audit_center:%t vector_ops:%t governance_alerts:%t semantic_cache:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} semantic_cache={threshold:%.3f ttl_seconds:%d max_candidates:%d max_entries_per_scope:%d scope:%s bypass:%s payload:%s topk:%s} phase2={fusion_strategy:%s rrf_k:%d rrf_dense_weight:%.3f rrf_sparse_weight:%.3f hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} phase4_metrics=%s milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -1302,10 +1505,19 @@ func (c *Config) LogRAGSnapshot() {
 		c.RAG.FeatureFlags.EnableAuditCenter,
 		c.RAG.FeatureFlags.EnableVectorOps,
 		c.RAG.FeatureFlags.EnableGovernanceAlerts,
+		c.RAG.FeatureFlags.EnableSemanticCache,
 		c.RAG.Thresholds.MaxRetryCount,
 		c.RAG.Thresholds.RetryBackoffMS,
 		c.RAG.Thresholds.RetrieveTimeoutMS,
 		c.RAG.Thresholds.UserQPSLimit,
+		c.RAG.SemanticCache.SimilarityThreshold,
+		c.RAG.SemanticCache.TTLSeconds,
+		c.RAG.SemanticCache.MaxCandidates,
+		c.RAG.SemanticCache.MaxEntriesPerScope,
+		strings.Join(semanticCacheContract.ScopeDimensions, ","),
+		strings.Join(semanticCacheContract.BypassReasons, ","),
+		semanticCacheContract.ResultPayload,
+		semanticCacheContract.TopKPolicy,
 		c.RAG.Phase2.FusionStrategy,
 		c.RAG.Phase2.RRFK,
 		c.RAG.Phase2.RRFDenseWeight,
@@ -1447,8 +1659,14 @@ func (c *Config) buildRAGStrategyDigest() string {
 		"env":        c.RAG.Environment,
 		"flags":      c.RAG.FeatureFlags,
 		"thresholds": c.RAG.Thresholds,
-		"phase2":     c.RAG.Phase2,
-		"phase3":     c.RAG.Phase3,
+		"embedding_cache": map[string]interface{}{
+			"enabled":     c.Embedding.EnableCache,
+			"ttl_seconds": c.Embedding.CacheTTLSeconds,
+			"max_entries": c.Embedding.CacheMaxEntries,
+		},
+		"semantic_cache": c.RAG.SemanticCache,
+		"phase2":         c.RAG.Phase2,
+		"phase3":         c.RAG.Phase3,
 		"phase4": map[string]interface{}{
 			"experiment_platform":     c.RAG.FeatureFlags.EnableExperimentPlatform,
 			"index_lifecycle":         c.RAG.FeatureFlags.EnableIndexLifecycle,
@@ -1470,6 +1688,15 @@ func (c *Config) buildRAGStrategyDigest() string {
 	}
 	sum := sha256.Sum256(data)
 	return hex.EncodeToString(sum[:8])
+}
+
+func (c *Config) SemanticCacheContract() RAGSemanticCacheContract {
+	return RAGSemanticCacheContract{
+		ScopeDimensions: []string{"tenant_id", "kb_ids", "strategy_version", "query_type"},
+		BypassReasons:   []string{"empty_query", "debug_request", "authorization_abnormal", "high_risk_experiment"},
+		ResultPayload:   "retrieve_result_only",
+		TopKPolicy:      "exact_topk_only",
+	}
 }
 
 // writePhase1BaselineSnapshot 固定 Phase 1 基线快照（配置 + 指标 + 评测报告占位）。
@@ -1883,16 +2110,20 @@ func expandEnvInBytes(data []byte) []byte {
 
 // EmbeddingConfig Embedding鏈嶅姟閰嶇疆
 type EmbeddingConfig struct {
+	EnableCache     bool `yaml:"EnableCache"`     // query embedding process-local cache switch
+	CacheTTLSeconds int  `yaml:"CacheTTLSeconds"` // query embedding cache TTL in seconds
+	CacheMaxEntries int  `yaml:"CacheMaxEntries"` // max query embedding cache entries per process
 	// 认证配置（二选一）
 	APIKey    string `yaml:"APIKey"`    // 使用 API Key 认证
 	AccessKey string `yaml:"AccessKey"` // 使用 AK 认证 (ark 专用)
 	SecretKey string `yaml:"SecretKey"` // 使用 SK 认证 (ark 专用)
 
 	// 服务配置
-	Provider string `yaml:"Provider"` // 向量模型提供商: ark, openai, ollama (默认 ark)
-	Model    string `yaml:"Model"`    // 模型 ID
-	BaseURL  string `yaml:"BaseURL"`  // API 基础 URL
-	Region   string `yaml:"Region"`   // 服务区域 (ark 专用)
+	Provider   string `yaml:"Provider"`   // 向量模型提供商: ark, openai, ollama (默认 ark)
+	Model      string `yaml:"Model"`      // 模型 ID
+	ArkAPIType string `yaml:"ArkAPIType"` // Ark API 类型: text_api, multi_modal_api
+	BaseURL    string `yaml:"BaseURL"`    // API 基础 URL
+	Region     string `yaml:"Region"`     // 服务区域 (ark 专用)
 
 	// 高级配置
 	Timeout    time.Duration `yaml:"Timeout"`    // 请求超时时间
@@ -1966,6 +2197,7 @@ func (c *Config) ExpandEnv() {
 	c.Embedding.SecretKey = expandEnvVar(c.Embedding.SecretKey)
 	c.Embedding.Provider = expandEnvVar(c.Embedding.Provider)
 	c.Embedding.Model = expandEnvVar(c.Embedding.Model)
+	c.Embedding.ArkAPIType = expandEnvVar(c.Embedding.ArkAPIType)
 	c.Embedding.BaseURL = expandEnvVar(c.Embedding.BaseURL)
 	c.Embedding.Region = expandEnvVar(c.Embedding.Region)
 	c.Embedding.User = expandEnvVar(c.Embedding.User)

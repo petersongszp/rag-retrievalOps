@@ -13,6 +13,7 @@ import (
 	"github.com/milvus-io/milvus-sdk-go/v2/entity"
 
 	"interview-agents/internal/config"
+	"interview-agents/internal/milvus/chunking"
 	"interview-agents/internal/milvus/retrieval"
 	"interview-agents/internal/milvus/splitter"
 	"interview-agents/internal/milvus/storage"
@@ -26,6 +27,7 @@ type MilvusManager struct {
 	// 各个服务实例
 	EmbeddingService *storage.EmbeddingService
 	SplitterService  *splitter.DocumentSplitterService
+	ChunkingStrategy chunking.Strategy
 	IndexerService   *storage.IndexerService
 	RetrieverService *retrieval.RetrieverService
 
@@ -113,6 +115,7 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		cfg.DocumentSplitter.AgenticChunkingMaxDocumentChars,
 		cfg.DocumentSplitter.AgenticChunkingAllowedKBIDs,
 	)
+	manager.ChunkingStrategy = newDefaultChunkingStrategy(splitterService)
 	log.Printf("Document Splitter initialized: ChunkSize=%d, OverlapSize=%d",
 		cfg.DocumentSplitter.ChunkSize, cfg.DocumentSplitter.OverlapSize)
 
@@ -140,7 +143,7 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 		OutputFields: []string{"id", "content", "metadata"},
 		MetricType:   entity.MetricType(cfg.Milvus.MetricType),
 		TopK:         cfg.Milvus.TopK,
-		Embedding:    embeddingService.GetEmbedder(),
+		Embedding:    embeddingService.GetQueryEmbedder(),
 	}
 	retrieverService, err := retrieval.NewRetrieverService(ctx, retrieverConfig)
 	if err != nil {
@@ -304,6 +307,36 @@ func (m *MilvusManager) GetEmbeddingService() *storage.EmbeddingService {
 // GetSplitterService 获取文档分割器服务
 func (m *MilvusManager) GetSplitterService() *splitter.DocumentSplitterService {
 	return m.SplitterService
+}
+
+// GetChunkingStrategy 获取文档切块策略。
+func (m *MilvusManager) GetChunkingStrategy() chunking.Strategy {
+	return m.ChunkingStrategy
+}
+
+func newDefaultChunkingStrategy(splitterService *splitter.DocumentSplitterService) chunking.Strategy {
+	markdownStrategy := chunking.NewMarkdownStrategy(splitterService)
+	structureStrategy := chunking.NewStructureAwareStrategy(markdownStrategy)
+	ocrStrategy := chunking.NewOCRAwareStrategy(structureStrategy, 0)
+	tableStrategy := chunking.NewTableAwareStrategy(structureStrategy)
+
+	return chunking.NewStrategyRouter(markdownStrategy, []chunking.RoutedStrategy{
+		{
+			Name:     chunking.StrategyTableAware,
+			Match:    chunking.MatchHasTables,
+			Strategy: tableStrategy,
+		},
+		{
+			Name:     chunking.StrategyOCRAware,
+			Match:    chunking.MatchOCRAware,
+			Strategy: ocrStrategy,
+		},
+		{
+			Name:     chunking.StrategyStructureAware,
+			Match:    chunking.MatchHasStructure,
+			Strategy: structureStrategy,
+		},
+	})
 }
 
 // GetIndexerService 获取索引器服务

@@ -31,13 +31,14 @@ func init() {
 func getTestConfig() *config.Config {
 	return &config.Config{
 		Embedding: config.EmbeddingConfig{
-			APIKey:     os.Getenv("EMBEDDING_API_KEY"),
-			Model:      getEnvOrDefault("EMBEDDING_MODEL", "doubao-embedding-text-240715"), // 默认使用 embedding 模型
-			BaseURL:    "https://ark.cn-beijing.volces.com/api/v3/",
-			Region:     getEnvOrDefault("EMBEDDING_REGION", "cn-beijing"),
+			APIKey:     firstNonEmptyEnv("MILVUS_TEST_EMBEDDING_API_KEY", "EMBEDDING_API_KEY"),
+			Provider:   getEnvOrDefault("MILVUS_TEST_EMBEDDING_PROVIDER", "mock"),
+			Model:      getEnvOrDefault("MILVUS_TEST_EMBEDDING_MODEL", "mock-embedding-v1"), // 本地测试默认走 mock embedding
+			BaseURL:    firstNonEmptyEnv("MILVUS_TEST_EMBEDDING_BASE_URL", "EMBEDDING_BASE_URL"),
+			Region:     getEnvOrDefault("MILVUS_TEST_EMBEDDING_REGION", getEnvOrDefault("EMBEDDING_REGION", "cn-beijing")),
 			Timeout:    30 * time.Second,
 			RetryTimes: 3,
-			Dimensions: 2560, // 向量维度（doubao-embedding-text-240715 实际输出维度）
+			Dimensions: 2560, // mock embedding 也使用固定维度，方便复用现有 Milvus 集合逻辑
 		},
 		DocumentSplitter: config.SplitterConfig{
 			ChunkSize:   500,
@@ -46,12 +47,12 @@ func getTestConfig() *config.Config {
 			KeepType:    0, // 0=不保留, 1=保留在开头, 2=保留在结尾
 		},
 		Milvus: config.MilvusConfig{
-			Address:        getEnvOrDefault("MILVUS_ADDRESS", "localhost:19530"),
+			Address:        firstNonEmptyString(getEnvOrDefault("MILVUS_TEST_ADDRESS", ""), getEnvOrDefault("MILVUS_ADDRESS", "localhost:19530")),
 			CollectionName: "knowledge",
-			DatabaseName:   getEnvOrDefault("MILVUS_DATABASE", "default"),
+			DatabaseName:   firstNonEmptyString(getEnvOrDefault("MILVUS_TEST_DATABASE", ""), getEnvOrDefault("MILVUS_DATABASE", "default")),
 			MetricType:     "COSINE",
-			Username:       getEnvOrDefault("MILVUS_USERNAME", "minioadmin"),
-			Password:       getEnvOrDefault("MILVUS_PASSWORD", "minioadmin"),
+			Username:       firstNonEmptyEnv("MILVUS_TEST_USERNAME", "MILVUS_USERNAME"),
+			Password:       firstNonEmptyEnv("MILVUS_TEST_PASSWORD", "MILVUS_PASSWORD"),
 			TopK:           5,
 			ConnectTimeout: 10 * time.Second,
 			SearchTimeout:  30 * time.Second,
@@ -67,16 +68,65 @@ func getEnvOrDefault(key, defaultValue string) string {
 	return defaultValue
 }
 
+const runMilvusIntegrationEnv = "RUN_MILVUS_INTEGRATION"
+
+func milvusIntegrationEnabled() bool {
+	return os.Getenv(runMilvusIntegrationEnv) == "1"
+}
+
+func initTestMilvusManager(t *testing.T, ctx context.Context, cfg *config.Config) *MilvusManager {
+	t.Helper()
+
+	if !milvusIntegrationEnabled() {
+		t.Skipf("skipping Milvus integration test; set %s=1 to run", runMilvusIntegrationEnv)
+	}
+
+	manager, err := InitMilvusManager(ctx, cfg)
+	if err != nil {
+		t.Logf("Failed to initialize MilvusManager (is Milvus running?): %v", err)
+		t.Skip("skipping Milvus integration test because Milvus is unavailable")
+	}
+
+	return manager
+}
+
+func TestMilvusIntegrationEnabled(t *testing.T) {
+	t.Setenv(runMilvusIntegrationEnv, "")
+	if milvusIntegrationEnabled() {
+		t.Fatal("milvusIntegrationEnabled() = true, want false when env is empty")
+	}
+
+	t.Setenv(runMilvusIntegrationEnv, "1")
+	if !milvusIntegrationEnabled() {
+		t.Fatal("milvusIntegrationEnabled() = false, want true when env is 1")
+	}
+}
+
+func firstNonEmptyEnv(keys ...string) string {
+	for _, key := range keys {
+		if value := os.Getenv(key); value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}
+
 // TestMilvusManagerInit 测试 MilvusManager 初始化
 func TestMilvusManagerInit(t *testing.T) {
 
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 测试健康检查
@@ -93,10 +143,7 @@ func TestEmbeddingService(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 测试单个文本嵌入
@@ -126,10 +173,7 @@ func TestDocumentSplitter(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 测试文档分割
@@ -170,10 +214,7 @@ func TestIndexerService(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 准备测试文档
@@ -224,10 +265,7 @@ func TestRetrieverService(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 先存储一些文档
@@ -255,7 +293,7 @@ func TestRetrieverService(t *testing.T) {
 		},
 	}
 
-	_, err = manager.IndexerService.Store(ctx, docs)
+	_, err := manager.IndexerService.Store(ctx, docs)
 	if err != nil {
 		t.Fatalf("Failed to store documents: %v", err)
 	}
@@ -287,10 +325,7 @@ func TestFullWorkflow(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 1. 准备长文档
@@ -378,10 +413,7 @@ func TestIndexerMultipleDocuments(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 准备多个测试文档
@@ -434,10 +466,7 @@ func TestRetrieverMultipleQueries(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 先存储文档
@@ -465,7 +494,7 @@ func TestRetrieverMultipleQueries(t *testing.T) {
 		},
 	}
 
-	_, err = manager.IndexerService.Store(ctx, docs)
+	_, err := manager.IndexerService.Store(ctx, docs)
 	if err != nil {
 		t.Fatalf("Failed to store documents: %v", err)
 	}
@@ -511,10 +540,7 @@ func TestMetricTypes(t *testing.T) {
 			cfg.Milvus.MetricType = metricType
 			cfg.Milvus.CollectionName = fmt.Sprintf("test_collection_%s", metricType)
 
-			manager, err := InitMilvusManager(ctx, cfg)
-			if err != nil {
-				t.Fatalf("Failed to initialize with metric type %s: %v", metricType, err)
-			}
+			manager := initTestMilvusManager(t, ctx, cfg)
 			defer manager.Close()
 
 			t.Logf("Successfully initialized with metric type: %s", metricType)
@@ -535,10 +561,7 @@ func TestHybridRetrieverIntegration(t *testing.T) {
 	ctx := context.Background()
 	cfg := getTestConfig()
 
-	manager, err := InitMilvusManager(ctx, cfg)
-	if err != nil {
-		t.Fatalf("Failed to initialize MilvusManager: %v", err)
-	}
+	manager := initTestMilvusManager(t, ctx, cfg)
 	defer manager.Close()
 
 	// 1. 准备测试文档
@@ -555,7 +578,7 @@ func TestHybridRetrieverIntegration(t *testing.T) {
 		},
 	}
 
-	_, err = manager.IndexerService.Store(ctx, docs)
+	_, err := manager.IndexerService.Store(ctx, docs)
 	if err != nil {
 		t.Fatalf("Failed to store documents: %v", err)
 	}

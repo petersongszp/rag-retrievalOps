@@ -80,6 +80,17 @@ llm:
 rag:
   enabled: false
   environment: dev
+  document_parser:
+    provider: http
+    engine: docling
+    endpoint: http://parser-provider:9000/parse
+    timeout_ms: 60000
+    strict_mode: true
+    save_sidecar: true
+    ocr:
+      provider: http
+      endpoint: http://paddleocr:9000/ocr
+      timeout_ms: 30000
   feature_flags:
     enable_prod_guard: false
     enable_ingest_retry: false
@@ -141,6 +152,9 @@ rag:
 
 # Embedding 服务配置
 Embedding:
+  EnableCache: false # query embedding process-local cache switch
+  CacheTTLSeconds: 1800 # query embedding cache TTL in seconds
+  CacheMaxEntries: 2000 # max query embedding cache entries per process
   # 认证配置（APIKey 或 AccessKey/SecretKey 二选一）
   # 支持环境变量引用语法：${VAR_NAME} 或 $VAR_NAME
   APIKey: '${EMBEDDING_API_KEY}' # 从环境变量 EMBEDDING_API_KEY 读取

@@ -108,6 +108,102 @@ func TestBuildDedupeKeyPrefersDocumentAndChunkID(t *testing.T) {
 	}
 }
 
+func TestDeduplicateFusedDocumentsPrefersTableChunkOverContainingSection(t *testing.T) {
+	fused := []*FusedDocument{
+		{
+			Key:            "doc-18:doc-18-child-004",
+			Doc:            makeFusedTestDoc("section", "doc-18", "doc-18-child-004", "markdown_heading_section", 100, 900, 0.47),
+			Score:          0.47,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.47},
+			RouteRawScores: map[string]float64{routeDense: 0.47},
+		},
+		{
+			Key:            "doc-18:doc-18-child-006",
+			Doc:            makeFusedTestDoc("table", "doc-18", "doc-18-child-006", "table", 320, 780, 0.49),
+			Score:          0.49,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.49},
+			RouteRawScores: map[string]float64{routeDense: 0.49},
+		},
+	}
+
+	merged := DeduplicateFusedDocuments(fused)
+	if len(merged) != 1 {
+		t.Fatalf("expected containing section to be removed, got %d docs", len(merged))
+	}
+	if merged[0].ID != "table" {
+		t.Fatalf("expected table chunk to be kept, got %s", merged[0].ID)
+	}
+}
+
+func TestDeduplicateFusedDocumentsKeepsNonOverlappingTableAndSection(t *testing.T) {
+	fused := []*FusedDocument{
+		{
+			Key:            "doc-18:doc-18-child-004",
+			Doc:            makeFusedTestDoc("section", "doc-18", "doc-18-child-004", "markdown_heading_section", 100, 250, 0.47),
+			Score:          0.47,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.47},
+			RouteRawScores: map[string]float64{routeDense: 0.47},
+		},
+		{
+			Key:            "doc-18:doc-18-child-006",
+			Doc:            makeFusedTestDoc("table", "doc-18", "doc-18-child-006", "table", 320, 780, 0.49),
+			Score:          0.49,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.49},
+			RouteRawScores: map[string]float64{routeDense: 0.49},
+		},
+	}
+
+	merged := DeduplicateFusedDocuments(fused)
+	if len(merged) != 2 {
+		t.Fatalf("expected non-overlapping chunks to be kept, got %d docs", len(merged))
+	}
+}
+
+func TestDeduplicateFusedDocumentsPrefersTableChunkWhenDocxSpansDoNotContain(t *testing.T) {
+	sectionDoc := makeFusedTestDoc("section", "doc-21", "doc-21-child-005", "markdown_heading_section", 100, 420, 0.4798)
+	sectionDoc.Content = "## 2. 计费规则 云消息队列 RocketMQ 版的基础计算规格费用按照规格大小计费，支持包年包月和按量付费两种计费方式，具体计费信息如下表所示： | 项目 | 按量付费 | 包年包月 | 计费项 | 按实际购买的计算规格收费。 | 计费公式 | 计算规格费用 = 实例购买后的服务时长（小时） × 规格单价（元/小时） | 计费周期 | 按小时计费 当前计费周期内，若实例的服务时间不足1小时按照1小时计算。"
+
+	tableDoc := makeFusedTestDoc("table", "doc-21", "doc-21-child-007", "table", 600, 900, 0.49)
+	tableDoc.Content = "Table table-001 | 项目 | 按量付费 | 包年包月 || 计费项 | 按实际购买的计算规格收费。 | 按实际购买的计算规格收费。 || 计费公式 | 计算规格费用 = 实例购买后的服务时长（小时） × 规格单价（元/小时） | 计算规格费用 = 购买时长（月） × 规格单价（元/月） || 计费周期 | 按小时计费 当前计费周期内，若实例的服务时间不足1小时按照1小时计算。 | 按月计费"
+
+	fused := []*FusedDocument{
+		{
+			Key:            "doc-21:doc-21-child-005",
+			Doc:            sectionDoc,
+			Score:          0.4798,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.4798},
+			RouteRawScores: map[string]float64{routeDense: 0.4798},
+		},
+		{
+			Key:            "doc-21:doc-21-child-007",
+			Doc:            tableDoc,
+			Score:          0.49,
+			PrimaryRoute:   routeDense,
+			FusionStrategy: "minmax_v1",
+			RouteContrib:   map[string]float64{routeDense: 0.49},
+			RouteRawScores: map[string]float64{routeDense: 0.49},
+		},
+	}
+
+	merged := DeduplicateFusedDocuments(fused)
+	if len(merged) != 1 {
+		t.Fatalf("expected docx section duplicate to be removed, got %d docs", len(merged))
+	}
+	if merged[0].ID != "table" {
+		t.Fatalf("expected table chunk to be kept, got %s", merged[0].ID)
+	}
+}
+
 func TestSummarizeFinalRouteStats(t *testing.T) {
 	docs := []*schema.Document{
 		{
@@ -143,6 +239,22 @@ func TestSummarizeFinalRouteStats(t *testing.T) {
 	}
 	if stats.DualRouteFinalCount != 1 {
 		t.Fatalf("DualRouteFinalCount = %d, want 1", stats.DualRouteFinalCount)
+	}
+}
+
+func makeFusedTestDoc(id, documentID, chunkID, unit string, start, end int, score float64) *schema.Document {
+	return &schema.Document{
+		ID:      id,
+		Content: id + " content",
+		MetaData: map[string]interface{}{
+			"document_id":        documentID,
+			"chunk_id":           chunkID,
+			"chunking_unit":      unit,
+			"child_start_offset": start,
+			"child_end_offset":   end,
+			"dense_score":        score,
+			"score":              score,
+		},
 	}
 }
 
