@@ -1,7 +1,6 @@
 package kb
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
