@@ -18,6 +18,11 @@ func TestSearchMetricsFields(t *testing.T) {
 		EmbeddingCacheHit:      true,
 		EmbeddingCacheLookupMs: 3,
 		EmbeddingCacheReason:   "hit",
+		DenseParticipation:     3,
+		SparseParticipation:    2,
+		PrimaryDenseCount:      2,
+		PrimarySparseCount:     1,
+		DualRouteFinalCount:    1,
 	}
 
 	if m.EmbeddingMs != 50 {
@@ -40,6 +45,12 @@ func TestSearchMetricsFields(t *testing.T) {
 	}
 	if m.EmbeddingCacheLookupMs != 3 || m.EmbeddingCacheReason != "hit" {
 		t.Errorf("unexpected embedding cache metrics: %+v", m)
+	}
+	if m.DenseParticipation != 3 || m.SparseParticipation != 2 {
+		t.Errorf("unexpected participation counts: dense=%d sparse=%d", m.DenseParticipation, m.SparseParticipation)
+	}
+	if m.PrimaryDenseCount != 2 || m.PrimarySparseCount != 1 || m.DualRouteFinalCount != 1 {
+		t.Errorf("unexpected primary/dual stats: %+v", m)
 	}
 }
 
@@ -94,6 +105,11 @@ func TestSearchMetricsJSONSerialization(t *testing.T) {
 
 	requiredFields := []string{"EmbeddingMs", "SearchMs", "PostprocessMs", "HitCount", "TruncatedCount", "EmbeddingCacheEnabled", "EmbeddingCacheHit", "EmbeddingCacheLookupMs", "EmbeddingCacheReason"}
 	for _, field := range requiredFields {
+		if _, ok := parsed[field]; !ok {
+			t.Errorf("SearchMetrics JSON missing field: %s", field)
+		}
+	}
+	for _, field := range []string{"DenseParticipation", "SparseParticipation", "PrimaryDenseCount", "PrimarySparseCount", "DualRouteFinalCount"} {
 		if _, ok := parsed[field]; !ok {
 			t.Errorf("SearchMetrics JSON missing field: %s", field)
 		}

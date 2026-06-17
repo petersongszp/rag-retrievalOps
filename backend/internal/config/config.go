@@ -386,6 +386,10 @@ type RAGThresholds struct {
 }
 
 type RAGPhase2Config struct {
+	FusionStrategy       string  `yaml:"fusion_strategy"`
+	RRFK                 int     `yaml:"rrf_k"`
+	RRFDenseWeight       float64 `yaml:"rrf_dense_weight"`
+	RRFSparseWeight      float64 `yaml:"rrf_sparse_weight"`
 	HybridDenseWeight    float64 `yaml:"hybrid_dense_weight"`
 	HybridSparseWeight   float64 `yaml:"hybrid_sparse_weight"`
 	CandidateTopK        int     `yaml:"candidate_topk"`
@@ -565,6 +569,13 @@ func (c *Config) ValidateRAGPrerequisites() error {
 		}
 	}
 	if c.RAG.FeatureFlags.EnableHybridRetrieval {
+		c.RAG.Phase2.FusionStrategy = normalizeFusionStrategy(c.RAG.Phase2.FusionStrategy)
+		if strings.TrimSpace(c.RAG.Phase2.FusionStrategy) == "" {
+			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.fusion_strategy is empty")
+		}
+		if !isValidFusionStrategy(c.RAG.Phase2.FusionStrategy) {
+			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.fusion_strategy must be one of minmax_v1/rrf_v1, got %q", c.RAG.Phase2.FusionStrategy)
+		}
 		if c.RAG.Phase2.HybridDenseWeight <= 0 {
 			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.hybrid_dense_weight must be > 0")
 		}
@@ -577,6 +588,28 @@ func (c *Config) ValidateRAGPrerequisites() error {
 		}
 		if c.RAG.Phase2.CandidateTopK <= 0 {
 			return fmt.Errorf("rag phase2 hybrid enabled but rag.phase2.candidate_topk must be > 0")
+		}
+		if c.RAG.Phase2.FusionStrategy == "rrf_v1" {
+			if c.RAG.Phase2.RRFK <= 0 {
+				return fmt.Errorf("rag phase2 rrf enabled but rag.phase2.rrf_k must be > 0")
+			}
+			if c.RAG.Phase2.RRFDenseWeight < 0 {
+				return fmt.Errorf("rag phase2 rrf enabled but rag.phase2.rrf_dense_weight must be >= 0")
+			}
+			if c.RAG.Phase2.RRFSparseWeight < 0 {
+				return fmt.Errorf("rag phase2 rrf enabled but rag.phase2.rrf_sparse_weight must be >= 0")
+			}
+			hasDenseWeight := c.RAG.Phase2.RRFDenseWeight > 0
+			hasSparseWeight := c.RAG.Phase2.RRFSparseWeight > 0
+			if hasDenseWeight != hasSparseWeight {
+				return fmt.Errorf("rag phase2 rrf enabled but rag.phase2.rrf_dense_weight and rag.phase2.rrf_sparse_weight must be set together")
+			}
+			if hasDenseWeight && hasSparseWeight {
+				rrfWeightSum := c.RAG.Phase2.RRFDenseWeight + c.RAG.Phase2.RRFSparseWeight
+				if rrfWeightSum < 0.999 || rrfWeightSum > 1.001 {
+					return fmt.Errorf("rag phase2 rrf enabled but rrf dense+sparse weight must be 1.0, got %.4f", rrfWeightSum)
+				}
+			}
 		}
 	}
 	if c.RAG.FeatureFlags.EnableDynamicTopK {
@@ -739,6 +772,13 @@ func (c *Config) applyRAGDefaults() {
 			c.RAG.Thresholds.UserQPSLimit = 20
 		}
 	}
+	c.RAG.Phase2.FusionStrategy = normalizeFusionStrategy(c.RAG.Phase2.FusionStrategy)
+	if c.RAG.Phase2.FusionStrategy == "" {
+		c.RAG.Phase2.FusionStrategy = "minmax_v1"
+	}
+	if c.RAG.Phase2.FusionStrategy == "rrf_v1" && c.RAG.Phase2.RRFK <= 0 {
+		c.RAG.Phase2.RRFK = 60
+	}
 	if c.RAG.Phase2.HybridDenseWeight <= 0 {
 		c.RAG.Phase2.HybridDenseWeight = 0.7
 	}
@@ -783,6 +823,18 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if c.RAG.SemanticCache.MaxEntriesPerScope <= 0 {
 		c.RAG.SemanticCache.MaxEntriesPerScope = 200
+	}
+	if strings.TrimSpace(c.RAG.Phase2.FusionStrategy) == "" {
+		c.RAG.Phase2.FusionStrategy = "minmax_v1"
+	}
+	if c.RAG.Phase2.RRFK <= 0 {
+		c.RAG.Phase2.RRFK = 60
+	}
+	if c.RAG.Phase2.RRFDenseWeight <= 0 {
+		c.RAG.Phase2.RRFDenseWeight = c.RAG.Phase2.HybridDenseWeight
+	}
+	if c.RAG.Phase2.RRFSparseWeight <= 0 {
+		c.RAG.Phase2.RRFSparseWeight = c.RAG.Phase2.HybridSparseWeight
 	}
 	if strings.TrimSpace(c.RAG.Release.Stage) == "" {
 		c.RAG.Release.Stage = "full"
@@ -1027,6 +1079,24 @@ func (c *Config) applyRAGEnvOverrides() error {
 	} else if ok {
 		c.Embedding.CacheMaxEntries = value
 	}
+	if value, ok := os.LookupEnv("RAG_FUSION_STRATEGY"); ok {
+		c.RAG.Phase2.FusionStrategy = normalizeFusionStrategy(value)
+	}
+	if value, ok, err := readEnvInt("RAG_RRF_K"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RRFK = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_RRF_DENSE_WEIGHT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RRFDenseWeight = value
+	}
+	if value, ok, err := readEnvFloat64("RAG_RRF_SPARSE_WEIGHT"); err != nil {
+		return err
+	} else if ok {
+		c.RAG.Phase2.RRFSparseWeight = value
+	}
 	if value, ok, err := readEnvFloat64("RAG_HYBRID_DENSE_WEIGHT"); err != nil {
 		return err
 	} else if ok {
@@ -1268,7 +1338,7 @@ func (c *Config) LogRAGSnapshot() {
 	}
 	semanticCacheContract := c.SemanticCacheContract()
 	log.Printf(
-		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t experiment_platform:%t index_lifecycle:%t cost_dashboard:%t compliance_audit:%t weekly_report:%t milvus_ops_tooling:%t collection_switch_guard:%t cost_governance:%t audit_center:%t vector_ops:%t governance_alerts:%t semantic_cache:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} semantic_cache={threshold:%.3f ttl_seconds:%d max_candidates:%d max_entries_per_scope:%d scope:%s bypass:%s payload:%s topk:%s} phase2={hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} phase4_metrics=%s milvus={address:%s database:%s collection:%s}",
+		"[RAG:L0] snapshot version=%s strategy_digest=%s env=%s enabled=%t flags={prod_guard:%t ingest_retry:%t retrieve_audit:%t hybrid:%t rewrite:%t dynamic_topk:%t adv_rerank:%t parent_child:%t strategic_topk:%t evidence_refusal:%t citation_consistency:%t domain_terms:%t route_specific_rewrite:%t model_assisted_rewrite:%t experiment_platform:%t index_lifecycle:%t cost_dashboard:%t compliance_audit:%t weekly_report:%t milvus_ops_tooling:%t collection_switch_guard:%t cost_governance:%t audit_center:%t vector_ops:%t governance_alerts:%t semantic_cache:%t} thresholds={max_retry_count:%d retry_backoff_ms:%d retrieve_timeout_ms:%d user_qps_limit:%d} semantic_cache={threshold:%.3f ttl_seconds:%d max_candidates:%d max_entries_per_scope:%d scope:%s bypass:%s payload:%s topk:%s} phase2={fusion_strategy:%s rrf_k:%d rrf_dense_weight:%.3f rrf_sparse_weight:%.3f hybrid_dense_weight:%.3f hybrid_sparse_weight:%.3f candidate_topk:%d min_topk:%d max_topk:%d token_budget:%d min_answer_chunks:%d rewrite_timeout_ms:%d rewrite_max_expansions:%d rerank_timeout_ms:%d rerank_model:%s} phase3={parent_child_fill_strategy:%s parent_child_window_size:%d parent_child_max_tokens:%d strategic_topk_min_k:%d strategic_topk_max_k:%d strategic_topk_budget_ratio:%.3f evidence_min_rerank_score:%.3f evidence_min_density:%.3f evidence_min_citation_coverage:%.3f citation_check_threshold:%.3f citation_check_version:%s domain_term_timeout_ms:%d model_rewrite_timeout_ms:%d model_rewrite_shadow_ratio:%.3f} release={enabled:%t stage:%s internal_roles:%s canary_percent:%d batch_percent:%d allowlist_count:%d} phase4_metrics=%s milvus={address:%s database:%s collection:%s}",
 		c.ConfigVersion,
 		c.buildRAGStrategyDigest(),
 		c.RAG.Environment,
@@ -1311,6 +1381,10 @@ func (c *Config) LogRAGSnapshot() {
 		strings.Join(semanticCacheContract.BypassReasons, ","),
 		semanticCacheContract.ResultPayload,
 		semanticCacheContract.TopKPolicy,
+		c.RAG.Phase2.FusionStrategy,
+		c.RAG.Phase2.RRFK,
+		c.RAG.Phase2.RRFDenseWeight,
+		c.RAG.Phase2.RRFSparseWeight,
 		c.RAG.Phase2.HybridDenseWeight,
 		c.RAG.Phase2.HybridSparseWeight,
 		c.RAG.Phase2.CandidateTopK,
@@ -1578,10 +1652,13 @@ func (c *Config) writePhase2BaselineSnapshot(configPath string) error {
 		"evaluation_baseline": map[string]interface{}{
 			"dataset_path":      "scripts/evaluation/dataset.json",
 			"profile_path":      "scripts/evaluation/retrieval_strategy_profiles.example.json",
-			"baseline_profile":  "phase2_baseline",
-			"candidate_profile": "parent_child+advanced_rewrite",
+			"baseline_profile":  "phase2_minmax_baseline",
+			"candidate_profile": "phase2_rrf_candidate",
 			"experiment_groups": []string{
-				"phase2_baseline",
+				"phase2_non_rrf_baseline",
+				"phase2_non_rrf_candidate",
+				"phase2_minmax_baseline",
+				"phase2_rrf_candidate",
 				"parent_child",
 				"parent_child+strategic_topk",
 				"parent_child+refusal",
@@ -1600,7 +1677,7 @@ func (c *Config) writePhase2BaselineSnapshot(configPath string) error {
 		"rollback_contract": map[string]interface{}{
 			"phase2_main_path_unchanged": true,
 			"phase3_flags_independent":   true,
-			"rollback_target":            "phase2_baseline",
+			"rollback_target":            "phase2_minmax_baseline",
 		},
 	}
 	data, err := json.MarshalIndent(payload, "", "  ")
@@ -1697,6 +1774,26 @@ func isValidParentChildFillStrategy(strategy string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func isValidFusionStrategy(strategy string) bool {
+	switch normalizeFusionStrategy(strategy) {
+	case "minmax_v1", "rrf_v1":
+		return true
+	default:
+		return false
+	}
+}
+
+func normalizeFusionStrategy(strategy string) string {
+	switch strings.ToLower(strings.TrimSpace(strategy)) {
+	case "", "minmax", "min-max", "min_max", "minmax_v1":
+		return "minmax_v1"
+	case "rrf", "rrf-v1", "rrf_v1":
+		return "rrf_v1"
+	default:
+		return strings.ToLower(strings.TrimSpace(strategy))
 	}
 }
 

@@ -1,8 +1,7 @@
 FROM node:18-alpine AS deps
 WORKDIR /app
 COPY package*.json ./
-RUN --mount=type=cache,target=/root/.npm,id=npm-cache \
-    npm install
+RUN npm install
 
 FROM node:18-alpine AS builder
 

@@ -45,12 +45,7 @@ export interface KBIngestJob {
   updated_at: string;
 }
 
-export type RetrieveResultStatus =
-  | 'success'
-  | 'no_result'
-  | 'filtered_out'
-  | 'error'
-  | 'timeout';
+export type RetrieveResultStatus = 'success' | 'no_result' | 'filtered_out' | 'error' | 'timeout';
 
 export interface RetrieveItem {
   content: string;
@@ -815,6 +810,9 @@ export interface ContractGapAware {
 export interface CostSummary extends ContractGapAware {
   range: string;
   total_estimated_cost?: number;
+  total_tokens?: number;
+  tokens_per_1k_queries?: number;
+  avg_tokens_per_query?: number;
   currency?: string;
   cost_per_1k_queries?: number;
   embedding_cost?: number;
@@ -830,6 +828,9 @@ export interface CostSummary extends ContractGapAware {
 export interface CostTimeseriesPoint extends ContractGapAware {
   bucket: string;
   total_estimated_cost?: number;
+  total_tokens?: number;
+  tokens_per_1k_queries?: number;
+  avg_tokens_per_query?: number;
   cost_per_1k_queries?: number;
   embedding_cost?: number;
   llm_cost?: number;

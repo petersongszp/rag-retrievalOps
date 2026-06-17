@@ -145,6 +145,10 @@ func InitMilvusManager(ctx context.Context, cfg *config.Config) (*MilvusManager,
 	}
 	hybridConfig := &retrieval.HybridRetrieverConfig{
 		CandidateTopK: candidateTopK,
+		FusionStrategy: cfg.RAG.Phase2.FusionStrategy,
+		RRFK:           cfg.RAG.Phase2.RRFK,
+		RRFDenseWeight: cfg.RAG.Phase2.RRFDenseWeight,
+		RRFSparseWeight: cfg.RAG.Phase2.RRFSparseWeight,
 		DenseWeight:   cfg.RAG.Phase2.HybridDenseWeight,
 		SparseWeight:  cfg.RAG.Phase2.HybridSparseWeight,
 		SparseConfig: &retrieval.SparseRetrieverConfig{

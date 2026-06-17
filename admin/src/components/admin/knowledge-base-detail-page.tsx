@@ -50,6 +50,13 @@ const STATUS_COLOR_MAP: Record<string, string> = {
 
 const ACTIVE_STATUSES = new Set(['pending', 'processing', 'retrying']);
 
+interface PaginatedResponse<T> {
+  items?: T[];
+  total?: number;
+  page?: number;
+  page_size?: number;
+}
+
 function formatContractField(value: unknown): string {
   if (value === undefined || value === null || value === '') {
     return 'Contract gap';
@@ -72,6 +79,12 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   } = useKnowledgeBaseContext();
   const [documents, setDocuments] = useState<KBDocument[]>([]);
   const [jobs, setJobs] = useState<KBIngestJob[]>([]);
+  const [documentsPage, setDocumentsPage] = useState(1);
+  const [documentsPageSize, setDocumentsPageSize] = useState(10);
+  const [documentsTotal, setDocumentsTotal] = useState(0);
+  const [jobsPage, setJobsPage] = useState(1);
+  const [jobsPageSize, setJobsPageSize] = useState(10);
+  const [jobsTotal, setJobsTotal] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [uploadOpen, setUploadOpen] = useState(false);
   const [fileList, setFileList] = useState<UploadFile[]>([]);
@@ -88,38 +101,69 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     [bases, kbId, selectedBase]
   );
 
-  const refreshJobs = useCallback(async () => {
-    try {
-      const jobsData = await (apiClient.get(KB_ADMIN_API.LIST_JOBS_BY_KB(kbId)) as Promise<{
-        items?: KBIngestJob[];
-      }>);
-      const nextJobs = jobsData?.items ?? [];
-      setJobs(nextJobs);
-      return nextJobs;
-    } catch {
-      return null;
-    }
-  }, [kbId]);
+  const documentsPageRef = useRef(1);
+  const documentsPageSizeRef = useRef(10);
+  const jobsPageRef = useRef(1);
+  const jobsPageSizeRef = useRef(10);
+
+  const refreshJobs = useCallback(
+    async (page?: number, pageSize?: number) => {
+      try {
+        const p = page ?? jobsPageRef.current;
+        const ps = pageSize ?? jobsPageSizeRef.current;
+        const jobsData = await (apiClient.get(KB_ADMIN_API.LIST_JOBS_BY_KB(kbId), {
+          params: { page: p, page_size: ps },
+        }) as Promise<PaginatedResponse<KBIngestJob>>);
+        const nextJobs = jobsData?.items ?? [];
+        const nextPage = jobsData?.page ?? p;
+        const nextPageSize = jobsData?.page_size ?? ps;
+        setJobs(nextJobs);
+        setJobsTotal(jobsData?.total ?? 0);
+        setJobsPage(nextPage);
+        setJobsPageSize(nextPageSize);
+        jobsPageRef.current = nextPage;
+        jobsPageSizeRef.current = nextPageSize;
+        return nextJobs;
+      } catch {
+        return null;
+      }
+    },
+    [kbId]
+  );
+
+  const refreshDocuments = useCallback(
+    async (page?: number, pageSize?: number) => {
+      const p = page ?? documentsPageRef.current;
+      const ps = pageSize ?? documentsPageSizeRef.current;
+      try {
+        const documentsData = await (apiClient.get(KB_ADMIN_API.LIST_DOCUMENTS, {
+          params: { kb_id: kbId, page: p, page_size: ps },
+        }) as Promise<PaginatedResponse<KBDocument>>);
+        const nextPage = documentsData?.page ?? p;
+        const nextPageSize = documentsData?.page_size ?? ps;
+        setDocuments(documentsData?.items ?? []);
+        setDocumentsTotal(documentsData?.total ?? 0);
+        setDocumentsPage(nextPage);
+        setDocumentsPageSize(nextPageSize);
+        documentsPageRef.current = nextPage;
+        documentsPageSizeRef.current = nextPageSize;
+      } catch (loadError) {
+        message.error(loadError instanceof Error ? loadError.message : '加载文档列表失败');
+      }
+    },
+    [kbId]
+  );
 
   const refreshDetail = useCallback(async () => {
     try {
       setIsLoading(true);
-      const [documentsData, latestJobs] = await Promise.all([
-        apiClient.get(KB_ADMIN_API.LIST_DOCUMENTS, { params: { kb_id: kbId } }) as Promise<{
-          items?: KBDocument[];
-        }>,
-        refreshJobs(),
-      ]);
-
-      setDocuments(documentsData?.items ?? []);
-      return latestJobs;
+      await Promise.all([refreshDocuments(), refreshJobs()]);
     } catch (loadError) {
       message.error(loadError instanceof Error ? loadError.message : '加载知识库详情失败');
-      return null;
     } finally {
       setIsLoading(false);
     }
-  }, [kbId, refreshJobs]);
+  }, [refreshDocuments, refreshJobs]);
 
   useEffect(() => {
     setSelectedBaseId(kbId);
@@ -153,6 +197,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   }, [jobs, refreshJobs]);
 
   const uploadProps: UploadProps = {
+    multiple: true,
     fileList,
     beforeUpload: () => false,
     onChange: ({ fileList: nextFileList }) => setFileList(nextFileList),
@@ -242,7 +287,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       message.success('上传成功，正在刷新文档和任务列表...');
       setUploadOpen(false);
       setFileList([]);
-      await refreshDetail();
+      await Promise.all([refreshDocuments(1), refreshJobs(1)]);
     } catch (uploadError) {
       message.error(uploadError instanceof Error ? uploadError.message : '上传失败');
     } finally {
@@ -465,19 +510,49 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           items={[
             {
               key: 'documents',
-              label: `文档（${documents.length}）`,
+              label: `文档（${documentsTotal}）`,
               children: (
                 <Card>
-                  <Table rowKey="id" columns={documentColumns} dataSource={documents} pagination={{ pageSize: 10 }} />
+                  <Table
+                    rowKey="id"
+                    columns={documentColumns}
+                    dataSource={documents}
+                    pagination={{
+                      current: documentsPage,
+                      pageSize: documentsPageSize,
+                      total: documentsTotal,
+                      showSizeChanger: true,
+                      onChange: (p, ps) => {
+                        setDocumentsPage(p);
+                        setDocumentsPageSize(ps);
+                        void refreshDocuments(p, ps);
+                      },
+                    }}
+                  />
                 </Card>
               ),
             },
             {
               key: 'jobs',
-              label: `入库任务（${jobs.length}）`,
+              label: `入库任务（${jobsTotal}）`,
               children: (
                 <Card>
-                  <Table rowKey="id" columns={jobColumns} dataSource={jobs} pagination={{ pageSize: 10 }} />
+                  <Table
+                    rowKey="id"
+                    columns={jobColumns}
+                    dataSource={jobs}
+                    pagination={{
+                      current: jobsPage,
+                      pageSize: jobsPageSize,
+                      total: jobsTotal,
+                      showSizeChanger: true,
+                      onChange: (p, ps) => {
+                        setJobsPage(p);
+                        setJobsPageSize(ps);
+                        void refreshJobs(p, ps);
+                      },
+                    }}
+                  />
                 </Card>
               ),
             },

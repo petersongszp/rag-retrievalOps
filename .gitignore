@@ -62,3 +62,5 @@ tools/
 check_fix.py
 test_embedding_cache.py
 debug*.json
+
+test-repo/

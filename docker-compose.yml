@@ -8,8 +8,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.rag
     restart: unless-stopped
-    ports:
-      - "8899:8899"
+    # ports:
+    #   - "8899:8899"  # 容器内部网络访问即可，无需暴露到宿主机
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DB_HOST: mysql
@@ -36,12 +36,49 @@ services:
     networks:
       - rag-network
 
+  rag-mcp-server:
+    env_file:
+      - .env
+    build:
+      context: ./backend
+      dockerfile: Dockerfile.mcp
+    restart: unless-stopped
+    ports:
+      - "${MCP_PORT:-8898}:${MCP_PORT:-8898}"
+    environment:
+      MCP_ENABLED: ${MCP_ENABLED:-true}
+      MCP_TRANSPORT: ${MCP_TRANSPORT:-http}
+      MCP_HOST: ${MCP_HOST:-0.0.0.0}
+      MCP_PORT: ${MCP_PORT:-8898}
+      MCP_ENDPOINT: ${MCP_ENDPOINT:-/mcp}
+      MCP_ALLOWED_ORIGINS: ${MCP_ALLOWED_ORIGINS:-}
+      MCP_UPSTREAM_TIMEOUT_MS: ${MCP_UPSTREAM_TIMEOUT_MS:-5000}
+      MCP_ENABLE_LEGACY_APP_ID: ${MCP_ENABLE_LEGACY_APP_ID:-false}
+      RAG_BASE_URL: ${RAG_BASE_URL:-http://rag-server:8899}
+      # Keep a local-debug fallback so stdio-based binaries can still boot when needed.
+      RAG_ACCESS_TOKEN: ${RAG_ACCESS_TOKEN:-rag_local_debug_token}
+    depends_on:
+      rag-server:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ \"$${MCP_TRANSPORT:-http}\" = \"http\" ]; then curl -fsS \"http://127.0.0.1:$${MCP_PORT:-8898}/healthz\" >/dev/null; else pgrep -f rag-mcp-server >/dev/null; fi",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - rag-network
+
   mysql:
     image: mysql:8.0
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
-    ports:
-      - "3308:3306"
+    # ports:
+    #   - "3308:3306"  # 仅本地开发时需要暴露，容器间通过内部网络访问
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${DB_NAME:-interview_agent}
@@ -61,8 +98,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-root}
-    ports:
-      - "6380:6379"
+    # ports:
+    #   - "6380:6379"  # 仅本地开发时需要暴露，容器间通过内部网络访问
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
     volumes:
@@ -83,9 +120,9 @@ services:
     environment:
       ETCD_USE_EMBED: "true"
       COMMON_STORAGETYPE: local
-    ports:
-      - "19531:19530"
-      - "9092:9091"
+    # ports:
+    #   - "19531:19530"  # 仅本地开发时需要暴露，容器间通过内部网络访问
+    #   - "9092:9091"    # 健康检查在容器内完成，无需暴露到宿主机
     volumes:
       - milvus-data:/var/lib/milvus
     healthcheck:
@@ -101,7 +138,7 @@ services:
     image: zilliz/attu:v2.4.12
     restart: unless-stopped
     ports:
-      - "8001:3000"
+      - "8001:3000"  # Milvus 管理UI，非应用必须；需要时取消注释即可访问
     environment:
       MILVUS_URL: milvus:19530
     depends_on:
@@ -119,7 +156,7 @@ services:
         API_PROXY_TARGET: http://rag-server:8899
     restart: unless-stopped
     ports:
-      - "3003:3001"
+      - "3003:3001"    # 用户浏览器访问入口，必须保留
     environment:
       NEXT_PUBLIC_API_BASE_URL: /api
       API_PROXY_TARGET: http://rag-server:8899

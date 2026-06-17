@@ -519,7 +519,7 @@ ON DUPLICATE KEY UPDATE permission = 'read';
 
 ### 10.1 SDK 与计划文档不一致
 
-`docs/agent-rag-integration-plan.md` 里描述了 SDK 传 `AppID` 的方案，但当前 `rag-retrievalOps/backend/pkg/ragsdk/client.go` 的真实 SDK 配置只有：
+`docs/集成-01-Agent接入RAG平台方案.md` 里描述了 SDK 传 `AppID` 的方案，但当前 `rag-retrievalOps/backend/pkg/ragsdk/client.go` 的真实 SDK 配置只有：
 
 - `BaseURL`
 - `APIKey`

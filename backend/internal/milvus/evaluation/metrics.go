@@ -197,6 +197,14 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 	parentFillGain := 0.0
 	rewriteApplied := 0.0
 	modelRewrite := 0.0
+	denseHitRate := 0.0
+	sparseHitRate := 0.0
+	denseParticipationRate := 0.0
+	sparseParticipationRate := 0.0
+	primaryDenseRate := 0.0
+	primarySparseRate := 0.0
+	dualRouteRate := 0.0
+	emptyRate := 0.0
 	denseContribution := 0.0
 	sparseContribution := 0.0
 	for _, metric := range queryMetrics {
@@ -222,6 +230,30 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 		if metric.ModelRewriteApplied {
 			modelRewrite++
 		}
+		if metric.DenseHits > 0 {
+			denseHitRate++
+		}
+		if metric.SparseHits > 0 {
+			sparseHitRate++
+		}
+		if metric.DenseParticipation > 0 {
+			denseParticipationRate++
+		}
+		if metric.SparseParticipation > 0 {
+			sparseParticipationRate++
+		}
+		if metric.PrimaryDenseCount > 0 {
+			primaryDenseRate += float64(metric.PrimaryDenseCount) / float64(maxInt(metric.TopK, 1))
+		}
+		if metric.PrimarySparseCount > 0 {
+			primarySparseRate += float64(metric.PrimarySparseCount) / float64(maxInt(metric.TopK, 1))
+		}
+		if metric.DualRouteFinalCount > 0 {
+			dualRouteRate += float64(metric.DualRouteFinalCount) / float64(maxInt(metric.TopK, 1))
+		}
+		if metric.EmptyResult || len(metric.ResultIDs) == 0 {
+			emptyRate++
+		}
 		totalRouteContribution := metric.DenseContribution + metric.SparseContribution
 		if totalRouteContribution > 0 {
 			denseContribution += float64(metric.DenseContribution) / float64(totalRouteContribution)
@@ -245,6 +277,14 @@ func aggregateQueryMetrics(queryMetrics []QueryMetrics, latencies []time.Duratio
 		ParentFillGain:           parentFillGain / count,
 		RewriteAppliedRate:       rewriteApplied / count,
 		ModelRewriteRate:         modelRewrite / count,
+		DenseHitRate:             denseHitRate / count,
+		SparseHitRate:            sparseHitRate / count,
+		DenseParticipationRate:   denseParticipationRate / count,
+		SparseParticipationRate:  sparseParticipationRate / count,
+		PrimaryDenseRate:         primaryDenseRate / count,
+		PrimarySparseRate:        primarySparseRate / count,
+		DualRouteRate:            dualRouteRate / count,
+		EmptyRate:                emptyRate / count,
 		DenseRouteContribution:   denseContribution / count,
 		SparseRouteContribution:  sparseContribution / count,
 		P50LatencyMS:             percentileLatency(latencies, 50),
@@ -321,6 +361,13 @@ func citationMatches(target CitationTarget, result RetrievedItem) bool {
 
 func min(a, b int) int {
 	if a < b {
+		return a
+	}
+	return b
+}
+
+func maxInt(a, b int) int {
+	if a > b {
 		return a
 	}
 	return b

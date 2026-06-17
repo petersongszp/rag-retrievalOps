@@ -1,0 +1,67 @@
+{
+  "dataset_version": "phase2-non-rrf-v1",
+  "description": "Minimal dedicated Phase2 non-RRF dataset for route hits, participation, and primary-route regression checks.",
+  "cases": [
+    {
+      "id": "non-rrf-entity-acronym",
+      "question": "GC 在 Go 语境里通常指什么？",
+      "query": "Go GC",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-with-real-chunk-id"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-with-real-chunk-id"
+        }
+      ],
+      "query_type": "acronym",
+      "scenario": "non_rrf_sparse_value",
+      "expected_behavior": "sparse_should_hit_and_participate",
+      "expected_primary_route": "sparse",
+      "expected_participating_routes": [
+        "sparse"
+      ],
+      "must_contain_terms": [
+        "gc"
+      ],
+      "difficulty": "easy",
+      "tags": [
+        "non_rrf",
+        "acronym",
+        "sparse_candidate"
+      ]
+    },
+    {
+      "id": "non-rrf-entity-longtail",
+      "question": "goroutine 调度为什么比线程更轻量？",
+      "query": "goroutine 调度 轻量",
+      "top_k": 5,
+      "relevant_ids": [
+        "replace-with-real-chunk-id-2"
+      ],
+      "citation_targets": [
+        {
+          "chunk_id": "replace-with-real-chunk-id-2"
+        }
+      ],
+      "query_type": "entity",
+      "scenario": "non_rrf_dense_guardrail",
+      "expected_behavior": "dense_should_stay_primary_while_sparse_can_participate",
+      "expected_primary_route": "dense",
+      "expected_participating_routes": [
+        "dense",
+        "sparse"
+      ],
+      "must_contain_terms": [
+        "goroutine"
+      ],
+      "difficulty": "medium",
+      "tags": [
+        "non_rrf",
+        "entity",
+        "dense_primary"
+      ]
+    }
+  ]
+}

@@ -77,6 +77,10 @@ rag:
     retrieve_timeout_ms: 3000
     user_qps_limit: 20
   phase2:
+    fusion_strategy: minmax_v1
+    rrf_k: 60
+    rrf_dense_weight: 0.7
+    rrf_sparse_weight: 0.3
     hybrid_dense_weight: 0.7
     hybrid_sparse_weight: 0.3
     candidate_topk: 10

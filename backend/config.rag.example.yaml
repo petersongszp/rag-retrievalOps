@@ -79,6 +79,10 @@ rag:
     max_candidates: 20
     max_entries_per_scope: 200
   phase2:
+    fusion_strategy: minmax_v1
+    rrf_k: 60
+    rrf_dense_weight: 0.7
+    rrf_sparse_weight: 0.3
     hybrid_dense_weight: 0.7
     hybrid_sparse_weight: 0.3
     candidate_topk: 10
