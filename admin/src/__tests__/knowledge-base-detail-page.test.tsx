@@ -52,7 +52,9 @@ describe('KnowledgeBaseDetailPage', () => {
     fireEvent.click(screen.getByRole('button', { name: /上传文档/ }));
 
     expect(
-      screen.getByText('支持格式：PDF、MD、TXT、MARKDOWN、DOCX、HTML、HTM')
+      screen.getByText(
+        '上传后会自动进入解析、切分、向量化和写入流程。支持格式：PDF、MD、TXT、MARKDOWN、DOCX、HTML、HTM'
+      )
     ).toBeInTheDocument();
   });
 });

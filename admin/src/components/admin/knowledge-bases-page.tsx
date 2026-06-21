@@ -17,6 +17,25 @@ import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
 const { Paragraph, Text, Title } = Typography;
 
+const KNOWLEDGE_BASE_STATUS_LABELS: Record<string, string> = {
+  active: '可用',
+  processing: '处理中',
+  building: '处理中',
+  syncing: '处理中',
+  failed: '异常',
+  error: '异常',
+  inactive: '停用',
+  disabled: '停用',
+};
+
+function getKnowledgeBaseStatusLabel(status?: string): string {
+  if (!status) {
+    return '未知';
+  }
+
+  return KNOWLEDGE_BASE_STATUS_LABELS[status] ?? status;
+}
+
 export function KnowledgeBasesPage() {
   const router = useRouter();
   const { user } = useAuth();
@@ -42,10 +61,10 @@ export function KnowledgeBasesPage() {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <Title level={2} style={{ marginBottom: 8 }}>
-            知识库
+            知识库管理
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            在这里查看知识库列表，并进入详情页完成文档上传、任务跟踪和检索联调。
+            统一管理知识资产，组织文档、生成向量，并为检索问答提供稳定可维护的知识来源。
           </Paragraph>
         </div>
         <Space>
@@ -78,9 +97,23 @@ export function KnowledgeBasesPage() {
         <Spin spinning={isLoading}>
           {bases.length === 0 ? (
             <Empty
-              description="暂无知识库。创建一个新知识库以解锁详情页、文档流程和检索实验室。"
+              description="还没有知识库。先创建一个知识库，再上传文档并启动入库流程。"
               image={Empty.PRESENTED_IMAGE_SIMPLE}
-            />
+            >
+              <Space>
+                <Button icon={<ReloadOutlined />} onClick={() => void refreshBases()}>
+                  刷新列表
+                </Button>
+                <Button
+                  type="primary"
+                  icon={<PlusOutlined />}
+                  disabled={isPermissionDenied || !allowCreate}
+                  onClick={() => setModalOpen(true)}
+                >
+                  创建第一个知识库
+                </Button>
+              </Space>
+            </Empty>
           ) : (
             <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
               {bases.map((base) => {
@@ -139,12 +172,14 @@ export function KnowledgeBasesPage() {
                           {base.name}
                         </Title>
                         <Tag color={base.status === 'active' ? 'success' : 'default'}>
-                          {base.status}
+                          {getKnowledgeBaseStatusLabel(base.status)}
                         </Tag>
                       </div>
-                      <Text type="secondary">{base.description || '暂无描述。'}</Text>
                       <Text type="secondary">
-                        Collection: {base.vector_collection || 'Contract gap'}
+                        {base.description || '暂未填写说明，可进入详情页补充文档范围和使用场景。'}
+                      </Text>
+                      <Text type="secondary">
+                        向量集合：{base.vector_collection || '待系统生成'}
                       </Text>
                       <Text type="secondary">创建时间：{base.created_at}</Text>
                       <Link href={`/knowledge-bases/${base.id}`}>查看详情</Link>

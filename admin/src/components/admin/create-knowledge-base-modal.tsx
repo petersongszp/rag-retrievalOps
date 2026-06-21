@@ -1,6 +1,6 @@
 'use client';
 
-import { Form, Input, Modal } from 'antd';
+import { Form, Input, Modal, Typography } from 'antd';
 
 type CreateKnowledgeBaseModalProps = {
   open: boolean;
@@ -8,6 +8,8 @@ type CreateKnowledgeBaseModalProps = {
   onCancel: () => void;
   onSubmit: (values: { name: string; description?: string }) => Promise<void> | void;
 };
+
+const { Paragraph } = Typography;
 
 export function CreateKnowledgeBaseModal({
   open,
@@ -19,9 +21,9 @@ export function CreateKnowledgeBaseModal({
 
   return (
     <Modal
-      title="新建知识库"
+      title="创建知识库"
       open={open}
-      okText="新建"
+      okText="创建并进入"
       cancelText="取消"
       confirmLoading={loading}
       onCancel={() => {
@@ -39,15 +41,21 @@ export function CreateKnowledgeBaseModal({
           form.resetFields();
         }}
       >
+        <Paragraph type="secondary" style={{ marginBottom: 20 }}>
+          知识库用于统一管理文档、生成向量索引，并为检索问答提供可维护的知识来源。
+        </Paragraph>
         <Form.Item
-          label="名称"
+          label="知识库名称"
           name="name"
           rules={[{ required: true, message: '请输入知识库名称' }]}
         >
-          <Input placeholder="示例：Go 面试指南" />
+          <Input placeholder="例如：客服 FAQ、产品文档、Go 面试题库" />
         </Form.Item>
-        <Form.Item label="描述" name="description">
-          <Input.TextArea rows={4} placeholder="可选，填写该知识库的描述信息" />
+        <Form.Item label="知识库说明" name="description">
+          <Input.TextArea
+            rows={4}
+            placeholder="可选，补充适用业务、文档范围或维护人，方便团队后续协作。"
+          />
         </Form.Item>
       </Form>
     </Modal>
