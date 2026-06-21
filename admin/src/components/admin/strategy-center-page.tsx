@@ -37,6 +37,9 @@ import type {
   StrategyRollbackResult,
   StrategyVersion,
 } from '@/types/kb';
+import { ActionEmpty } from './ui/action-empty';
+import { MetricCard } from './ui/metric-card';
+import { PageHeader } from './ui/page-header';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -447,41 +450,45 @@ export function StrategyCenterPage() {
     editForm.getFieldValue('status') !== 'canary';
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       {contextHolder}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            策略中心
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            查看 Phase 3 高级检索策略的状态、影响、版本和最小操作日志，并在需要时安全地做灰度或回滚。
-          </Paragraph>
-        </div>
-        <Space wrap>
-          <Link href="/evaluation/runs">
-            <Button>查看评测运行</Button>
-          </Link>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadFlags()}>
-            刷新
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="策略管理"
+        subtitle="查看检索策略的状态、影响、版本和操作记录，并在确认风险后进行灰度或回退。"
+        extra={
+          <>
+            <Link href="/evaluation/runs">
+              <Button>查看评测任务</Button>
+            </Link>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadFlags()}>
+              刷新
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <Statistic title="启用策略数" value={enabledCount} prefix={<SettingOutlined />} />
-        </Card>
-        <Card>
-          <Statistic title="Canary 策略数" value={canaryCount} />
-        </Card>
-        <Card>
-          <Statistic title="Error 策略数" value={errorCount} />
-        </Card>
-        <Card>
-          <Statistic title="最近回滚次数" value={rollbackCount} prefix={<RollbackOutlined />} />
-        </Card>
+        <MetricCard
+          label="启用策略数"
+          value={<Statistic value={enabledCount} prefix={<SettingOutlined />} />}
+          helper="当前处于启用状态的策略总数"
+        />
+        <MetricCard
+          label="小流量试用策略数"
+          value={<Statistic value={canaryCount} />}
+          helper="正在小范围放量观察的策略数量"
+        />
+        <MetricCard
+          label="异常策略数"
+          value={<Statistic value={errorCount} />}
+          helper="需要优先检查的异常策略数量"
+        />
+        <MetricCard
+          label="最近回退次数"
+          value={<Statistic value={rollbackCount} prefix={<RollbackOutlined />} />}
+          helper="近期执行过的策略回退次数"
+        />
       </div>
 
       {flagsError ? (
@@ -498,13 +505,16 @@ export function StrategyCenterPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(440px,520px)_minmax(0,1fr)]">
-        <Card title="Feature Flags">
+        <Card title="策略开关" className="admin-section-card">
           {flagsLoading ? (
             <div className="flex justify-center py-10">
               <Spin />
             </div>
           ) : flags.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有可展示的策略开关。" />
+            <ActionEmpty
+              title="当前没有可展示的策略开关"
+              description="请先确认后端是否已返回策略配置。"
+            />
           ) : (
             <Table<StrategyFlag>
               rowKey="flag_key"
@@ -529,8 +539,11 @@ export function StrategyCenterPage() {
 
         <Space direction="vertical" size="large" className="w-full">
           {!selectedFlag ? (
-            <Card>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个策略查看详情。" />
+            <Card className="admin-section-card">
+              <ActionEmpty
+                title="请选择一个策略查看详情"
+                description="选择后可以查看影响分析、门禁摘要、版本和操作记录。"
+              />
             </Card>
           ) : (
             <>
@@ -547,10 +560,11 @@ export function StrategyCenterPage() {
                     <Button onClick={openEditModal}>修改策略</Button>
                     <Button onClick={() => openRollbackModal(false)}>回滚当前策略</Button>
                     <Button danger onClick={() => openRollbackModal(true)}>
-                      回滚到 Phase2 Baseline
+                      回退到稳定检索策略
                     </Button>
                   </Space>
                 }
+                className="admin-section-card"
               >
                 <Descriptions column={2} size="small" bordered>
                   <Descriptions.Item label="flag_key">{selectedFlag.flag_key}</Descriptions.Item>

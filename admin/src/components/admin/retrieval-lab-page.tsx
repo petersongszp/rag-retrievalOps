@@ -32,6 +32,8 @@ import { KB_ADMIN_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import type { EvalDataset, ListResponse, RetrieveItem, RetrieveResponse } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
+import { ActionEmpty } from './ui/action-empty';
+import { PageHeader } from './ui/page-header';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -345,19 +347,15 @@ export function RetrievalLabPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       {contextHolder}
 
-      <div>
-        <Title level={2} style={{ marginBottom: 8 }}>
-          检索实验室
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          运行检索测试、检查 request_id 与契约字段，并把一次检索沉淀为评测样本草稿。
-        </Paragraph>
-      </div>
+      <PageHeader
+        title="检索调优"
+        subtitle="输入问题，查看相关结果、引用来源和本次检索链路编号，并把结果沉淀为评测样本。"
+      />
 
-      <Card>
+      <Card className="admin-section-card">
         <Form
           form={retrieveForm}
           layout="vertical"
@@ -391,7 +389,7 @@ export function RetrievalLabPage() {
             />
           </Form.Item>
           <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={loading}>
-            运行检索测试
+            开始检索验证
           </Button>
         </Form>
       </Card>
@@ -399,19 +397,19 @@ export function RetrievalLabPage() {
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
       {!result ? (
-        <Card>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+        <Card className="admin-section-card">
+          <ActionEmpty
+            title={selectedBase ? `开始验证 ${selectedBase.name} 的检索效果` : '请选择知识库并开始检索验证'}
             description={
               selectedBase
-                ? `对 ${selectedBase.name} 运行测试，检查 request_id、score、citation 与 source 字段。`
-                : '请选择知识库并运行检索测试。'
+                ? '输入一个真实问题，查看相关结果、引用来源和链路编号。'
+                : '先选择知识库，再输入问题查看检索结果。'
             }
           />
         </Card>
       ) : (
         <Space direction="vertical" size="large" className="w-full">
-          <Card>
+          <Card className="admin-section-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Space direction="vertical" size={4}>
                 <Text strong>Request ID</Text>
@@ -442,7 +440,7 @@ export function RetrievalLabPage() {
                     );
                   }}
                 >
-                  查看 Trace
+                  查看链路追踪
                 </Button>
                 <Button
                   disabled={!result.request_id}
@@ -455,7 +453,7 @@ export function RetrievalLabPage() {
                     );
                   }}
                 >
-                  查看调试视图
+                  查看链路分析
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={() => void openSaveModal()}>
                   保存为评测样本
@@ -465,15 +463,18 @@ export function RetrievalLabPage() {
           </Card>
 
           {result.items.length === 0 ? (
-            <Card>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未返回检索结果。" />
+            <Card className="admin-section-card">
+              <ActionEmpty
+                title="本次未返回检索结果"
+                description="可以尝试换一种问法、放宽关键词，或先检查知识库中是否已有相关内容。"
+              />
             </Card>
           ) : (
             result.items.map((item, index) => {
               const gaps = findContractGaps(item);
 
               return (
-                <Card key={`${item.citation?.chunk_id ?? 'row'}-${index}`}>
+                <Card key={`${item.citation?.chunk_id ?? 'row'}-${index}`} className="admin-section-card">
                   <Space direction="vertical" size={12} className="w-full">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Tag color="blue">结果 {index + 1}</Tag>

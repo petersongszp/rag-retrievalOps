@@ -22,6 +22,10 @@ import type {
   MetricsRange,
 } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
+import { ActionEmpty } from './ui/action-empty';
+import { InlineHelp } from './ui/inline-help';
+import { MetricCard } from './ui/metric-card';
+import { PageHeader } from './ui/page-header';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -112,10 +116,13 @@ function TrendMetricCard({
   color: string;
 }) {
   return (
-    <Card bodyStyle={{ padding: 20 }} className="h-full">
+    <Card bodyStyle={{ padding: 20 }} className="h-full admin-section-card">
       <Space direction="vertical" size={14} className="w-full">
         <div>
-          <Text type="secondary">{title}</Text>
+          <Space size={6}>
+            <Text type="secondary">{title}</Text>
+            <InlineHelp title={helper} />
+          </Space>
           <div className="mt-1 text-2xl font-semibold text-slate-900">{value}</div>
           <Text type="secondary">{helper}</Text>
         </div>
@@ -129,9 +136,12 @@ function ErrorTopNCard({ metrics }: { metrics: MetricsOverview | null }) {
   const items = metrics?.error_type_topn ?? [];
 
   return (
-    <Card title="失败类型 TopN" className="h-full">
+    <Card title="失败类型 TopN" className="h-full admin-section-card">
       {items.length === 0 ? (
-        <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前时间窗内没有失败日志" />
+        <ActionEmpty
+          title="当前时间窗内没有失败日志"
+          description="说明当前链路较稳定，可以继续关注趋势变化。"
+        />
       ) : (
         <Space direction="vertical" size={14} className="w-full">
           {items.map((item, index) => {
@@ -278,20 +288,16 @@ export function DashboardPage() {
   const latestAvgContextTokens = metrics?.cost_overview?.at(-1)?.avg_context_tokens ?? 0;
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            概览
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            当前知识库：{selectedBase?.name ?? '未选择'}
-          </Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => router.refresh()}>
-          刷新页面
-        </Button>
-      </div>
+    <div className="admin-page">
+      <PageHeader
+        title="工作台"
+        subtitle={`当前知识库：${selectedBase?.name ?? '未选择'}。在这里快速查看系统状态、核心指标和治理入口。`}
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => router.refresh()}>
+            刷新页面
+          </Button>
+        }
+      />
 
       {isPermissionDenied && (
         <Alert
@@ -315,95 +321,97 @@ export function DashboardPage() {
 
       <Row gutter={[16, 16]}>
         <Col xs={12} md={6}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/knowledge-bases')}>
-            <Statistic title="知识库" value={stats?.kb_count ?? 0} loading={loading} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              点击管理知识库
-            </Text>
-          </Card>
+          <MetricCard
+            label="知识库数量"
+            value={<Statistic value={stats?.kb_count ?? 0} loading={loading} />}
+            helper="查看已接入的知识库资产"
+            onClick={() => router.push('/knowledge-bases')}
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/knowledge-bases')}>
-            <Statistic title="文档" value={stats?.document_count ?? 0} loading={loading} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              点击查看文档列表
-            </Text>
-          </Card>
+          <MetricCard
+            label="文档总数"
+            value={<Statistic value={stats?.document_count ?? 0} loading={loading} />}
+            helper="查看文档沉淀与入库规模"
+            onClick={() => router.push('/knowledge-bases')}
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push(jobsHref)}>
-            <Statistic
-              title="处理中任务"
-              value={stats?.processing_job_count ?? 0}
-              loading={loading}
-              prefix={<SyncOutlined spin={!!stats && stats.processing_job_count > 0} />}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              点击查看任务队列
-            </Text>
-          </Card>
+          <MetricCard
+            label="处理中入库任务"
+            value={
+              <Statistic
+                value={stats?.processing_job_count ?? 0}
+                loading={loading}
+                prefix={<SyncOutlined spin={!!stats && stats.processing_job_count > 0} />}
+              />
+            }
+            helper="查看正在执行的解析和入库任务"
+            onClick={() => router.push(jobsHref)}
+          />
         </Col>
         <Col xs={12} md={6}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push(jobsHref)}>
-            <Statistic
-              title="失败任务"
-              value={stats?.failed_job_count ?? 0}
-              loading={loading}
-              valueStyle={stats && stats.failed_job_count > 0 ? { color: '#cf1322' } : undefined}
-              prefix={stats && stats.failed_job_count > 0 ? <WarningOutlined /> : undefined}
-            />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              点击查看失败任务
-            </Text>
-          </Card>
+          <MetricCard
+            label="失败入库任务"
+            value={
+              <Statistic
+                value={stats?.failed_job_count ?? 0}
+                loading={loading}
+                valueStyle={stats && stats.failed_job_count > 0 ? { color: '#cf1322' } : undefined}
+                prefix={stats && stats.failed_job_count > 0 ? <WarningOutlined /> : undefined}
+              />
+            }
+            helper="优先处理失败任务，避免影响检索质量"
+            onClick={() => router.push(jobsHref)}
+          />
         </Col>
       </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={8}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/cost-ops/cost')}>
-            <Statistic title="P4 成本治理" value={latestCostPer1K} precision={4} suffix="/1k" />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              打开成本看板与高成本 Query
-            </Text>
-          </Card>
+          <MetricCard
+            label="每千次问答成本"
+            value={<Statistic value={latestCostPer1K} precision={4} suffix="/1k" />}
+            helper="查看成本趋势和高成本请求"
+            onClick={() => router.push('/cost-ops/cost')}
+          />
         </Col>
         <Col xs={24} md={8}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/audit')}>
-            <Statistic title="审计覆盖入口" value={metrics?.retrieve_request_count?.length ?? 0} prefix={<FolderOpenOutlined />} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              查看审计事件、脱敏详情与导出
-            </Text>
-          </Card>
+          <MetricCard
+            label="审计覆盖入口"
+            value={<Statistic value={metrics?.retrieve_request_count?.length ?? 0} prefix={<FolderOpenOutlined />} />}
+            helper="查看关键操作记录和追溯详情"
+            onClick={() => router.push('/audit')}
+          />
         </Col>
         <Col xs={24} md={8}>
-          <Card hoverable style={{ cursor: 'pointer' }} onClick={() => router.push('/alerts')}>
-            <Statistic title="治理告警入口" value={metrics?.error_type_topn?.length ?? 0} prefix={<BellOutlined />} />
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              查看告警确认、解决与治理门禁
-            </Text>
-          </Card>
+          <MetricCard
+            label="治理告警入口"
+            value={<Statistic value={metrics?.error_type_topn?.length ?? 0} prefix={<BellOutlined />} />}
+            helper="查看告警确认、解决与风险处理"
+            onClick={() => router.push('/alerts')}
+          />
         </Col>
       </Row>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} md={12}>
-          <Card title="知识库管理" extra={<Link href="/knowledge-bases">打开</Link>}>
+          <Card title="知识库管理" extra={<Link href="/knowledge-bases">打开</Link>} className="admin-section-card">
             <Paragraph style={{ marginBottom: 0 }}>
               管理知识库与文档，上传文件并触发入库任务。
             </Paragraph>
           </Card>
         </Col>
         <Col xs={24} md={12}>
-          <Card title="检索实验室" extra={<Link href="/retrieval-lab">打开</Link>}>
+          <Card title="检索调优" extra={<Link href="/retrieval-lab">打开</Link>} className="admin-section-card">
             <Paragraph style={{ marginBottom: 0 }}>
-              运行检索测试，验证入库效果与召回质量。
+              运行检索验证，查看相关结果、引用来源与链路编号。
             </Paragraph>
           </Card>
         </Col>
       </Row>
 
-      <Card>
+      <Card className="admin-section-card">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <Title level={4} style={{ marginBottom: 4 }}>

@@ -8,12 +8,15 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        primary: '#52c41a',
-        secondary: '#722ed1',
-        success: '#52c41a',
-        warning: '#faad14',
-        error: '#f5222d',
-        info: '#1890ff',
+        primary: '#2563eb',
+        secondary: '#0f172a',
+        success: '#16a34a',
+        warning: '#d97706',
+        error: '#dc2626',
+        info: '#0284c7',
+        slate: {
+          25: '#fcfcfd',
+        },
       },
     },
   },
