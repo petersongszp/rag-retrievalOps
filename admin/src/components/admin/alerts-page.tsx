@@ -56,9 +56,9 @@ export function AlertsPage() {
     () => [
       { title: '标题', dataIndex: 'title', key: 'title' },
       { title: '类别', dataIndex: 'category', key: 'category', render: (value: string) => <Tag>{value}</Tag> },
-      { title: '级别', dataIndex: 'severity', key: 'severity', render: (value: string) => <Tag color={value === 'high' ? 'error' : value === 'medium' ? 'warning' : 'default'}>{value}</Tag> },
-      { title: '状态', dataIndex: 'status', key: 'status', render: (value: string) => <Tag color={value === 'resolved' ? 'success' : value === 'acknowledged' ? 'processing' : 'error'}>{value}</Tag> },
-      { title: 'Metric', dataIndex: 'metric_key', key: 'metric_key', render: (value?: string) => value || '-' },
+      { title: '级别', dataIndex: 'severity', key: 'severity', render: (value: string) => <Tag color={value === 'high' ? 'error' : value === 'medium' ? 'warning' : 'default'}>{value === 'high' ? '高' : value === 'medium' ? '中' : '低'}</Tag> },
+      { title: '状态', dataIndex: 'status', key: 'status', render: (value: string) => <Tag color={value === 'resolved' ? 'success' : value === 'acknowledged' ? 'processing' : 'error'}>{value === 'resolved' ? '已解决' : value === 'acknowledged' ? '已确认' : '待处理'}</Tag> },
+      { title: '指标', dataIndex: 'metric_key', key: 'metric_key', render: (value?: string) => value || '-' },
       {
         title: '操作',
         key: 'action',
@@ -96,9 +96,16 @@ export function AlertsPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <Card title="Alerts">
+      <Card title="治理告警列表">
         {items.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有治理告警" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前没有待处理的治理告警，可以继续关注质量、成本与容量波动。"
+          >
+            <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
+              重新加载
+            </Button>
+          </Empty>
         ) : (
           <Table rowKey="id" columns={columns} dataSource={items} pagination={false} />
         )}

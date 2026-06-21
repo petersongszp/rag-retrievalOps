@@ -137,9 +137,9 @@ describe('StrategyCenterPage', () => {
     mockFullLoad();
     render(<StrategyCenterPage />);
     await waitFor(() => {
-      expect(screen.getAllByText('canary').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('enabled').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('shadow').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('灰度中').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('已启用').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('影子模式').length).toBeGreaterThanOrEqual(1);
     }, WAIT_OPTS);
   });
 
@@ -156,9 +156,9 @@ describe('StrategyCenterPage', () => {
     mockFullLoad();
     render(<StrategyCenterPage />);
     await waitFor(() => {
-      expect(screen.getAllByText('medium').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('low').length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText('high').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('中风险').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('低风险').length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText('高风险').length).toBeGreaterThanOrEqual(1);
     }, WAIT_OPTS);
   });
 
