@@ -875,7 +875,7 @@ export function StrategyCenterPage() {
             message={rollbackAll ? '将按后端冻结顺序做全量回滚' : '将仅回滚当前策略'}
             description={
               rollbackAll
-                ? '影响范围：全部 Phase 3 策略开关，目标版本为 phase2_baseline。'
+                ? '影响范围：全部高级检索策略开关，目标版本为当前稳定基线。'
                 : `影响范围：${selectedFlag?.label || selectedFlag?.flag_key || '当前策略'}。`
             }
           />
