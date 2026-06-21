@@ -79,13 +79,13 @@ type FailureTraceLink = {
 };
 
 const failureReasonOptions: Array<{ label: string; value: EvalFailureReason }> = [
-  { label: 'recall_miss', value: 'recall_miss' },
-  { label: 'citation_miss', value: 'citation_miss' },
-  { label: 'mrr_drop', value: 'mrr_drop' },
-  { label: 'ndcg_drop', value: 'ndcg_drop' },
-  { label: 'latency_regression', value: 'latency_regression' },
-  { label: 'gate_failed', value: 'gate_failed' },
-  { label: 'trace_missing', value: 'trace_missing' },
+  { label: '召回缺失', value: 'recall_miss' },
+  { label: '引用缺失', value: 'citation_miss' },
+  { label: 'MRR 下降', value: 'mrr_drop' },
+  { label: 'nDCG 下降', value: 'ndcg_drop' },
+  { label: '延迟回退', value: 'latency_regression' },
+  { label: '门禁未通过', value: 'gate_failed' },
+  { label: '链路缺失', value: 'trace_missing' },
 ];
 
 function normalizeError(error: unknown, fallback: string): string {
@@ -169,6 +169,48 @@ function failureReasonColor(reason: EvalFailureReason): string {
   }
 }
 
+function formatFailureReason(reason: EvalFailureReason): string {
+  switch (reason) {
+    case 'recall_miss':
+      return '召回缺失';
+    case 'citation_miss':
+      return '引用缺失';
+    case 'mrr_drop':
+      return 'MRR 下降';
+    case 'ndcg_drop':
+      return 'nDCG 下降';
+    case 'latency_regression':
+      return '延迟回退';
+    case 'gate_failed':
+      return '门禁未通过';
+    case 'trace_missing':
+      return '链路缺失';
+    default:
+      return reason;
+  }
+}
+
+function formatGateResult(passed: boolean): string {
+  return passed ? '通过' : '未通过';
+}
+
+function formatRunStatusLabel(status?: string): string {
+  switch (status) {
+    case 'pending':
+      return '排队中';
+    case 'running':
+      return '运行中';
+    case 'succeeded':
+      return '已完成';
+    case 'failed':
+      return '失败';
+    case 'canceled':
+      return '已取消';
+    default:
+      return status || '未知';
+  }
+}
+
 function buildFailureParams(filters: FailureFilterValues, page: number) {
   return {
     page,
@@ -191,7 +233,7 @@ function getFailureTraceLink(
   record: FailureCaseWithDebugHints,
   side: FailureTraceSide
 ): FailureTraceLink {
-  const prefix = side === 'baseline' ? 'Baseline' : 'Candidate';
+  const prefix = side === 'baseline' ? '基线' : '候选';
   const requestId = side === 'baseline' ? record.baseline_request_id : record.candidate_request_id;
   const debugRequestId =
     side === 'baseline'
@@ -391,19 +433,19 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
     () => [
       { title: '指标', dataIndex: 'metric', key: 'metric', width: 180 },
       {
-        title: 'Baseline',
+        title: '基线',
         key: 'baseline',
         render: (_, record) =>
           record.unit === 'ms' ? formatLatency(record.baseline) : formatMetric(record.baseline),
       },
       {
-        title: 'Candidate',
+        title: '候选',
         key: 'candidate',
         render: (_, record) =>
           record.unit === 'ms' ? formatLatency(record.candidate) : formatMetric(record.candidate),
       },
       {
-        title: 'Delta',
+        title: '变化值',
         key: 'delta',
         render: (_, record) =>
           record.unit === 'ms'
@@ -411,7 +453,7 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
             : formatDelta(record.delta, { inverse: record.inverse }),
       },
       {
-        title: 'Delta Ratio',
+        title: '变化比例',
         key: 'delta_ratio',
         render: (_, record) =>
           record.deltaRatio !== undefined ? (
@@ -426,34 +468,34 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
 
   const contributionColumns = useMemo<ColumnsType<EvalStrategyDelta>>(
     () => [
-      { title: 'Strategy', dataIndex: 'strategy', key: 'strategy', width: 180 },
-      { title: 'Compared To', dataIndex: 'compared_to', key: 'compared_to', width: 180 },
+      { title: '策略', dataIndex: 'strategy', key: 'strategy', width: 180 },
+      { title: '对比对象', dataIndex: 'compared_to', key: 'compared_to', width: 180 },
       {
-        title: 'Recall Delta',
+        title: 'Recall 变化',
         dataIndex: 'recall_delta',
         key: 'recall_delta',
         render: (value: number) => formatDelta(value),
       },
       {
-        title: 'MRR Delta',
+        title: 'MRR 变化',
         dataIndex: 'mrr_delta',
         key: 'mrr_delta',
         render: (value: number) => formatDelta(value),
       },
       {
-        title: 'nDCG Delta',
+        title: 'nDCG 变化',
         dataIndex: 'ndcg_delta',
         key: 'ndcg_delta',
         render: (value: number) => formatDelta(value),
       },
       {
-        title: 'Citation Delta',
+        title: '引用变化',
         dataIndex: 'citation_accuracy_delta',
         key: 'citation_accuracy_delta',
         render: (value: number) => formatDelta(value),
       },
       {
-        title: 'P95 Latency Delta',
+        title: 'P95 延迟变化',
         dataIndex: 'p95_latency_delta_ms',
         key: 'p95_latency_delta_ms',
         render: (value: number) => formatDelta(value, { digits: 0, suffix: ' ms', inverse: true }),
@@ -464,27 +506,27 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
 
   const gateColumns = useMemo<ColumnsType<EvalGateCheck>>(
     () => [
-      { title: 'Name', dataIndex: 'name', key: 'name', width: 220 },
+      { title: '检查项', dataIndex: 'name', key: 'name', width: 220 },
       {
-        title: 'Actual',
+        title: '实际值',
         dataIndex: 'actual',
         key: 'actual',
         render: (value: number) => formatMetric(value),
       },
       {
-        title: 'Expected',
+        title: '阈值',
         dataIndex: 'expected',
         key: 'expected',
         render: (value: number) => formatMetric(value),
       },
       {
-        title: 'Passed',
+        title: '结果',
         dataIndex: 'passed',
         key: 'passed',
         width: 120,
-        render: (value: boolean) => <Tag color={gateColor(value)}>{value ? 'passed' : 'failed'}</Tag>,
+        render: (value: boolean) => <Tag color={gateColor(value)}>{formatGateResult(value)}</Tag>,
       },
-      { title: 'Message', dataIndex: 'message', key: 'message', ellipsis: true },
+      { title: '说明', dataIndex: 'message', key: 'message', ellipsis: true },
     ],
     []
   );
@@ -492,51 +534,53 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
   const failureColumns = useMemo<ColumnsType<EvalFailureCase>>(
     () => [
       {
-        title: 'Case ID',
+        title: '样本 ID',
         dataIndex: 'case_id',
         key: 'case_id',
         width: 180,
         render: (value: string) => <Text code>{value}</Text>,
       },
       {
-        title: 'Query',
+        title: '查询',
         dataIndex: 'query',
         key: 'query',
         ellipsis: true,
       },
       {
-        title: 'Reason',
+        title: '失败原因',
         dataIndex: 'failure_reason',
         key: 'failure_reason',
         width: 160,
-        render: (value: EvalFailureReason) => <Tag color={failureReasonColor(value)}>{value}</Tag>,
+        render: (value: EvalFailureReason) => (
+          <Tag color={failureReasonColor(value)}>{formatFailureReason(value)}</Tag>
+        ),
       },
       {
-        title: 'Recall Delta',
+        title: 'Recall 变化',
         key: 'recall_delta',
         width: 120,
         render: (_, record) => formatDelta(record.delta.recall_delta),
       },
       {
-        title: 'MRR Delta',
+        title: 'MRR 变化',
         key: 'mrr_delta',
         width: 120,
         render: (_, record) => formatDelta(record.delta.mrr_delta),
       },
       {
-        title: 'nDCG Delta',
+        title: 'nDCG 变化',
         key: 'ndcg_delta',
         width: 120,
         render: (_, record) => formatDelta(record.delta.ndcg_delta),
       },
       {
-        title: 'Citation Delta',
+        title: '引用变化',
         key: 'citation_delta',
         width: 140,
         render: (_, record) => formatDelta(record.delta.citation_accuracy_delta),
       },
       {
-        title: 'Latency Delta',
+        title: '延迟变化',
         key: 'latency_delta_ms',
         width: 140,
         render: (_, record) =>
@@ -547,7 +591,7 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
           }),
       },
       {
-        title: 'Trace',
+        title: '链路',
         key: 'trace',
         width: 320,
         render: (_, rawRecord) => {
@@ -568,19 +612,19 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
                 {trace.usesDebug && trace.fallbackHref ? (
                   <Link href={trace.fallbackHref}>
                     <Button size="small" type="link">
-                      Trace Logs
+                      链路日志
                     </Button>
                   </Link>
                 ) : null}
-                {trace.downgraded ? <Text type="secondary">P3 unavailable</Text> : null}
+                {trace.downgraded ? <Text type="secondary">调试页暂不可用</Text> : null}
               </Space>
             );
           };
 
           return (
             <Space wrap>
-              {renderTraceAction(baselineTrace, 'Baseline trace unavailable')}
-              {renderTraceAction(candidateTrace, 'Candidate trace unavailable')}
+              {renderTraceAction(baselineTrace, '基线链路暂不可用')}
+              {renderTraceAction(candidateTrace, '候选链路暂不可用')}
             </Space>
           );
         },
@@ -635,51 +679,61 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
         <Card loading />
       ) : !report ? (
         <Card>
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前运行还没有可用报告" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前运行还没有可用报告，通常需要等待任务完成后再查看。"
+          >
+            <Space wrap>
+              <Link href="/evaluation/runs">
+                <Button type="primary">返回运行列表</Button>
+              </Link>
+              <Button onClick={() => void loadPage()}>重新获取</Button>
+            </Space>
+          </Empty>
         </Card>
       ) : (
         <>
           <Descriptions bordered size="small" column={2}>
-            <Descriptions.Item label="Run ID">{run?.run_id ?? runId}</Descriptions.Item>
-            <Descriptions.Item label="Gate">
-              <Tag color={gateColor(report.gate.passed)}>{report.gate.passed ? 'passed' : 'failed'}</Tag>
+            <Descriptions.Item label="运行 ID">{run?.run_id ?? runId}</Descriptions.Item>
+            <Descriptions.Item label="门禁结果">
+              <Tag color={gateColor(report.gate.passed)}>{formatGateResult(report.gate.passed)}</Tag>
             </Descriptions.Item>
-            <Descriptions.Item label="Dataset Size">{report.dataset_size}</Descriptions.Item>
-            <Descriptions.Item label="Generated At">{formatTime(report.generated_at)}</Descriptions.Item>
-            <Descriptions.Item label="Baseline">{report.baseline}</Descriptions.Item>
-            <Descriptions.Item label="Candidate">{report.candidate}</Descriptions.Item>
-            <Descriptions.Item label="Run Status">
-              {run ? <Tag color={run.status === 'succeeded' ? 'success' : 'warning'}>{run.status}</Tag> : <Tag color="warning">Contract gap</Tag>}
+            <Descriptions.Item label="样本规模">{report.dataset_size}</Descriptions.Item>
+            <Descriptions.Item label="生成时间">{formatTime(report.generated_at)}</Descriptions.Item>
+            <Descriptions.Item label="基线策略">{report.baseline}</Descriptions.Item>
+            <Descriptions.Item label="候选策略">{report.candidate}</Descriptions.Item>
+            <Descriptions.Item label="运行状态">
+              {run ? <Tag color={run.status === 'succeeded' ? 'success' : 'warning'}>{formatRunStatusLabel(run.status)}</Tag> : <Tag color="warning">字段暂缺</Tag>}
             </Descriptions.Item>
-            <Descriptions.Item label="Error">
+            <Descriptions.Item label="错误信息">
               {run?.error_msg ? run.error_msg : <Text type="secondary">-</Text>}
             </Descriptions.Item>
           </Descriptions>
 
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card>
-              <Statistic title="Recall@K Delta" value={report.comparison.recall_delta} precision={4} />
+              <Statistic title="Recall@K 变化" value={report.comparison.recall_delta} precision={4} />
             </Card>
             <Card>
-              <Statistic title="MRR Delta" value={report.comparison.mrr_delta} precision={4} />
+              <Statistic title="MRR 变化" value={report.comparison.mrr_delta} precision={4} />
             </Card>
             <Card>
-              <Statistic title="nDCG Delta" value={report.comparison.ndcg_delta} precision={4} />
+              <Statistic title="nDCG 变化" value={report.comparison.ndcg_delta} precision={4} />
             </Card>
             <Card>
-              <Statistic title="Citation Delta" value={report.comparison.citation_accuracy_delta} precision={4} />
+              <Statistic title="引用准确率变化" value={report.comparison.citation_accuracy_delta} precision={4} />
             </Card>
             <Card>
-              <Statistic title="Baseline P50" value={baselineResult?.metrics.p50_latency_ms} precision={0} suffix="ms" />
+              <Statistic title="基线 P50" value={baselineResult?.metrics.p50_latency_ms} precision={0} suffix="ms" />
             </Card>
             <Card>
-              <Statistic title="Candidate P50" value={candidateResult?.metrics.p50_latency_ms} precision={0} suffix="ms" />
+              <Statistic title="候选 P50" value={candidateResult?.metrics.p50_latency_ms} precision={0} suffix="ms" />
             </Card>
             <Card>
-              <Statistic title="Baseline P95" value={baselineResult?.metrics.p95_latency_ms} precision={0} suffix="ms" />
+              <Statistic title="基线 P95" value={baselineResult?.metrics.p95_latency_ms} precision={0} suffix="ms" />
             </Card>
             <Card>
-              <Statistic title="Candidate P95" value={candidateResult?.metrics.p95_latency_ms} precision={0} suffix="ms" />
+              <Statistic title="候选 P95" value={candidateResult?.metrics.p95_latency_ms} precision={0} suffix="ms" />
             </Card>
           </div>
 
@@ -701,8 +755,8 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
           </Card>
 
           <Card
-            title="Gate 检查"
-            extra={<Tag color={gateColor(report.gate.passed)}>{report.gate.passed ? 'passed' : 'failed'}</Tag>}
+            title="门禁检查"
+            extra={<Tag color={gateColor(report.gate.passed)}>{formatGateResult(report.gate.passed)}</Tag>}
           >
             <Table<EvalGateCheck> rowKey="name" pagination={false} dataSource={report.gate.checks} columns={gateColumns} />
           </Card>
@@ -723,13 +777,13 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
                 }}
               >
                 <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                  <Form.Item label="Failure Reason" name="failure_reason">
+                  <Form.Item label="失败原因" name="failure_reason">
                     <Select allowClear placeholder="全部原因" options={failureReasonOptions} />
                   </Form.Item>
-                  <Form.Item label="Query Type" name="query_type">
+                  <Form.Item label="查询类型" name="query_type">
                     <Input placeholder="例如 factual / multi-hop" />
                   </Form.Item>
-                  <Form.Item label="Tag" name="tag">
+                  <Form.Item label="标签" name="tag">
                     <Input placeholder="按单个标签筛选" />
                   </Form.Item>
                 </div>
@@ -753,7 +807,12 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
               {failureError ? <Alert type="error" showIcon message={failureError} /> : null}
 
               {failureCases.length === 0 && !failureLoading ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下没有失败样本" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="当前筛选条件下没有失败样本，说明这次对比暂未发现明显问题。"
+                >
+                  <Button onClick={() => void loadFailureCases(failureFilters, 1)}>重新获取失败样本</Button>
+                </Empty>
               ) : (
                 <Table<EvalFailureCase>
                   rowKey={(record) => `${record.case_id}-${record.failure_reason}`}
@@ -768,16 +827,16 @@ export function EvaluationReportPage({ runId }: EvaluationReportPageProps) {
                       Boolean(record.candidate_request_id),
                     expandedRowRender: (record) => (
                       <Descriptions bordered size="small" column={1}>
-                        <Descriptions.Item label="Query Type">{record.query_type || '-'}</Descriptions.Item>
-                        <Descriptions.Item label="Tags">
+                        <Descriptions.Item label="查询类型">{record.query_type || '-'}</Descriptions.Item>
+                        <Descriptions.Item label="标签">
                           {record.tags?.length ? record.tags.join(', ') : '-'}
                         </Descriptions.Item>
-                        <Descriptions.Item label="Baseline Metrics">
+                        <Descriptions.Item label="基线指标">
                           <pre className="mb-0 whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">
                             {JSON.stringify(record.baseline_metrics, null, 2)}
                           </pre>
                         </Descriptions.Item>
-                        <Descriptions.Item label="Candidate Metrics">
+                        <Descriptions.Item label="候选指标">
                           <pre className="mb-0 whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">
                             {JSON.stringify(record.candidate_metrics, null, 2)}
                           </pre>
