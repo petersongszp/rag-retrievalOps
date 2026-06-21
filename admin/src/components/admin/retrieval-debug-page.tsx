@@ -33,6 +33,8 @@ import type {
   RetrievalDebugTrace,
   RetrievalRouteHit,
 } from '@/types/kb';
+import { ActionEmpty } from './ui/action-empty';
+import { PageHeader } from './ui/page-header';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -53,7 +55,7 @@ function normalizeError(error: unknown, fallback: string): string {
 
 function renderValue(value?: string | number | boolean | null) {
   if (value === undefined || value === null || value === '') {
-    return <Tag color="warning">Contract gap</Tag>;
+    return <Tag color="warning">暂未返回</Tag>;
   }
   if (typeof value === 'boolean') {
     return value ? 'true' : 'false';
@@ -77,33 +79,33 @@ function toDebugRows(items?: RetrievalDebugDocument[], prefix = 'doc'): DebugDoc
 
 const debugDocumentColumns: ColumnsType<DebugDocumentRow> = [
   {
-    title: 'Chunk',
+    title: '分块编号',
     dataIndex: 'chunk_id',
     key: 'chunk_id',
     width: 180,
-    render: (value?: string) => value || <Tag color="warning">Contract gap</Tag>,
+    render: (value?: string) => value || <Tag color="warning">暂未返回</Tag>,
   },
   {
-    title: 'File',
+    title: '来源文件',
     dataIndex: 'file_name',
     key: 'file_name',
     width: 180,
-    render: (value?: string) => value || <Tag color="default">unknown</Tag>,
+    render: (value?: string) => value || <Tag color="default">未知</Tag>,
   },
   {
-    title: 'Route',
+    title: '召回路线',
     dataIndex: 'route',
     key: 'route',
     width: 120,
-    render: (value?: string) => value || <Tag color="default">n/a</Tag>,
+    render: (value?: string) => value || <Tag color="default">暂未返回</Tag>,
   },
   {
-    title: 'Score',
+    title: '相关度',
     dataIndex: 'score',
     key: 'score',
     width: 120,
     render: (value?: number) =>
-      value === undefined || value === null ? <Tag color="warning">Contract gap</Tag> : value.toFixed(4),
+      value === undefined || value === null ? <Tag color="warning">暂未返回</Tag> : value.toFixed(4),
   },
 ];
 
@@ -120,7 +122,7 @@ function StageFallback({
     <Space direction="vertical" size="middle" className="w-full">
       <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description={description} />
       {gaps?.length ? (
-        <Alert type="warning" showIcon message={`${title} contract gaps`} description={gaps.join(', ')} />
+        <Alert type="warning" showIcon message={`${title} 返回信息不完整`} description={gaps.join(', ')} />
       ) : null}
     </Space>
   );
@@ -180,35 +182,31 @@ export function RetrievalDebugPage() {
   );
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       {contextHolder}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            检索调试视图
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            把一次检索请求拆成可读的阶段剖面，优先展示风险最高的 query rewrite、topk、evidence 与 citation 决策。
-          </Paragraph>
-        </div>
-        <Space wrap>
-          <Link href="/retrieval-lab">
-            <Button>返回检索实验室</Button>
-          </Link>
-          <Link
-            href={
-              requestId
-                ? `/trace-logs/retrieval?request_id=${encodeURIComponent(requestId)}`
-                : '/trace-logs/retrieval'
-            }
-          >
-            <Button type="primary">打开原始 Trace Logs</Button>
-          </Link>
-        </Space>
-      </div>
+      <PageHeader
+        title="检索链路分析"
+        subtitle="按阶段查看一次检索请求的改写、召回、排序、过滤和引用检查结果。高级调试字段保留在下方明细中。"
+        extra={
+          <>
+            <Link href="/retrieval-lab">
+              <Button>返回检索调优</Button>
+            </Link>
+            <Link
+              href={
+                requestId
+                  ? `/trace-logs/retrieval?request_id=${encodeURIComponent(requestId)}`
+                  : '/trace-logs/retrieval'
+              }
+            >
+              <Button type="primary">查看链路追踪</Button>
+            </Link>
+          </>
+        }
+      />
 
-      <Card>
+      <Card className="admin-section-card">
         <Form
           form={form}
           layout="vertical"
@@ -227,11 +225,11 @@ export function RetrievalDebugPage() {
         >
           <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_auto_auto]">
             <Form.Item
-              label="Request ID"
+              label="请求编号"
               name="request_id"
-              rules={[{ required: true, message: '请输入 request_id' }]}
+              rules={[{ required: true, message: '请输入请求编号' }]}
             >
-              <Input placeholder="输入 request_id 以查询单次检索调试详情" />
+              <Input placeholder="输入请求编号，查看单次检索的链路分析详情" />
             </Form.Item>
             <Form.Item label=" ">
               <Button type="primary" htmlType="submit" icon={<SearchOutlined />}>
@@ -250,62 +248,66 @@ export function RetrievalDebugPage() {
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
       {!requestId ? (
-        <Card>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="请输入 request_id，或从检索实验室、检索日志、评测报告跳转进入。"
+        <Card className="admin-section-card">
+          <ActionEmpty
+            title="请输入请求编号"
+            description="可从检索调优、链路追踪或评测报告进入，查看完整检索链路分析。"
           />
         </Card>
       ) : loading ? (
-        <Card>
+        <Card className="admin-section-card">
           <div className="flex justify-center py-12">
             <Spin />
           </div>
         </Card>
       ) : !trace ? (
-        <Card>
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有可展示的调试数据。" />
+        <Card className="admin-section-card">
+          <ActionEmpty
+            title="当前没有可展示的链路数据"
+            description="请确认请求编号是否正确，或稍后重新加载。"
+          />
         </Card>
       ) : (
         <>
           <Card
-            title="请求顶栏"
+            title="请求概览"
             extra={
               <Button
                 icon={<CopyOutlined />}
                 disabled={!trace.request_id}
                 onClick={async () => {
                   if (!trace.request_id) {
-                    messageApi.warning('当前缺少 request_id');
+                    messageApi.warning('当前缺少请求编号');
                     return;
                   }
                   await navigator.clipboard.writeText(trace.request_id);
-                  messageApi.success('request_id 已复制');
+                  messageApi.success('请求编号已复制');
                 }}
               >
-                复制 request_id
+                复制请求编号
               </Button>
             }
+            className="admin-section-card"
           >
             <Descriptions column={1} size="small" bordered>
-              <Descriptions.Item label="request_id">{renderValue(trace.request_id)}</Descriptions.Item>
-              <Descriptions.Item label="original_query">
+              <Descriptions.Item label="请求编号">{renderValue(trace.request_id)}</Descriptions.Item>
+              <Descriptions.Item label="原始问题">
                 {renderValue(trace.original_query)}
               </Descriptions.Item>
-              <Descriptions.Item label="rewritten_query">
+              <Descriptions.Item label="改写后问题">
                 {renderValue(trace.rewritten_query)}
               </Descriptions.Item>
-              <Descriptions.Item label="kb_ids">
-                {trace.kb_ids?.length ? trace.kb_ids.join(', ') : <Tag color="warning">Contract gap</Tag>}
+              <Descriptions.Item label="知识库范围">
+                {trace.kb_ids?.length ? trace.kb_ids.join(', ') : <Tag color="warning">暂未返回</Tag>}
               </Descriptions.Item>
-              <Descriptions.Item label="created_at">{renderValue(trace.created_at)}</Descriptions.Item>
-              <Descriptions.Item label="debug_available">
-                {trace.debug_available ? <Tag color="success">true</Tag> : <Tag color="warning">false</Tag>}
+              <Descriptions.Item label="创建时间">{renderValue(trace.created_at)}</Descriptions.Item>
+              <Descriptions.Item label="链路明细状态">
+                {trace.debug_available ? <Tag color="success">已返回</Tag> : <Tag color="warning">部分缺失</Tag>}
               </Descriptions.Item>
-              <Descriptions.Item label="degradation">
+              <Descriptions.Item label="降级信息">
                 {trace.degradation?.enabled ? (
                   <Space wrap>
-                    <Tag color="warning">{trace.degradation.reason || 'degraded'}</Tag>
+                    <Tag color="warning">{trace.degradation.reason || '已降级'}</Tag>
                     {trace.degradation.error_code ? <Text code>{trace.degradation.error_code}</Text> : null}
                     {trace.degradation.fallback_strategy ? (
                       <Tag>{trace.degradation.fallback_strategy}</Tag>
@@ -322,27 +324,27 @@ export function RetrievalDebugPage() {
             <Alert
               type="warning"
               showIcon
-              message="集中契约缺口"
-              description={contractGaps.join(', ')}
+              message="链路返回信息不完整"
+              description={contractGaps.join('、')}
             />
           ) : null}
 
           <Collapse
-            defaultActiveKey={['query', 'routes', 'topk', 'evidence', 'citation']}
+            defaultActiveKey={['query', 'routes', 'topk', 'evidence', 'citation', 'final']}
             items={[
               {
                 key: 'query',
-                label: 'Query Rewrite',
+                label: '查询改写',
                 children: (
                   <Space direction="vertical" size="middle" className="w-full">
                     <Descriptions column={1} size="small" bordered>
-                      <Descriptions.Item label="original query">
+                      <Descriptions.Item label="原始问题">
                         {renderValue(trace.original_query)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="rewritten query">
+                      <Descriptions.Item label="改写后问题">
                         {renderValue(trace.rewritten_query)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="route final queries">
+                      <Descriptions.Item label="各路线最终查询">
                         {Object.keys(routeFinalQueries).length ? (
                           <Space direction="vertical" size="small">
                             {Object.entries(routeFinalQueries).map(([key, value]) => (
@@ -352,16 +354,16 @@ export function RetrievalDebugPage() {
                             ))}
                           </Space>
                         ) : (
-                          <Tag color="warning">Contract gap</Tag>
+                          <Tag color="warning">暂未返回</Tag>
                         )}
                       </Descriptions.Item>
-                      <Descriptions.Item label="rewrite_strategy">
+                      <Descriptions.Item label="改写策略">
                         {renderValue(trace.rewrite_strategy)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="rewrite_gain_bucket">
+                      <Descriptions.Item label="收益分层">
                         {renderValue(trace.rewrite_gain_bucket)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="term_hits">
+                      <Descriptions.Item label="命中术语">
                         {renderStringList(trace.term_hits)}
                       </Descriptions.Item>
                     </Descriptions>
@@ -370,19 +372,19 @@ export function RetrievalDebugPage() {
               },
               {
                 key: 'routes',
-                label: 'Route Hits',
+                label: '召回路线',
                 children: routeCards.length ? (
                   <Space direction="vertical" size="middle" className="w-full">
                     {routeCards.map((item) => (
-                      <Card key={item.route} size="small" title={item.route}>
+                      <Card key={item.route} size="small" title={item.route} className="admin-section-card">
                         <Descriptions column={1} size="small" bordered>
-                          <Descriptions.Item label="contribution">
+                          <Descriptions.Item label="贡献占比">
                             {renderValue(item.contribution)}
                           </Descriptions.Item>
-                          <Descriptions.Item label="latency_ms">
+                          <Descriptions.Item label="耗时（毫秒）">
                             {renderValue(item.latency_ms)}
                           </Descriptions.Item>
-                          <Descriptions.Item label="error">{renderValue(item.error)}</Descriptions.Item>
+                          <Descriptions.Item label="异常信息">{renderValue(item.error)}</Descriptions.Item>
                         </Descriptions>
                         <Table<DebugDocumentRow>
                           className="mt-4"
@@ -391,69 +393,69 @@ export function RetrievalDebugPage() {
                           columns={debugDocumentColumns}
                           dataSource={item.rows}
                           pagination={false}
-                          locale={{ emptyText: '当前 route 没有 top hits' }}
+                          locale={{ emptyText: '当前路线没有命中文档' }}
                         />
                       </Card>
                     ))}
                   </Space>
                 ) : (
                   <StageFallback
-                    title="Route Hits"
-                    description="当前没有 route hits 数据。"
+                    title="召回路线"
+                    description="当前没有召回路线明细。"
                     gaps={contractGaps.filter((item) => item.startsWith('route_hits'))}
                   />
                 ),
               },
               {
                 key: 'fusion',
-                label: 'Fusion / Dedupe / Rerank / Filter',
+                label: '结果合并与排序',
                 children: (
                   <div className="grid gap-4 xl:grid-cols-2">
-                    <Card size="small" title="Fusion">
+                    <Card size="small" title="结果合并">
                       <Descriptions column={1} size="small" bordered>
-                        <Descriptions.Item label="before">
-                          {trace.fusion_results?.before?.length ?? <Tag color="warning">Contract gap</Tag>}
+                        <Descriptions.Item label="合并前数量">
+                          {trace.fusion_results?.before?.length ?? <Tag color="warning">暂未返回</Tag>}
                         </Descriptions.Item>
-                        <Descriptions.Item label="after">
-                          {trace.fusion_results?.after?.length ?? <Tag color="warning">Contract gap</Tag>}
+                        <Descriptions.Item label="合并后数量">
+                          {trace.fusion_results?.after?.length ?? <Tag color="warning">暂未返回</Tag>}
                         </Descriptions.Item>
                       </Descriptions>
                     </Card>
-                    <Card size="small" title="Dedupe">
+                    <Card size="small" title="去重处理">
                       <Descriptions column={1} size="small" bordered>
-                        <Descriptions.Item label="before_count">
+                        <Descriptions.Item label="去重前数量">
                           {renderValue(trace.dedupe_results?.before_count)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="after_count">
+                        <Descriptions.Item label="去重后数量">
                           {renderValue(trace.dedupe_results?.after_count)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="removed">
-                          {trace.dedupe_results?.removed?.length ?? <Tag color="warning">Contract gap</Tag>}
+                        <Descriptions.Item label="移除数量">
+                          {trace.dedupe_results?.removed?.length ?? <Tag color="warning">暂未返回</Tag>}
                         </Descriptions.Item>
                       </Descriptions>
                     </Card>
-                    <Card size="small" title="Rerank">
+                    <Card size="small" title="重排序">
                       <Descriptions column={1} size="small" bordered>
-                        <Descriptions.Item label="rerank_model">
+                        <Descriptions.Item label="重排模型">
                           {renderValue(trace.rerank_results?.rerank_model)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="fallback">
+                        <Descriptions.Item label="回退状态">
                           {renderValue(trace.rerank_results?.fallback)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="reason">
+                        <Descriptions.Item label="说明">
                           {renderValue(trace.rerank_results?.reason)}
                         </Descriptions.Item>
                       </Descriptions>
                     </Card>
-                    <Card size="small" title="Filter">
+                    <Card size="small" title="过滤处理">
                       <Descriptions column={1} size="small" bordered>
-                        <Descriptions.Item label="before_count">
+                        <Descriptions.Item label="过滤前数量">
                           {renderValue(trace.filter_results?.before_count)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="after_count">
+                        <Descriptions.Item label="过滤后数量">
                           {renderValue(trace.filter_results?.after_count)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="truncate_reason">
+                        <Descriptions.Item label="截断原因">
                           {renderValue(trace.filter_results?.truncate_reason)}
                         </Descriptions.Item>
                       </Descriptions>
@@ -463,153 +465,153 @@ export function RetrievalDebugPage() {
               },
               {
                 key: 'parent-child',
-                label: 'Parent-Child',
+                label: '上下文补全',
                 children: trace.parent_child ? (
                   <Space direction="vertical" size="middle" className="w-full">
                     <Descriptions column={1} size="small" bordered>
-                      <Descriptions.Item label="parent_child_enabled">
+                      <Descriptions.Item label="是否启用">
                         {renderValue(trace.parent_child.parent_child_enabled)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="parent_fill_strategy">
+                      <Descriptions.Item label="补全策略">
                         {renderValue(trace.parent_child.parent_fill_strategy)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="parent_fill_tokens">
+                      <Descriptions.Item label="补全文本量">
                         {renderValue(trace.parent_child.parent_fill_tokens)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="fallback_reason">
+                      <Descriptions.Item label="回退原因">
                         {renderValue(trace.parent_child.fallback_reason)}
                       </Descriptions.Item>
                     </Descriptions>
                     <div className="grid gap-4 xl:grid-cols-2">
-                      <Card size="small" title="Child Hits">
+                      <Card size="small" title="命中的子分块">
                         <Table<DebugDocumentRow>
                           rowKey="key"
                           size="small"
                           columns={debugDocumentColumns}
                           dataSource={toDebugRows(trace.parent_child.child_hits, 'child')}
                           pagination={false}
-                          locale={{ emptyText: '没有 child hits' }}
+                          locale={{ emptyText: '没有命中的子分块' }}
                         />
                       </Card>
-                      <Card size="small" title="Parent Contexts">
+                      <Card size="small" title="补全的父级上下文">
                         <Table<DebugDocumentRow>
                           rowKey="key"
                           size="small"
                           columns={debugDocumentColumns}
                           dataSource={toDebugRows(trace.parent_child.parent_contexts, 'parent')}
                           pagination={false}
-                          locale={{ emptyText: '没有 parent contexts' }}
+                          locale={{ emptyText: '没有补全的父级上下文' }}
                         />
                       </Card>
                     </div>
                   </Space>
                 ) : (
                   <StageFallback
-                    title="Parent-Child"
-                    description="当前没有 parent-child 数据。"
+                    title="上下文补全"
+                    description="当前没有上下文补全数据。"
                     gaps={contractGaps.filter((item) => item.startsWith('parent_child'))}
                   />
                 ),
               },
               {
                 key: 'topk',
-                label: 'TopK Decision',
+                label: '召回数量决策',
                 children: trace.topk_decision ? (
                   <Descriptions column={1} size="small" bordered>
-                    <Descriptions.Item label="candidate_topk">
+                    <Descriptions.Item label="候选召回数">
                       {renderValue(trace.topk_decision.candidate_topk)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="final_topk">
+                    <Descriptions.Item label="最终返回数">
                       {renderValue(trace.topk_decision.final_topk)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="score_distribution">
+                    <Descriptions.Item label="分数分布">
                       {renderValue(trace.topk_decision.score_distribution)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="rerank_gap">
+                    <Descriptions.Item label="重排间隔">
                       {renderValue(trace.topk_decision.rerank_gap)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="evidence_density">
+                    <Descriptions.Item label="证据密度">
                       {renderValue(trace.topk_decision.evidence_density)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="token_budget">
+                    <Descriptions.Item label="上下文预算">
                       {renderValue(trace.topk_decision.token_budget)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="topk_decision_reason">
+                    <Descriptions.Item label="决策原因">
                       {renderValue(trace.topk_decision.topk_decision_reason)}
                     </Descriptions.Item>
                   </Descriptions>
                 ) : (
-                  <StageFallback title="TopK Decision" description="当前没有 topk 决策数据。" />
+                  <StageFallback title="召回数量决策" description="当前没有召回数量决策数据。" />
                 ),
               },
               {
                 key: 'evidence',
-                label: 'Evidence Gate',
+                label: '证据检查',
                 children: trace.evidence_gate ? (
                   <Descriptions column={1} size="small" bordered>
-                    <Descriptions.Item label="evidence_gate_result">
+                    <Descriptions.Item label="检查结果">
                       {renderValue(trace.evidence_gate.evidence_gate_result)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="refusal_reason">
+                    <Descriptions.Item label="拒答原因">
                       {renderValue(trace.evidence_gate.refusal_reason)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="thresholds">
+                    <Descriptions.Item label="阈值设置">
                       {trace.evidence_gate.thresholds ? (
                         <Space direction="vertical" size="small">
-                          <Text>min_rerank_score: {renderValue(trace.evidence_gate.thresholds.min_rerank_score)}</Text>
-                          <Text>min_density: {renderValue(trace.evidence_gate.thresholds.min_density)}</Text>
+                          <Text>最低重排得分: {renderValue(trace.evidence_gate.thresholds.min_rerank_score)}</Text>
+                          <Text>最低证据密度: {renderValue(trace.evidence_gate.thresholds.min_density)}</Text>
                           <Text>
-                            min_citation_coverage:{' '}
+                            最低引用覆盖率:{' '}
                             {renderValue(trace.evidence_gate.thresholds.min_citation_coverage)}
                           </Text>
                         </Space>
                       ) : (
-                        <Tag color="warning">Contract gap</Tag>
+                        <Tag color="warning">暂未返回</Tag>
                       )}
                     </Descriptions.Item>
-                    <Descriptions.Item label="evidence_gate_error">
+                    <Descriptions.Item label="异常信息">
                       {renderValue(trace.evidence_gate.evidence_gate_error)}
                     </Descriptions.Item>
-                    <Descriptions.Item label="refusal_template_version">
+                    <Descriptions.Item label="模板版本">
                       {renderValue(trace.evidence_gate.refusal_template_version)}
                     </Descriptions.Item>
                   </Descriptions>
                 ) : (
-                  <StageFallback title="Evidence Gate" description="当前没有 evidence gate 数据。" />
+                  <StageFallback title="证据检查" description="当前没有证据检查数据。" />
                 ),
               },
               {
                 key: 'citation',
-                label: 'Citation Consistency',
+                label: '引用检查',
                 children: trace.citation_check ? (
                   <Space direction="vertical" size="middle" className="w-full">
                     <Descriptions column={1} size="small" bordered>
-                      <Descriptions.Item label="citation_supported">
+                      <Descriptions.Item label="引用是否通过">
                         {renderValue(trace.citation_check.citation_supported)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="citation_support_score">
+                      <Descriptions.Item label="引用支持得分">
                         {renderValue(trace.citation_check.citation_support_score)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="unsupported_claims">
+                      <Descriptions.Item label="未支持的陈述">
                         {renderStringList(trace.citation_check.unsupported_claims)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="citation_check_version">
+                      <Descriptions.Item label="检查版本">
                         {renderValue(trace.citation_check.citation_check_version)}
                       </Descriptions.Item>
                     </Descriptions>
                     <Alert
                       type="info"
                       showIcon
-                      message="当前后端尚未返回 citation snippets 与 child/parent 对照专用结构"
+                      message="当前版本暂未返回更细粒度的引用片段对照信息"
                     />
                   </Space>
                 ) : (
-                  <StageFallback title="Citation Consistency" description="当前没有 citation consistency 数据。" />
+                  <StageFallback title="引用检查" description="当前没有引用检查数据。" />
                 ),
               },
               {
                 key: 'final',
-                label: 'Final Results',
+                label: '最终结果',
                 children: finalResults.length ? (
                   <List
                     itemLayout="vertical"
@@ -626,20 +628,34 @@ export function RetrievalDebugPage() {
                         }
                       >
                         <Space direction="vertical" size="small" className="w-full">
-                          <Text strong>Result {index + 1}</Text>
+                          <Text strong>结果 {index + 1}</Text>
                           <Text>{item.content}</Text>
                           <Space wrap>
-                            <Tag>route: {item.source?.route || 'Contract gap'}</Tag>
-                            <Tag>file: {item.citation?.file_name || 'Contract gap'}</Tag>
-                            <Tag>chunk: {item.citation?.chunk_id || 'Contract gap'}</Tag>
-                            <Tag>kb: {item.citation?.kb_id ?? 'Contract gap'}</Tag>
+                            <Tag>召回路线：{item.source?.route || '暂未返回'}</Tag>
+                            <Tag>引用来源：{item.citation?.file_name || '暂未返回'}</Tag>
+                            <Tag>分块编号：{item.citation?.chunk_id || '暂未返回'}</Tag>
+                            <Tag>知识库：{item.citation?.kb_id ?? '暂未返回'}</Tag>
                           </Space>
                         </Space>
                       </List.Item>
                     )}
                   />
                 ) : (
-                  <StageFallback title="Final Results" description="当前没有 final results 数据。" />
+                  <StageFallback title="最终结果" description="当前没有最终结果数据。" />
+                ),
+              },
+              {
+                key: 'advanced',
+                label: '高级信息',
+                children: (
+                  <Descriptions column={1} size="small" bordered>
+                    <Descriptions.Item label="调试字段状态">
+                      {trace.debug_available ? '已返回' : '部分缺失'}
+                    </Descriptions.Item>
+                    <Descriptions.Item label="契约缺口列表">
+                      {contractGaps.length ? contractGaps.join('、') : '无'}
+                    </Descriptions.Item>
+                  </Descriptions>
                 ),
               },
             ]}

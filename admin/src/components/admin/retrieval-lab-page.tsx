@@ -65,47 +65,47 @@ type SaveCaseFormValues = {
 const FIELD_META: Record<string, Omit<ContractGapEntry, 'field'>> = {
   score: {
     interface: 'POST /admin/kb/retrieve -> items[].score',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: true,
   },
   citation: {
     interface: 'POST /admin/kb/retrieve -> items[].citation',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: true,
   },
   'citation.file_name': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.file_name',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'citation.chunk_index': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.chunk_index',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'citation.chunk_id': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.chunk_id',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   source: {
     interface: 'POST /admin/kb/retrieve -> items[].source',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.route': {
     interface: 'POST /admin/kb/retrieve -> items[].source.route',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.collection': {
     interface: 'POST /admin/kb/retrieve -> items[].source.collection',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.retriever_version': {
     interface: 'POST /admin/kb/retrieve -> items[].source.retriever_version',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
 };
@@ -412,22 +412,22 @@ export function RetrievalLabPage() {
           <Card className="admin-section-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Space direction="vertical" size={4}>
-                <Text strong>Request ID</Text>
-                <Text code>{result.request_id || 'Contract gap: request_id'}</Text>
+                <Text strong>请求编号</Text>
+                <Text code>{result.request_id || '暂未返回请求编号'}</Text>
               </Space>
               <Space wrap>
                 <Button
                   icon={<CopyOutlined />}
                   onClick={async () => {
                     if (!result.request_id) {
-                      messageApi.warning('后端未返回 request_id');
+                      messageApi.warning('当前结果暂未返回请求编号');
                       return;
                     }
                     await navigator.clipboard.writeText(result.request_id);
-                    messageApi.success('request_id 已复制');
+                    messageApi.success('请求编号已复制');
                   }}
                 >
-                  复制 request_id
+                  复制请求编号
                 </Button>
                 <Button
                   disabled={!result.request_id}
@@ -478,19 +478,24 @@ export function RetrievalLabPage() {
                   <Space direction="vertical" size={12} className="w-full">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Tag color="blue">结果 {index + 1}</Tag>
-                      <Text>Score: {item.score ?? 'Contract gap'}</Text>
+                      <Text>相关度：{item.score ?? '暂未返回'}</Text>
                     </div>
                     <Text>{item.content}</Text>
                     <Space wrap>
-                      <Tag>文件：{item.citation?.file_name || 'Contract gap'}</Tag>
-                      <Tag>Chunk Index：{item.citation?.chunk_index ?? 'Contract gap'}</Tag>
-                      <Tag>Chunk ID：{item.citation?.chunk_id || 'Contract gap'}</Tag>
-                      <Tag>Route：{item.source?.route || 'Contract gap'}</Tag>
-                      <Tag>Collection：{item.source?.collection || 'Contract gap'}</Tag>
-                      <Tag>Retriever：{item.source?.retriever_version || 'Contract gap'}</Tag>
+                      <Tag>引用来源：{item.citation?.file_name || '暂未返回'}</Tag>
+                      <Tag>分块序号：{item.citation?.chunk_index ?? '暂未返回'}</Tag>
+                      <Tag>分块编号：{item.citation?.chunk_id || '暂未返回'}</Tag>
+                      <Tag>召回路线：{item.source?.route || '暂未返回'}</Tag>
+                      <Tag>数据集合：{item.source?.collection || '暂未返回'}</Tag>
+                      <Tag>检索版本：{item.source?.retriever_version || '暂未返回'}</Tag>
                     </Space>
                     {gaps.length > 0 ? (
-                      <Alert type="warning" showIcon message={`Contract gaps: ${gaps.join(', ')}`} />
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="返回信息完整性检查"
+                        description={`当前结果仍缺少以下字段：${gaps.join('、')}`}
+                      />
                     ) : null}
                   </Space>
                 </Card>
@@ -506,7 +511,7 @@ export function RetrievalLabPage() {
                   label: (
                     <Space>
                       <WarningOutlined style={{ color: '#faad14' }} />
-                      <Text>契约缺口记录（{gapLog.length} 项）</Text>
+                      <Text>返回信息完整性检查（{gapLog.length} 项）</Text>
                     </Space>
                   ),
                   children: (
