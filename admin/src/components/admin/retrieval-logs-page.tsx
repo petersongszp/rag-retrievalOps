@@ -26,6 +26,8 @@ import { KB_ADMIN_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import type { KBRetrieveLog, ListResponse, RetrieveResultStatus } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
+import { ActionEmpty } from './ui/action-empty';
+import { PageHeader } from './ui/page-header';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -53,11 +55,11 @@ type RetrievalLogWithP3Summary = KBRetrieveLog & {
 const PAGE_SIZE = 20;
 
 const statusOptions: Array<{ label: string; value: RetrieveResultStatus }> = [
-  { label: 'Success', value: 'success' },
-  { label: 'No Result', value: 'no_result' },
-  { label: 'Filtered Out', value: 'filtered_out' },
-  { label: 'Error', value: 'error' },
-  { label: 'Timeout', value: 'timeout' },
+  { label: '成功', value: 'success' },
+  { label: '无结果', value: 'no_result' },
+  { label: '已过滤', value: 'filtered_out' },
+  { label: '异常', value: 'error' },
+  { label: '超时', value: 'timeout' },
 ];
 
 function buildFilters(values: RetrievalLogFormValues): RetrievalLogFilters {
@@ -103,7 +105,7 @@ function statusColor(status: RetrieveResultStatus): string {
 
 function renderField(value: string | number | boolean | null | undefined) {
   if (value === null || value === undefined || value === '') {
-    return <Tag color="warning">Contract gap</Tag>;
+    return <Tag color="warning">当前版本暂未返回</Tag>;
   }
   if (typeof value === 'boolean') {
     return value ? 'true' : 'false';
@@ -113,9 +115,9 @@ function renderField(value: string | number | boolean | null | undefined) {
 
 function renderCacheHitTag(hit: boolean | null | undefined) {
   if (hit === undefined || hit === null) {
-    return <Tag color="warning">Contract gap</Tag>;
+    return <Tag color="warning">暂未返回</Tag>;
   }
-  return hit ? <Tag color="success">Hit</Tag> : <Tag>Miss</Tag>;
+  return hit ? <Tag color="success">命中</Tag> : <Tag>未命中</Tag>;
 }
 
 function buildRetrievalDebugHref(requestId: string) {
@@ -155,76 +157,76 @@ export function RetrievalLogsPage() {
   const columns = useMemo<ColumnsType<KBRetrieveLog>>(
     () => [
       {
-        title: 'Query',
+        title: '问题',
         dataIndex: 'query',
         key: 'query',
         ellipsis: true,
-        render: (value: string) => value || <Tag color="warning">Contract gap</Tag>,
+        render: (value: string) => value || <Tag color="warning">当前版本暂未返回</Tag>,
       },
       {
-        title: 'Request ID',
+        title: '请求编号',
         dataIndex: 'request_id',
         key: 'request_id',
         width: 180,
         ellipsis: true,
-        render: (value: string) => <Text code>{value || 'Contract gap'}</Text>,
+        render: (value: string) => <Text code>{value || '暂未返回'}</Text>,
       },
       {
-        title: 'KB IDs',
+        title: '知识库',
         dataIndex: 'kb_ids',
         key: 'kb_ids',
         width: 120,
-        render: (value: string) => value || <Tag color="warning">Contract gap</Tag>,
+        render: (value: string) => value || <Tag color="warning">暂未返回</Tag>,
       },
       {
-        title: 'Top K',
+        title: '返回上限',
         dataIndex: 'top_k',
         key: 'top_k',
         width: 90,
       },
       {
-        title: 'Final Count',
+        title: '返回数量',
         dataIndex: 'final_count',
         key: 'final_count',
         width: 110,
       },
       {
-        title: 'Duration',
+        title: '耗时',
         dataIndex: 'duration_ms',
         key: 'duration_ms',
         width: 110,
         render: (value: number) => `${value ?? 0} ms`,
       },
       {
-        title: 'Status',
+        title: '状态',
         dataIndex: 'result_status',
         key: 'result_status',
         width: 110,
         render: (value: RetrieveResultStatus) => <Tag color={statusColor(value)}>{value}</Tag>,
       },
       {
-        title: 'Semantic Cache',
+        title: '语义缓存',
         dataIndex: 'semantic_cache_hit',
         key: 'semantic_cache_hit',
         width: 140,
         render: (value: boolean | undefined) => renderCacheHitTag(value),
       },
       {
-        title: 'Embedding Cache',
+        title: '向量缓存',
         dataIndex: 'embedding_cache_hit',
         key: 'embedding_cache_hit',
         width: 140,
         render: (value: boolean | undefined) => renderCacheHitTag(value),
       },
       {
-        title: 'Created At',
+        title: '创建时间',
         dataIndex: 'created_at',
         key: 'created_at',
         width: 190,
         render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss'),
       },
       {
-        title: 'Actions',
+        title: '操作',
         key: 'actions',
         width: 120,
         render: (_, record) => (
@@ -240,7 +242,7 @@ export function RetrievalLogsPage() {
               router.push(buildRetrievalDebugHref(record.request_id));
             }}
           >
-            Debug View
+            链路分析
           </Button>
         ),
       },
@@ -259,7 +261,7 @@ export function RetrievalLogsPage() {
       setTotal(data.total ?? 0);
       setPage(data.page ?? nextPage);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load retrieval logs');
+      setError(err instanceof Error ? err.message : '加载检索链路追踪失败');
       setItems([]);
       setTotal(0);
     } finally {
@@ -277,7 +279,7 @@ export function RetrievalLogsPage() {
       )) as RetrievalLogWithP3Summary;
       setDetail(data);
     } catch (err) {
-      setDetailError(err instanceof Error ? err.message : 'Failed to load retrieval detail');
+      setDetailError(err instanceof Error ? err.message : '加载链路详情失败');
       setDetail(null);
     } finally {
       setDetailLoading(false);
@@ -321,23 +323,18 @@ export function RetrievalLogsPage() {
   };
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            Retrieval Logs
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            Review structured retrieval traces, filter by request ID, knowledge base, status, and
-            time range, then drill into a single request.
-          </Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadList(filters, page)}>
-          Refresh
-        </Button>
-      </div>
+    <div className="admin-page">
+      <PageHeader
+        title="检索链路追踪"
+        subtitle="按请求编号、知识库、状态和时间范围定位一次检索，并进入详情查看阶段耗时、缓存命中和异常原因。"
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => void loadList(filters, page)}>
+            刷新
+          </Button>
+        }
+      />
 
-      <Card>
+      <Card className="admin-section-card">
         <Form
           form={form}
           layout="vertical"
@@ -349,29 +346,29 @@ export function RetrievalLogsPage() {
           }}
         >
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
-            <Form.Item label="Knowledge Base" name="kb_id">
+            <Form.Item label="知识库" name="kb_id">
               <Select
                 allowClear
-                placeholder="All knowledge bases"
+                placeholder="全部知识库"
                 options={bases.map((base) => ({ label: base.name, value: base.id }))}
               />
             </Form.Item>
-            <Form.Item label="Status" name="result_status">
-              <Select allowClear placeholder="All statuses" options={statusOptions} />
+            <Form.Item label="状态" name="result_status">
+              <Select allowClear placeholder="全部状态" options={statusOptions} />
             </Form.Item>
-            <Form.Item label="Request ID" name="request_id">
-              <Input placeholder="Exact request_id" />
+            <Form.Item label="请求编号" name="request_id">
+              <Input placeholder="输入请求编号，快速定位一次检索" />
             </Form.Item>
-            <Form.Item label="Query Keyword" name="query_keyword">
-              <Input placeholder="Fuzzy search query text" />
+            <Form.Item label="问题关键词" name="query_keyword">
+              <Input placeholder="按问题内容模糊查询" />
             </Form.Item>
-            <Form.Item label="Time Range" name="range">
+            <Form.Item label="时间范围" name="range">
               <DatePicker.RangePicker showTime className="w-full" />
             </Form.Item>
           </div>
           <Space>
             <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={isLoading}>
-              Search Logs
+              查询链路
             </Button>
             <Button
               onClick={() => {
@@ -382,7 +379,7 @@ export function RetrievalLogsPage() {
                 void loadList(nextFilters, 1);
               }}
             >
-              Reset
+              重置
             </Button>
           </Space>
         </Form>
@@ -390,11 +387,16 @@ export function RetrievalLogsPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <Card>
+      <Card className="admin-section-card">
         {items.length === 0 && !isLoading ? (
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="No retrieval logs matched the current filters"
+          <ActionEmpty
+            title="当前筛选条件下没有检索链路"
+            description="可以直接输入请求编号定位一次检索，或放宽状态与时间范围后重新查询。"
+            action={
+              <Button type="link" onClick={() => router.push('/retrieval-lab')}>
+                去做检索验证
+              </Button>
+            }
           />
         ) : (
           <Table<KBRetrieveLog>
@@ -417,7 +419,7 @@ export function RetrievalLogsPage() {
       </Card>
 
       <Drawer
-        title={detail?.request_id ? `Trace Detail - ${detail.request_id}` : 'Trace Detail'}
+        title={detail?.request_id ? `链路详情 · ${detail.request_id}` : '链路详情'}
         width={560}
         open={detailOpen}
         onClose={() => setDetailOpen(false)}
@@ -434,151 +436,154 @@ export function RetrievalLogsPage() {
               <Alert
                 type="warning"
                 showIcon
-                message="P3 summary fields are not fully available yet"
-                description="The base trace is still visible. For a full P3 summary, make sure the logging pipeline has returned parent-child, top-k, evidence gate, and citation fields."
+                message="高级链路摘要暂未完整返回"
+                description="当前仍可查看基础链路信息。如需完整高级摘要，请确认日志流水线已返回上下文补全、TopK、证据检查与引用字段。"
               />
             ) : null}
 
-            <Descriptions title="Request" column={1} size="small" bordered>
-              <Descriptions.Item label="Request ID">{renderField(detail.request_id)}</Descriptions.Item>
-              <Descriptions.Item label="KB IDs">{renderField(detail.kb_ids)}</Descriptions.Item>
-              <Descriptions.Item label="Query">{renderField(detail.query)}</Descriptions.Item>
-              <Descriptions.Item label="Final Query">{renderField(detail.final_query)}</Descriptions.Item>
-              <Descriptions.Item label="Expr">{renderField(detail.expr)}</Descriptions.Item>
-              <Descriptions.Item label="Top K">{renderField(detail.top_k)}</Descriptions.Item>
-              <Descriptions.Item label="Candidate Top K">
+            <Descriptions title="基础信息" column={1} size="small" bordered>
+              <Descriptions.Item label="请求编号">{renderField(detail.request_id)}</Descriptions.Item>
+              <Descriptions.Item label="知识库">{renderField(detail.kb_ids)}</Descriptions.Item>
+              <Descriptions.Item label="问题">{renderField(detail.query)}</Descriptions.Item>
+              <Descriptions.Item label="最终查询">{renderField(detail.final_query)}</Descriptions.Item>
+              <Descriptions.Item label="过滤表达式">{renderField(detail.expr)}</Descriptions.Item>
+              <Descriptions.Item label="请求 Top K">{renderField(detail.top_k)}</Descriptions.Item>
+              <Descriptions.Item label="候选召回数">
                 {renderField(detail.candidate_topk)}
               </Descriptions.Item>
-              <Descriptions.Item label="Final Top K">{renderField(detail.final_topk)}</Descriptions.Item>
+              <Descriptions.Item label="最终返回数">{renderField(detail.final_topk)}</Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="Stage Latency" column={1} size="small" bordered>
-              <Descriptions.Item label="Embedding">{renderField(detail.embedding_ms)} ms</Descriptions.Item>
-              <Descriptions.Item label="Search">{renderField(detail.search_ms)} ms</Descriptions.Item>
-              <Descriptions.Item label="Postprocess">
+            <Descriptions title="阶段耗时" column={1} size="small" bordered>
+              <Descriptions.Item label="向量计算">{renderField(detail.embedding_ms)} ms</Descriptions.Item>
+              <Descriptions.Item label="检索查询">{renderField(detail.search_ms)} ms</Descriptions.Item>
+              <Descriptions.Item label="后处理">
                 {renderField(detail.postprocess_ms)} ms
               </Descriptions.Item>
-              <Descriptions.Item label="Rerank">{renderField(detail.rerank_ms)} ms</Descriptions.Item>
-              <Descriptions.Item label="Duration">{renderField(detail.duration_ms)} ms</Descriptions.Item>
+              <Descriptions.Item label="重排序">{renderField(detail.rerank_ms)} ms</Descriptions.Item>
+              <Descriptions.Item label="总耗时">{renderField(detail.duration_ms)} ms</Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="Routing & Result" column={1} size="small" bordered>
-              <Descriptions.Item label="Routes">{renderField(detail.routes)}</Descriptions.Item>
-              <Descriptions.Item label="Collection">{renderField(detail.collection)}</Descriptions.Item>
-              <Descriptions.Item label="Retriever">{renderField(detail.retriever_version)}</Descriptions.Item>
-              <Descriptions.Item label="Result Status">
+            <Descriptions title="结果摘要" column={1} size="small" bordered>
+              <Descriptions.Item label="召回路线">{renderField(detail.routes)}</Descriptions.Item>
+              <Descriptions.Item label="数据集合">{renderField(detail.collection)}</Descriptions.Item>
+              <Descriptions.Item label="检索版本">{renderField(detail.retriever_version)}</Descriptions.Item>
+              <Descriptions.Item label="结果状态">
                 <Tag color={statusColor(detail.result_status)}>{detail.result_status}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Final Count">{renderField(detail.final_count)}</Descriptions.Item>
-              <Descriptions.Item label="Truncated Count">
+              <Descriptions.Item label="返回数量">{renderField(detail.final_count)}</Descriptions.Item>
+              <Descriptions.Item label="截断数量">
                 {renderField(detail.truncated_count)}
               </Descriptions.Item>
-              <Descriptions.Item label="Dense Hits">{renderField(detail.dense_hits)}</Descriptions.Item>
-              <Descriptions.Item label="Sparse Hits">{renderField(detail.sparse_hits)}</Descriptions.Item>
-              <Descriptions.Item label="Dense Contribution">
+              <Descriptions.Item label="向量命中数">{renderField(detail.dense_hits)}</Descriptions.Item>
+              <Descriptions.Item label="关键词命中数">{renderField(detail.sparse_hits)}</Descriptions.Item>
+              <Descriptions.Item label="向量贡献占比">
                 {renderField(detail.dense_contribution)}
               </Descriptions.Item>
-              <Descriptions.Item label="Sparse Contribution">
+              <Descriptions.Item label="关键词贡献占比">
                 {renderField(detail.sparse_contribution)}
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="Semantic Cache" column={1} size="small" bordered>
-              <Descriptions.Item label="Enabled">
+            <Descriptions title="语义缓存" column={1} size="small" bordered>
+              <Descriptions.Item label="是否启用">
                 {renderField(detail.semantic_cache_enabled)}
               </Descriptions.Item>
-              <Descriptions.Item label="Cache Hit">
+              <Descriptions.Item label="缓存状态">
                 {renderCacheHitTag(detail.semantic_cache_hit)}
               </Descriptions.Item>
-              <Descriptions.Item label="Lookup">
+              <Descriptions.Item label="查询耗时">
                 {renderField(detail.semantic_cache_lookup_ms)} ms
               </Descriptions.Item>
-              <Descriptions.Item label="Similarity">
+              <Descriptions.Item label="相似度">
                 {detail.semantic_cache_similarity === null ||
                 detail.semantic_cache_similarity === undefined ? (
-                  <Tag color="warning">Contract gap</Tag>
+                  <Tag color="warning">当前版本暂未返回</Tag>
                 ) : (
                   detail.semantic_cache_similarity.toFixed(4)
                 )}
               </Descriptions.Item>
-              <Descriptions.Item label="Reason">
+              <Descriptions.Item label="命中原因">
                 {renderField(detail.semantic_cache_reason)}
               </Descriptions.Item>
-              <Descriptions.Item label="Entry ID">
+              <Descriptions.Item label="缓存条目">
                 {renderField(detail.semantic_cache_entry_id)}
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="Embedding Cache" column={1} size="small" bordered>
-              <Descriptions.Item label="Enabled">
+            <Descriptions title="向量缓存" column={1} size="small" bordered>
+              <Descriptions.Item label="是否启用">
                 {renderField(detail.embedding_cache_enabled)}
               </Descriptions.Item>
-              <Descriptions.Item label="Cache Hit">
+              <Descriptions.Item label="缓存状态">
                 {renderCacheHitTag(detail.embedding_cache_hit)}
               </Descriptions.Item>
-              <Descriptions.Item label="Lookup">
+              <Descriptions.Item label="查询耗时">
                 {renderField(detail.embedding_cache_lookup_ms)} ms
               </Descriptions.Item>
-              <Descriptions.Item label="Reason">
+              <Descriptions.Item label="命中原因">
                 {renderField(detail.embedding_cache_reason)}
               </Descriptions.Item>
             </Descriptions>
 
-            <Descriptions title="Error & Context" column={1} size="small" bordered>
-              <Descriptions.Item label="Tenant ID">{renderField(detail.tenant_id)}</Descriptions.Item>
-              <Descriptions.Item label="App ID">{renderField(detail.app_id)}</Descriptions.Item>
-              <Descriptions.Item label="API Key ID">{renderField(detail.api_key_id)}</Descriptions.Item>
-              <Descriptions.Item label="Auth Type">{renderField(detail.auth_type)}</Descriptions.Item>
-              <Descriptions.Item label="Source API">{renderField(detail.source_api)}</Descriptions.Item>
-              <Descriptions.Item label="Permission Result">
+            <Descriptions title="错误原因与高级字段" column={1} size="small" bordered>
+              <Descriptions.Item label="组织编号">{renderField(detail.tenant_id)}</Descriptions.Item>
+              <Descriptions.Item label="应用编号">{renderField(detail.app_id)}</Descriptions.Item>
+              <Descriptions.Item label="接入密钥">{renderField(detail.api_key_id)}</Descriptions.Item>
+              <Descriptions.Item label="鉴权方式">{renderField(detail.auth_type)}</Descriptions.Item>
+              <Descriptions.Item label="来源接口">{renderField(detail.source_api)}</Descriptions.Item>
+              <Descriptions.Item label="权限结果">
                 {renderField(detail.permission_result)}
               </Descriptions.Item>
-              <Descriptions.Item label="Legacy Path">{renderField(detail.is_legacy)}</Descriptions.Item>
-              <Descriptions.Item label="P3 Summary">
+              <Descriptions.Item label="旧链路回退">{renderField(detail.is_legacy)}</Descriptions.Item>
+              <Descriptions.Item label="高级链路摘要">
                 <Space direction="vertical" size="middle" className="w-full">
                   <div>
-                    <Text strong>parent_child_enabled: </Text>
+                    <Text strong>上下文补全: </Text>
                     {renderField(detail.parent_child_enabled)}
                   </div>
                   <div>
-                    <Text strong>topk_policy_version: </Text>
+                    <Text strong>TopK 策略版本: </Text>
                     {detail.topk_policy_version ? (
                       detail.topk_policy_version
                     ) : (
-                      <Text type="secondary">topk_policy_version is not returned in this log yet</Text>
+                      <Text type="secondary">当前版本暂未返回</Text>
                     )}
                   </div>
                   <div>
-                    <Text strong>evidence_gate_result: </Text>
+                    <Text strong>证据检查结果: </Text>
                     {renderField(detail.evidence_gate_result)}
                   </div>
                   <div>
-                    <Text strong>citation_support_score: </Text>
+                    <Text strong>引用支持得分: </Text>
                     {renderField(detail.citation_support_score)}
                   </div>
                   <div>
-                    <Text strong>refusal_reason: </Text>
+                    <Text strong>拒答原因: </Text>
                     {renderField(detail.refusal_reason)}
                   </div>
                 </Space>
               </Descriptions.Item>
-              <Descriptions.Item label="Error Code">{renderField(detail.error_code)}</Descriptions.Item>
-              <Descriptions.Item label="Error Message">{renderField(detail.error_msg)}</Descriptions.Item>
-              <Descriptions.Item label="Strategy">{renderField(detail.strategy)}</Descriptions.Item>
-              <Descriptions.Item label="Release Stage">
+              <Descriptions.Item label="错误编号">{renderField(detail.error_code)}</Descriptions.Item>
+              <Descriptions.Item label="错误信息">{renderField(detail.error_msg)}</Descriptions.Item>
+              <Descriptions.Item label="策略版本">{renderField(detail.strategy)}</Descriptions.Item>
+              <Descriptions.Item label="发布阶段">
                 {renderField(detail.release_stage)}
               </Descriptions.Item>
-              <Descriptions.Item label="Release Reason">
+              <Descriptions.Item label="发布说明">
                 {renderField(detail.release_reason)}
               </Descriptions.Item>
-              <Descriptions.Item label="Empty Reason">{renderField(detail.empty_reason)}</Descriptions.Item>
-              <Descriptions.Item label="Created At">
+              <Descriptions.Item label="无结果原因">{renderField(detail.empty_reason)}</Descriptions.Item>
+              <Descriptions.Item label="记录时间">
                 {renderField(dayjs(detail.created_at).format('YYYY-MM-DD HH:mm:ss'))}
               </Descriptions.Item>
             </Descriptions>
           </Space>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="Select a log row to inspect detail" />
+          <ActionEmpty
+            title="请选择一条链路记录查看详情"
+            description="点击上方任意一行，可展开查看阶段耗时、缓存命中与错误原因。"
+          />
         )}
       </Drawer>
     </div>
