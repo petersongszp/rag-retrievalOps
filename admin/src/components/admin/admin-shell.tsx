@@ -61,7 +61,7 @@ type NavItem = {
 };
 
 const navItems: NavItem[] = [
-  { key: '/dashboard', label: '概览', href: '/dashboard', icon: <BarChartOutlined /> },
+  { key: '/dashboard', label: '工作台', href: '/dashboard', icon: <BarChartOutlined /> },
   {
     key: '/knowledge-bases',
     label: '知识库',
@@ -70,19 +70,19 @@ const navItems: NavItem[] = [
   },
   {
     key: '/api-keys',
-    label: 'API Keys',
+    label: '接入密钥',
     href: '/api-keys',
     icon: <ControlOutlined />,
   },
   {
     key: '/retrieval-lab',
-    label: '检索实验室',
+    label: '检索调优',
     href: '/retrieval-lab',
     icon: <ExperimentOutlined />,
   },
   {
     key: '/trace-logs',
-    label: '链路日志',
+    label: '链路追踪',
     href: '/trace-logs',
     icon: <FileSearchOutlined />,
     children: [
@@ -98,12 +98,12 @@ const navItems: NavItem[] = [
   },
   {
     key: '/evaluation',
-    label: '评测',
+    label: '质量评测',
     href: '/evaluation',
     icon: <BookOutlined />,
     children: [
-      { key: '/evaluation/datasets', label: '评测集', href: '/evaluation/datasets' },
-      { key: '/evaluation/runs', label: '评测运行', href: '/evaluation/runs' },
+      { key: '/evaluation/datasets', label: '评测样本', href: '/evaluation/datasets' },
+      { key: '/evaluation/runs', label: '评测任务', href: '/evaluation/runs' },
     ],
   },
   {
@@ -114,26 +114,26 @@ const navItems: NavItem[] = [
   },
   {
     key: '/strategy-center',
-    label: '策略中心',
+    label: '策略管理',
     href: '/strategy-center',
     icon: <SettingOutlined />,
   },
   {
     key: '/tenant',
-    label: '租户',
+    label: '组织',
     icon: <SettingOutlined />,
     children: [
-      { key: '/tenant/settings', label: '租户设置', href: '/tenant/settings' },
-      { key: '/tenant/usage', label: '租户用量', href: '/tenant/usage' },
+      { key: '/tenant/settings', label: '组织设置', href: '/tenant/settings' },
+      { key: '/tenant/usage', label: '组织用量', href: '/tenant/usage' },
     ],
   },
   {
     key: '/cost-ops',
-    label: '成本运营',
+    label: '成本与运维',
     icon: <WalletOutlined />,
     children: [
-      { key: '/cost-ops/cost', label: '成本看板', href: '/cost-ops/cost' },
-      { key: '/cost-ops/vector-db', label: 'Vector DB', href: '/cost-ops/vector-db' },
+      { key: '/cost-ops/cost', label: '成本分析', href: '/cost-ops/cost' },
+      { key: '/cost-ops/vector-db', label: '向量库运维', href: '/cost-ops/vector-db' },
     ],
   },
   { key: '/audit', label: '审计中心', href: '/audit', icon: <FolderOpenOutlined /> },
@@ -353,139 +353,139 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
   const breadcrumbItems = useMemo(() => {
     if (pathname.startsWith('/knowledge-bases/')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
         { title: <Link href="/knowledge-bases">知识库</Link> },
         { title: selectedBase?.name ?? '知识库详情' },
       ];
     }
     if (pathname.startsWith('/knowledge-bases')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '知识库' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '知识库' }];
     }
     if (pathname.startsWith('/api-keys')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: 'API Keys' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '接入密钥' }];
     }
     if (pathname.startsWith('/docs/integration')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
         { title: '接入文档' },
         { title: '集成指南' },
       ];
     }
     if (pathname.startsWith('/retrieval-lab/debug')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/retrieval-lab">检索实验室</Link> },
-        { title: '调试详情' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/retrieval-lab">检索调优</Link> },
+        { title: '链路分析' },
       ];
     }
     if (pathname.startsWith('/retrieval-lab')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '检索实验室' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '检索调优' }];
     }
     if (pathname.startsWith('/trace-logs/retrieval')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/trace-logs">链路日志</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/trace-logs">链路追踪</Link> },
         { title: '检索日志' },
       ];
     }
     if (pathname.startsWith('/trace-logs/ingest')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/trace-logs">链路日志</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/trace-logs">链路追踪</Link> },
         { title: '入库日志' },
       ];
     }
     if (pathname.startsWith('/trace-logs')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '链路日志' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '链路追踪' }];
     }
     if (pathname.startsWith('/tenant/settings')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: '租户' },
-        { title: '租户设置' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: '组织' },
+        { title: '组织设置' },
       ];
     }
     if (pathname.startsWith('/tenant/usage')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: '租户' },
-        { title: '租户用量' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: '组织' },
+        { title: '组织用量' },
       ];
     }
     if (pathname.startsWith('/evaluation/reports/')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/evaluation/datasets">评测</Link> },
-        { title: <Link href="/evaluation/runs">评测运行</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/evaluation/datasets">质量评测</Link> },
+        { title: <Link href="/evaluation/runs">评测任务</Link> },
         { title: '评测报告' },
       ];
     }
     if (pathname.startsWith('/evaluation/runs')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/evaluation/datasets">评测</Link> },
-        { title: '评测运行' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/evaluation/datasets">质量评测</Link> },
+        { title: '评测任务' },
       ];
     }
     if (pathname.startsWith('/evaluation/datasets')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: <Link href="/evaluation/datasets">评测</Link> },
-        { title: '评测集' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: <Link href="/evaluation/datasets">质量评测</Link> },
+        { title: '评测样本' },
       ];
     }
     if (pathname.startsWith('/evaluation')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '评测' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '质量评测' }];
     }
     if (pathname.startsWith('/quality-monitor')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '质量监控' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '质量监控' }];
     }
     if (pathname.startsWith('/strategy-center')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '策略中心' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '策略管理' }];
     }
     if (pathname.startsWith('/cost-ops/cost')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: '成本运营' },
-        { title: '成本看板' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: '成本与运维' },
+        { title: '成本分析' },
       ];
     }
     if (pathname.startsWith('/cost-ops/vector-db')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
-        { title: '成本运营' },
-        { title: 'Vector DB' },
+        { title: <Link href="/dashboard">工作台</Link> },
+        { title: '成本与运维' },
+        { title: '向量库运维' },
       ];
     }
     if (pathname.startsWith('/audit')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '审计中心' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '审计中心' }];
     }
     if (pathname.startsWith('/alerts')) {
-      return [{ title: <Link href="/dashboard">概览</Link> }, { title: '告警中心' }];
+      return [{ title: <Link href="/dashboard">工作台</Link> }, { title: '告警中心' }];
     }
     if (pathname.startsWith('/reports/weekly')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
         { title: '报告' },
         { title: '周报' },
       ];
     }
     if (pathname.startsWith('/semantic-cache')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
         { title: '语义缓存' },
         { title: '语义缓存总览' },
       ];
     }
     if (pathname.startsWith('/embedding-cache')) {
       return [
-        { title: <Link href="/dashboard">概览</Link> },
+        { title: <Link href="/dashboard">工作台</Link> },
         { title: '语义缓存' },
         { title: 'Embedding 缓存' },
       ];
     }
 
-    return [{ title: '概览' }];
+    return [{ title: '工作台' }];
   }, [pathname, selectedBase?.name]);
 
   const userMenuItems: MenuProps['items'] = [
@@ -539,9 +539,9 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
               </div>
               <div>
                 <Title level={4} style={{ margin: 0 }}>
-                  RAG Admin
+                  智能知识库管理平台
                 </Title>
-                <Text type="secondary">知识库与评测管理台</Text>
+                <Text type="secondary">知识资产、检索质量与运营治理</Text>
               </div>
             </Space>
           </div>
@@ -557,9 +557,11 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
           </div>
 
           <div className="border-t border-slate-200 px-5 py-4">
-            <Text type="secondary">
-              当前控制台已接入 Phase 4 管理闭环，后续会继续补齐 API Key、租户用量与接入文档能力。
-            </Text>
+            <Space direction="vertical" size={4}>
+              <Text type="secondary">当前平台状态：核心功能可用，持续完善中。</Text>
+              <Text type="secondary">帮助入口：查看组织使用规范与常见问题。</Text>
+              <Text type="secondary">接入指南入口：前往接入文档查看集成说明。</Text>
+            </Space>
           </div>
         </div>
       </Sider>
@@ -585,7 +587,7 @@ function AdminShellInner({ children }: { children: React.ReactNode }) {
               </Tag>
               {user ? (
                 <Space size={6}>
-                  <Tag color="geekblue">{user.tenant_name || `Tenant ${user.tenant_id}`}</Tag>
+                  <Tag color="geekblue">{user.tenant_name || `组织 ${user.tenant_id}`}</Tag>
                   {tenantDetail?.plan ? <Tag color="purple">{tenantDetail.plan}</Tag> : null}
                   <Tag color="cyan">{user.role}</Tag>
                 </Space>

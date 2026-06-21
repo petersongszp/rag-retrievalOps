@@ -25,15 +25,12 @@ export function AuthShell({
                 <SafetyCertificateOutlined />
               </div>
               <div>
-                <Text className="text-xs font-semibold uppercase tracking-[0.35em] text-sky-600">
-                  Phase 4 Admin Access
-                </Text>
                 <Title level={1} style={{ marginTop: 16, marginBottom: 16 }}>
-                  用真实账号体系接管 Admin 闭环
+                  进入智能知识库管理平台
                 </Title>
                 <Paragraph className="max-w-xl text-base text-slate-600">
-                  登录、知识库管理、API Key 管理和接入文档都会收敛到同一条受保护链路里。
-                  这一步开始，管理台不再依赖开发期默认入口。
+                  使用统一账号体系进入平台，管理知识资产、检索质量与运营动作。
+                  登录后即可在同一身份上下文中完成知识库、接入密钥和运营治理工作。
                 </Paragraph>
               </div>
               <div className="grid gap-4 md:grid-cols-2">
@@ -45,9 +42,9 @@ export function AuthShell({
                   </Paragraph>
                 </div>
                 <div className="rounded-2xl border border-emerald-100 bg-emerald-50/80 p-5">
-                  <Text className="text-sm font-semibold text-slate-900">多租户上下文</Text>
+                  <Text className="text-sm font-semibold text-slate-900">多组织上下文</Text>
                   <Paragraph className="mb-0 mt-2 text-sm text-slate-600">
-                    当前租户、当前角色和后续的 API Key 权限都会在同一套身份上下文里闭环。
+                    当前组织、当前角色和后续的接入密钥权限都会在同一套身份上下文里闭环。
                   </Paragraph>
                 </div>
               </div>

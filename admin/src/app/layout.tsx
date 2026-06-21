@@ -6,8 +6,8 @@ import '../styles/globals.css';
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
-  title: 'RAG 管理后台',
-  description: 'RAG 知识库管理控制台',
+  title: '智能知识库管理平台',
+  description: '知识库、检索质量与运营治理平台',
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

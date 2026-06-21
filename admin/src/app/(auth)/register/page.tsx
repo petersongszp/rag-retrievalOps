@@ -32,8 +32,8 @@ export default function RegisterPage() {
 
   return (
     <AuthShell
-      title="创建租户 owner 账号"
-      description="Phase 4 首版采用“注册成功后跳转登录”的闭环，不会直接自动登录。"
+      title="创建组织管理员账号"
+      description="注册完成后将跳转到登录页，使用新账号进入平台。"
     >
       <Space direction="vertical" size={20} className="w-full">
         {error ? <Alert type="error" showIcon message={error} /> : null}
@@ -55,9 +55,9 @@ export default function RegisterPage() {
           </Form.Item>
 
           <Form.Item
-            label="租户名称"
+            label="组织名称"
             name="tenant_name"
-            rules={[{ required: true, message: '请输入租户名称' }]}
+            rules={[{ required: true, message: '请输入组织名称' }]}
           >
             <Input size="large" placeholder="Acme Workspace" />
           </Form.Item>
@@ -81,7 +81,7 @@ export default function RegisterPage() {
 
         <div className="rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3">
           <Paragraph className="mb-1 text-sm text-slate-700">
-            注册成功后会先创建租户和 owner 用户，再引导你回到登录页继续完成会话建立。
+            注册成功后会先创建组织和管理员账号，再引导你回到登录页继续完成会话建立。
           </Paragraph>
           <Text type="secondary">这一步不会把 token 暴露到页面或 URL 中。</Text>
         </div>
