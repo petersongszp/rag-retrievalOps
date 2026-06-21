@@ -51,6 +51,18 @@ temp*.txt
 
 # 编译的可执行文件
 *.exe
+*.dll
+*.so
+*.dylib
+backend/main
+backend/rag-server
+backend/rag-server.exe
+backend/parser-provider
+backend/rag-mcp-server
+
+# Go 编译产物
+backend/*.exe
+backend/cmd/*/
 
 # 后端运行时目录
 backend/runtime/
