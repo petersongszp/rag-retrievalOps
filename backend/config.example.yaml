@@ -99,7 +99,7 @@ rag:
     enable_query_rewrite: false
     enable_dynamic_topk: false
     enable_advanced_rerank: false
-    enable_parent_child_retrieval: false
+    enable_parent_child_retrieval: true
     enable_strategic_topk: false
     enable_evidence_refusal: false
     enable_citation_consistency: false
@@ -210,6 +210,22 @@ DocumentSplitter:
     - '! ' # 英文感叹号
     - '? ' # 英文问号
   KeepType: 0 # 分隔符保留策略: 0=不保留, 1=保留在开头, 2=保留在结尾
+  ContextualEmbeddingEnabled: false
+  ContextualEmbeddingStrategy: "title_section_v1"
+  ContextualEmbeddingMaxPrefixChars: 400
+  ContextualEmbeddingMaxContentChars: 3000
+  SaveEmbeddingContentForDebug: false
+  EmbeddingContentMaxLength: 1200
+  SemanticSecondarySplitEnabled: false
+  SemanticMinBlockSize: 1200
+  SemanticTargetChunkSize: 1000
+  SemanticMaxChunkSize: 1400
+  SemanticBreakpointPercentile: 20
+  SemanticMinSentencesPerChunk: 2
+  AgenticChunkingEnabled: false
+  AgenticChunkingMode: "shadow"
+  AgenticChunkingMaxDocumentChars: 30000
+  AgenticChunkingAllowedKBIDs: []
 
 # 微信配置
 wechat:

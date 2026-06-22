@@ -65,11 +65,11 @@ type RunFilters = {
 };
 
 const runStatusOptions: Array<{ label: string; value: EvalRunStatus }> = [
-  { label: 'pending', value: 'pending' },
-  { label: 'running', value: 'running' },
-  { label: 'succeeded', value: 'succeeded' },
-  { label: 'failed', value: 'failed' },
-  { label: 'canceled', value: 'canceled' },
+  { label: '排队中', value: 'pending' },
+  { label: '运行中', value: 'running' },
+  { label: '已完成', value: 'succeeded' },
+  { label: '失败', value: 'failed' },
+  { label: '已取消', value: 'canceled' },
 ];
 
 function normalizeError(error: unknown, fallback: string): string {
@@ -123,6 +123,23 @@ function statusColor(status: EvalRunStatus): string {
       return 'default';
     default:
       return 'gold';
+  }
+}
+
+function formatRunStatus(status: EvalRunStatus): string {
+  switch (status) {
+    case 'pending':
+      return '排队中';
+    case 'running':
+      return '运行中';
+    case 'succeeded':
+      return '已完成';
+    case 'failed':
+      return '失败';
+    case 'canceled':
+      return '已取消';
+    default:
+      return status;
   }
 }
 
@@ -356,14 +373,14 @@ export function EvaluationRunsPage() {
         ),
       },
       {
-        title: 'Baseline',
+        title: '基线策略',
         dataIndex: 'baseline_profile',
         key: 'baseline_profile',
         width: 180,
         ellipsis: true,
       },
       {
-        title: 'Candidate',
+        title: '候选策略',
         dataIndex: 'candidate_profile',
         key: 'candidate_profile',
         width: 180,
@@ -377,11 +394,11 @@ export function EvaluationRunsPage() {
         render: (value: EvalRunStatus, record) =>
           value === 'running' ? (
             <Space direction="vertical" size={4} className="w-full">
-              <Tag color={statusColor(value)}>{value}</Tag>
+              <Tag color={statusColor(value)}>{formatRunStatus(value)}</Tag>
               <Progress percent={Number(formatProgress(record.progress).toFixed(0))} size="small" status="active" />
             </Space>
           ) : (
-            <Tag color={statusColor(value)}>{value}</Tag>
+            <Tag color={statusColor(value)}>{formatRunStatus(value)}</Tag>
           ),
       },
       {
@@ -571,7 +588,19 @@ export function EvaluationRunsPage() {
 
       <Card title="运行列表">
         {runs.length === 0 && !runsLoading ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下还没有评测运行" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前筛选条件下还没有评测运行。先选定评测集，再创建第一条运行。"
+          >
+            <Space wrap>
+              <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateOpen(true)}>
+                新建运行
+              </Button>
+              <Link href="/evaluation/datasets">
+                <Button>去准备评测集</Button>
+              </Link>
+            </Space>
+          </Empty>
         ) : (
           <Table<EvalRun>
             rowKey="run_id"
@@ -651,30 +680,30 @@ export function EvaluationRunsPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <Form.Item
-                label="Baseline Profile"
+                label="基线策略 Profile"
                 name="baseline_profile"
-                rules={[{ required: true, message: '请输入 baseline profile' }]}
+                rules={[{ required: true, message: '请输入基线策略 profile' }]}
               >
                 <Input placeholder="例如 dense_only" />
               </Form.Item>
               <Form.Item
-                label="Candidate Profile"
+                label="候选策略 Profile"
                 name="candidate_profile"
-                rules={[{ required: true, message: '请输入 candidate profile' }]}
+                rules={[{ required: true, message: '请输入候选策略 profile' }]}
               >
                 <Input placeholder="例如 hybrid_rewrite_dynamic_topk" />
               </Form.Item>
             </div>
 
             <Form.Item
-              label="Profiles JSON"
+              label="策略 Profiles JSON"
               name="profiles_json"
-              rules={[{ required: true, message: '请输入 profiles JSON' }]}
+              rules={[{ required: true, message: '请输入策略 profiles JSON' }]}
             >
               <TextArea rows={12} placeholder='例如: [{"name":"dense_only","baseline":true,"mode":"dense"}]' />
             </Form.Item>
 
-            <Form.Item label="Gate Thresholds JSON" name="gate_thresholds_json">
+            <Form.Item label="门禁阈值 JSON" name="gate_thresholds_json">
               <TextArea
                 rows={8}
                 placeholder='例如: {"min_recall_delta":0.08,"max_p95_latency_regression_ratio":0.2}'
@@ -697,14 +726,14 @@ export function EvaluationRunsPage() {
         ) : detail ? (
           <Space direction="vertical" size="large" className="w-full">
             <Descriptions title="运行信息" column={1} size="small" bordered>
-              <Descriptions.Item label="Run ID">{detail.run_id}</Descriptions.Item>
+              <Descriptions.Item label="运行 ID">{detail.run_id}</Descriptions.Item>
               <Descriptions.Item label="评测集">
                 {datasetNameMap.get(detail.dataset_id) ?? `#${detail.dataset_id}`}
               </Descriptions.Item>
-              <Descriptions.Item label="Baseline">{detail.baseline_profile}</Descriptions.Item>
-              <Descriptions.Item label="Candidate">{detail.candidate_profile}</Descriptions.Item>
+              <Descriptions.Item label="基线策略">{detail.baseline_profile}</Descriptions.Item>
+              <Descriptions.Item label="候选策略">{detail.candidate_profile}</Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag color={statusColor(detail.status)}>{detail.status}</Tag>
+                <Tag color={statusColor(detail.status)}>{formatRunStatus(detail.status)}</Tag>
               </Descriptions.Item>
               <Descriptions.Item label="进度">
                 <Space direction="vertical" size={4} className="w-full">
@@ -728,21 +757,21 @@ export function EvaluationRunsPage() {
                 {detail.error_msg || <Text type="secondary">-</Text>}
               </Descriptions.Item>
               <Descriptions.Item label="报告路径">
-                {detail.report_path ? <Text code>{detail.report_path}</Text> : <Tag color="warning">Contract gap</Tag>}
+                {detail.report_path ? <Text code>{detail.report_path}</Text> : <Tag color="warning">字段暂缺</Tag>}
               </Descriptions.Item>
             </Descriptions>
 
-            <Card title="Gate Thresholds" size="small">
+            <Card title="门禁阈值" size="small">
               {detail.gate_thresholds && Object.keys(detail.gate_thresholds).length > 0 ? (
                 <pre className="mb-0 whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">
                   {JSON.stringify(detail.gate_thresholds, null, 2)}
                 </pre>
               ) : (
-                <Text type="secondary">未配置 gate thresholds</Text>
+                <Text type="secondary">未配置门禁阈值</Text>
               )}
             </Card>
 
-            <Card title="Profiles" size="small">
+            <Card title="策略配置 Profiles" size="small">
               {detail.profiles?.length ? (
                 <pre className="mb-0 whitespace-pre-wrap rounded bg-slate-50 p-3 text-xs">
                   {JSON.stringify(detail.profiles, null, 2)}
@@ -751,8 +780,8 @@ export function EvaluationRunsPage() {
                 <Alert
                   type="warning"
                   showIcon
-                  message="Contract gap"
-                  description="后端未返回 profiles，前端无法展示完整策略配置。"
+                  message="策略配置字段暂缺"
+                  description="后端暂未返回 profiles，当前无法展示完整策略配置。"
                 />
               )}
             </Card>

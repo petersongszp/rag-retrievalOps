@@ -39,5 +39,5 @@ func (m *MilvusManager) NewIndexerServiceForCollection(ctx context.Context, coll
 		Collection: strings.TrimSpace(collection),
 		Embedding:  m.EmbeddingService.GetEmbedder(),
 	}
-	return storage.NewIndexerServiceWithDimension(ctx, indexerConfig, m.Config.Embedding.Dimensions)
+	return storage.NewIndexerServiceWithDimension(ctx, indexerConfig, m.Config.Embedding.Dimensions, &m.Config.DocumentSplitter)
 }

@@ -528,8 +528,12 @@ export function CostOpsCostPage() {
         ) : detailRows.length === 0 ? (
           <Empty
             image={Empty.PRESENTED_IMAGE_SIMPLE}
-            description="当前时间范围内没有非零成本数据"
-          />
+            description="当前时间范围内还没有非零成本数据，建议切换时间范围或等待请求流量产生。"
+          >
+            <Button icon={<ReloadOutlined />} onClick={() => void loadData()} loading={loading}>
+              重新加载
+            </Button>
+          </Empty>
         ) : (
           <Table
             rowKey="bucket"
@@ -541,13 +545,20 @@ export function CostOpsCostPage() {
         )}
       </Card>
 
-      <Card title="高成本 Query Top 10">
-        <Table
-          rowKey="request_id"
-          columns={queryColumns}
-          dataSource={highCostQueries}
-          pagination={false}
-        />
+      <Card title="高成本查询 Top 10">
+        {highCostQueries.length === 0 && !loading ? (
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前时间范围内没有高成本查询，可以继续观察成本趋势。"
+          />
+        ) : (
+          <Table
+            rowKey="request_id"
+            columns={queryColumns}
+            dataSource={highCostQueries}
+            pagination={false}
+          />
+        )}
       </Card>
     </div>
   );

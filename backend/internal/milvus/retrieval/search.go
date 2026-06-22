@@ -89,6 +89,7 @@ type SearchMetrics struct {
 	ParentFillCount                int
 	ParentFillFallback             int
 	ParentFillTokens               int
+	ParentFillReason               string
 	EvidenceGateResult             string
 	RefusalReason                  string
 	CitationSupportScore           float64

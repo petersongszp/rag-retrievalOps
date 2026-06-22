@@ -86,16 +86,16 @@ type CreateCaseFormValues = {
 };
 
 const datasetStatusOptions: Array<{ label: string; value: EvalDatasetStatus }> = [
-  { label: 'draft', value: 'draft' },
-  { label: 'ready', value: 'ready' },
-  { label: 'invalid', value: 'invalid' },
-  { label: 'archived', value: 'archived' },
+  { label: '草稿', value: 'draft' },
+  { label: '可运行', value: 'ready' },
+  { label: '校验异常', value: 'invalid' },
+  { label: '已归档', value: 'archived' },
 ];
 
 const validationStatusOptions: Array<{ label: string; value: EvalCaseValidationStatus }> = [
-  { label: 'unchecked', value: 'unchecked' },
-  { label: 'valid', value: 'valid' },
-  { label: 'invalid', value: 'invalid' },
+  { label: '未检查', value: 'unchecked' },
+  { label: '有效', value: 'valid' },
+  { label: '无效', value: 'invalid' },
 ];
 
 function normalizeError(error: unknown, fallback: string): string {
@@ -145,6 +145,30 @@ function validationStatusColor(status: EvalCaseValidationStatus): string {
       return 'error';
     default:
       return 'gold';
+  }
+}
+
+function formatDatasetStatus(status: EvalDatasetStatus): string {
+  switch (status) {
+    case 'ready':
+      return '可运行';
+    case 'invalid':
+      return '校验异常';
+    case 'archived':
+      return '已归档';
+    default:
+      return '草稿';
+  }
+}
+
+function formatValidationStatus(status: EvalCaseValidationStatus): string {
+  switch (status) {
+    case 'valid':
+      return '有效';
+    case 'invalid':
+      return '无效';
+    default:
+      return '未检查';
   }
 }
 
@@ -456,7 +480,9 @@ export function EvaluationDatasetsPage() {
         dataIndex: 'status',
         key: 'status',
         width: 120,
-        render: (value: EvalDatasetStatus) => <Tag color={datasetStatusColor(value)}>{value}</Tag>,
+        render: (value: EvalDatasetStatus) => (
+          <Tag color={datasetStatusColor(value)}>{formatDatasetStatus(value)}</Tag>
+        ),
       },
       {
         title: '更新时间',
@@ -516,13 +542,13 @@ export function EvaluationDatasetsPage() {
         render: (value: string) => <Text code>{value}</Text>,
       },
       {
-        title: 'Query',
+        title: '查询',
         dataIndex: 'query',
         key: 'query',
         ellipsis: true,
       },
       {
-        title: 'Query Type',
+        title: '查询类型',
         dataIndex: 'query_type',
         key: 'query_type',
         width: 140,
@@ -568,7 +594,7 @@ export function EvaluationDatasetsPage() {
         key: 'validation_status',
         width: 130,
         render: (value: EvalCaseValidationStatus) => (
-          <Tag color={validationStatusColor(value)}>{value}</Tag>
+          <Tag color={validationStatusColor(value)}>{formatValidationStatus(value)}</Tag>
         ),
       },
       {
@@ -748,7 +774,14 @@ export function EvaluationDatasetsPage() {
 
       <Card title="评测集列表">
         {datasets.length === 0 && !datasetsLoading ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下还没有评测集" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前筛选条件下还没有评测集。先创建一个评测集，再导入样本。"
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDatasetOpen(true)}>
+              新建评测集
+            </Button>
+          </Empty>
         ) : (
           <Table<EvalDataset>
             rowKey="id"
@@ -805,13 +838,22 @@ export function EvaluationDatasetsPage() {
         }
       >
         {!selectedDataset ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="先从上面的列表中选择一个评测集，再管理样本" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="先从上面的列表中选择一个评测集，再继续管理样本。"
+          >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateDatasetOpen(true)}>
+              先创建评测集
+            </Button>
+          </Empty>
         ) : (
           <Space direction="vertical" size="large" className="w-full">
             <Descriptions bordered column={2} size="small">
               <Descriptions.Item label="评测集名称">{selectedDataset.name}</Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag color={datasetStatusColor(selectedDataset.status)}>{selectedDataset.status}</Tag>
+                <Tag color={datasetStatusColor(selectedDataset.status)}>
+                  {formatDatasetStatus(selectedDataset.status)}
+                </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="知识库">
                 {selectedDataset.kb_id
@@ -828,7 +870,7 @@ export function EvaluationDatasetsPage() {
               <Alert
                 type={lastValidation.status === 'ready' ? 'success' : 'warning'}
                 showIcon
-                message={`最近一次校验结果：${lastValidation.status}`}
+                message={`最近一次校验结果：${formatDatasetStatus(lastValidation.status)}`}
                 description={
                   <Space wrap size="large">
                     <Text>总样本 {lastValidation.case_count}</Text>
@@ -849,10 +891,10 @@ export function EvaluationDatasetsPage() {
               }}
             >
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-                <Form.Item label="Query Type" name="query_type">
+                <Form.Item label="查询类型" name="query_type">
                   <Input placeholder="例如 factual / multi-hop" />
                 </Form.Item>
-                <Form.Item label="Tag" name="tag">
+                <Form.Item label="标签" name="tag">
                   <Input placeholder="按单个标签筛选" />
                 </Form.Item>
                 <Form.Item label="校验状态" name="validation_status">
@@ -882,7 +924,19 @@ export function EvaluationDatasetsPage() {
             {caseError ? <Alert type="error" showIcon message={caseError} /> : null}
 
             {cases.length === 0 && !casesLoading ? (
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前评测集下还没有样本" />
+              <Empty
+                image={Empty.PRESENTED_IMAGE_SIMPLE}
+                description="当前评测集下还没有样本。先手动新增，或直接导入一批 JSON 样本。"
+              >
+                <Space wrap>
+                  <Button type="primary" icon={<PlusOutlined />} onClick={() => setCreateCaseOpen(true)}>
+                    新增样本
+                  </Button>
+                  <Button icon={<UploadOutlined />} onClick={() => setImportOpen(true)}>
+                    导入 JSON
+                  </Button>
+                </Space>
+              </Empty>
             ) : (
               <Table<EvalCase>
                 rowKey="id"
@@ -998,12 +1052,12 @@ export function EvaluationDatasetsPage() {
             </Form.Item>
           </div>
 
-          <Form.Item label="Query" name="query" rules={[{ required: true, message: '请输入 query' }]}>
+          <Form.Item label="查询" name="query" rules={[{ required: true, message: '请输入查询内容' }]}>
             <TextArea rows={3} placeholder="输入用于检索回归的查询" />
           </Form.Item>
 
           <div className="grid gap-4 md:grid-cols-2">
-            <Form.Item label="Query Type" name="query_type">
+            <Form.Item label="查询类型" name="query_type">
               <Input placeholder="例如 factual / multi-hop" />
             </Form.Item>
             <Form.Item label="Collection" name="collection">

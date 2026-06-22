@@ -27,6 +27,8 @@ import type {
   ListResponse,
 } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
+import { ActionEmpty } from './ui/action-empty';
+import { PageHeader } from './ui/page-header';
 
 const { Paragraph, Title } = Typography;
 
@@ -48,14 +50,35 @@ type IngestLogFilters = {
 const PAGE_SIZE = 20;
 
 const statusOptions: Array<{ label: string; value: KBIngestJob['status'] }> = [
-  { label: 'pending', value: 'pending' },
-  { label: 'processing', value: 'processing' },
-  { label: 'completed', value: 'completed' },
-  { label: 'failed', value: 'failed' },
-  { label: 'retrying', value: 'retrying' },
-  { label: 'dead', value: 'dead' },
-  { label: 'canceled', value: 'canceled' },
+  { label: '待处理', value: 'pending' },
+  { label: '处理中', value: 'processing' },
+  { label: '已完成', value: 'completed' },
+  { label: '失败', value: 'failed' },
+  { label: '重试中', value: 'retrying' },
+  { label: '已终止', value: 'dead' },
+  { label: '已取消', value: 'canceled' },
 ];
+
+function statusLabel(status: KBIngestJob['status']) {
+  switch (status) {
+    case 'pending':
+      return '待处理';
+    case 'processing':
+      return '处理中';
+    case 'completed':
+      return '已完成';
+    case 'failed':
+      return '失败';
+    case 'retrying':
+      return '重试中';
+    case 'dead':
+      return '已终止';
+    case 'canceled':
+      return '已取消';
+    default:
+      return status;
+  }
+}
 
 function buildFilters(values: IngestLogFormValues): IngestLogFilters {
   return {
@@ -101,38 +124,38 @@ export function IngestLogsPage() {
   const columns = useMemo<ColumnsType<KBIngestJob>>(
     () => [
       { title: 'Job ID', dataIndex: 'id', key: 'id', width: 100 },
-      { title: 'KB', dataIndex: 'kb_id', key: 'kb_id', width: 90 },
-      { title: 'Document', dataIndex: 'document_id', key: 'document_id', width: 110 },
+      { title: '知识库', dataIndex: 'kb_id', key: 'kb_id', width: 90 },
+      { title: '文档', dataIndex: 'document_id', key: 'document_id', width: 110 },
       {
-        title: 'Status',
+        title: '状态',
         dataIndex: 'status',
         key: 'status',
         width: 120,
-        render: (value: KBIngestJob['status']) => <Tag color={statusColor(value)}>{value}</Tag>,
+        render: (value: KBIngestJob['status']) => <Tag color={statusColor(value)}>{statusLabel(value)}</Tag>,
       },
       {
-        title: 'Error Code',
+        title: '错误编号',
         dataIndex: 'last_error_code',
         key: 'last_error_code',
         width: 150,
         render: (value?: string) => value || '-',
       },
       {
-        title: 'Operation',
+        title: '操作',
         dataIndex: 'operation',
         key: 'operation',
         width: 110,
         render: (value?: string) => value || '-',
       },
       {
-        title: 'Reason',
+        title: '原因',
         dataIndex: 'operation_reason',
         key: 'operation_reason',
         ellipsis: true,
         render: (value?: string) => value || '-',
       },
       {
-        title: 'Created',
+        title: '创建时间',
         dataIndex: 'created_at',
         key: 'created_at',
         width: 180,
@@ -192,22 +215,18 @@ export function IngestLogsPage() {
   }, [form, selectedBase?.id]);
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            入库日志
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            查看入库任务状态机和操作审计记录，定位失败原因与人工操作轨迹。
-          </Paragraph>
-        </div>
-        <Button icon={<ReloadOutlined />} onClick={() => void loadList(filters, page)}>
-          刷新
-        </Button>
-      </div>
+    <div className="admin-page">
+      <PageHeader
+        title="入库链路追踪"
+        subtitle="按知识库、状态和错误类型定位一次文档处理流程，查看任务状态、错误原因和人工操作记录。"
+        extra={
+          <Button icon={<ReloadOutlined />} onClick={() => void loadList(filters, page)}>
+            刷新
+          </Button>
+        }
+      />
 
-      <Card>
+      <Card className="admin-section-card">
         <Form
           form={form}
           layout="vertical"
@@ -231,7 +250,7 @@ export function IngestLogsPage() {
             <Form.Item label="错误类型" name="error_code">
               <Select
                 allowClear
-                placeholder="按 error_code 过滤"
+                placeholder="按错误编号过滤"
                 options={[
                   { label: 'embedding_failed', value: 'embedding_failed' },
                   { label: 'milvus_error', value: 'milvus_error' },
@@ -245,7 +264,7 @@ export function IngestLogsPage() {
           </div>
           <Space>
             <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={isLoading}>
-              查询日志
+              查询链路
             </Button>
             <Button
               onClick={() => {
@@ -263,9 +282,12 @@ export function IngestLogsPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <Card>
+      <Card className="admin-section-card">
         {items.length === 0 && !isLoading ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前筛选条件下没有入库日志" />
+          <ActionEmpty
+            title="当前筛选条件下没有入库链路"
+            description="可以先上传文档触发入库流程，或放宽筛选条件后重新查询。"
+          />
         ) : (
           <Table<KBIngestJob>
             rowKey="id"
@@ -298,30 +320,33 @@ export function IngestLogsPage() {
           <Alert type="error" showIcon message={detailError} />
         ) : detail?.job ? (
           <Space direction="vertical" size="large" className="w-full">
-            <Descriptions title="任务信息" column={1} size="small" bordered>
+            <Descriptions title="基础信息" column={1} size="small" bordered>
               <Descriptions.Item label="Job ID">{detail.job.id}</Descriptions.Item>
-              <Descriptions.Item label="KB ID">{detail.job.kb_id}</Descriptions.Item>
-              <Descriptions.Item label="Document ID">{detail.job.document_id}</Descriptions.Item>
-              <Descriptions.Item label="Status">
-                <Tag color={statusColor(detail.job.status)}>{detail.job.status}</Tag>
+              <Descriptions.Item label="知识库">{detail.job.kb_id}</Descriptions.Item>
+              <Descriptions.Item label="文档">{detail.job.document_id}</Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag color={statusColor(detail.job.status)}>{statusLabel(detail.job.status)}</Tag>
               </Descriptions.Item>
-              <Descriptions.Item label="Retry Count">{detail.job.retry_count}</Descriptions.Item>
-              <Descriptions.Item label="Error Code">{detail.job.last_error_code || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Error Detail">
+              <Descriptions.Item label="重试次数">{detail.job.retry_count}</Descriptions.Item>
+              <Descriptions.Item label="错误编号">{detail.job.last_error_code || '-'}</Descriptions.Item>
+              <Descriptions.Item label="错误详情">
                 {detail.job.last_error_detail || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Operation">{detail.job.operation || '-'}</Descriptions.Item>
-              <Descriptions.Item label="Operation Reason">
+              <Descriptions.Item label="操作">{detail.job.operation || '-'}</Descriptions.Item>
+              <Descriptions.Item label="操作原因">
                 {detail.job.operation_reason || '-'}
               </Descriptions.Item>
-              <Descriptions.Item label="Operated At">
+              <Descriptions.Item label="操作时间">
                 {detail.job.operated_at ? dayjs(detail.job.operated_at).format('YYYY-MM-DD HH:mm:ss') : '-'}
               </Descriptions.Item>
             </Descriptions>
 
-            <Card title="操作审计记录">
+            <Card title="操作审计记录" className="admin-section-card">
               {detail.operation_logs.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="该任务暂无操作审计记录" />
+                <ActionEmpty
+                  title="该任务暂无操作审计记录"
+                  description="说明当前任务还没有人工介入或额外状态流转记录。"
+                />
               ) : (
                 <Table
                   rowKey="id"
@@ -332,7 +357,7 @@ export function IngestLogsPage() {
                     { title: '时间', dataIndex: 'created_at', key: 'created_at', render: (value: string) => dayjs(value).format('YYYY-MM-DD HH:mm:ss') },
                     { title: '操作人', dataIndex: 'operator_id', key: 'operator_id' },
                     { title: '操作', dataIndex: 'operation', key: 'operation' },
-                    { title: '状态流转', key: 'transition', render: (_, record) => `${record.from_status} -> ${record.to_status}` },
+                    { title: '状态流转', key: 'transition', render: (_, record) => `${statusLabel(record.from_status as KBIngestJob['status'])} -> ${statusLabel(record.to_status as KBIngestJob['status'])}` },
                     { title: '原因', dataIndex: 'operation_reason', key: 'operation_reason', render: (value?: string) => value || '-' },
                   ]}
                 />
@@ -340,7 +365,10 @@ export function IngestLogsPage() {
             </Card>
           </Space>
         ) : (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一条入库日志查看详情" />
+          <ActionEmpty
+            title="请选择一条入库链路查看详情"
+            description="点击上方任意一行，可展开查看任务状态、错误原因和操作记录。"
+          />
         )}
       </Drawer>
     </div>

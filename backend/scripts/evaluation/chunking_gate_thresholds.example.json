@@ -1,0 +1,20 @@
+{
+  "min_recall_delta": 0.0,
+  "min_mrr_delta": 0.0,
+  "min_ndcg_delta": 0.0,
+  "min_citation_accuracy_delta": 0.0,
+  "min_citation_precision_delta": 0.0,
+  "min_citation_recall_delta": 0.0,
+  "min_contextual_recall_gain_delta": 0.0,
+  "min_chunk_purity_delta": 0.0,
+  "min_chunk_self_contained_rate_delta": 0.0,
+  "min_parent_fill_gain_delta": 0.0,
+  "max_p95_latency_regression_ratio": 0.2,
+  "max_ingest_p95_regression_ratio": 0.25,
+  "max_avg_embedding_text_length_delta": 400,
+  "max_p95_embedding_text_length_delta": 800,
+  "max_avg_chunks_per_document_delta": 5,
+  "max_p95_chunks_per_document_delta": 10,
+  "max_refusal_false_positive_rate": 0.05,
+  "min_rewrite_gain_delta": 0.0
+}

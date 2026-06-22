@@ -9,6 +9,7 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"sort"
 	"strings"
 	"time"
 
@@ -17,11 +18,22 @@ import (
 	"interview-agents/internal/documentparser/canonical"
 	"interview-agents/internal/milvus"
 	"interview-agents/internal/milvus/chunking"
+	"interview-agents/internal/milvus/chunkmeta"
 	"interview-agents/internal/model"
 	"interview-agents/internal/observability/metrics"
+
+	"github.com/cloudwego/eino/schema"
 )
 
 type knowledgeIngestErrorType string
+
+type knowledgeIngestStats struct {
+	AvgChunkChars               float64
+	P95ChunkChars               int
+	AvgEmbeddingChars           float64
+	SemanticResplitCount        int
+	MarkdownStructureChunkCount int
+}
 
 const (
 	knowledgeIngestErrorTypePayload   knowledgeIngestErrorType = "invalid_payload"
@@ -74,7 +86,7 @@ func HandleKnowledgeIngest(ctx context.Context, message *Message) error {
 		log.Printf("[KB Ingest] failed to update document status to processing: document_id=%d err=%v", payload.DocumentID, updateErr)
 	}
 
-	totalChunks, ingestErr := ingestKnowledgeDocument(ctx, payload)
+	totalChunks, ingestStats, ingestErr := ingestKnowledgeDocument(ctx, payload)
 	if ingestErr != nil {
 		handleKnowledgeIngestFailure(payload, ingestErr, start)
 		return nil
@@ -100,7 +112,7 @@ func HandleKnowledgeIngest(ctx context.Context, message *Message) error {
 		log.Printf("[KB Ingest] skip complete update due to non-processing state: job_id=%d", payload.JobID)
 	}
 
-	logKnowledgeIngest(payload, string(model.KBIngestJobStatusCompleted), "", totalChunks, time.Since(start))
+	logKnowledgeIngest(payload, string(model.KBIngestJobStatusCompleted), "", totalChunks, ingestStats, time.Since(start))
 	metrics.ObserveIngest(time.Since(start), string(model.KBIngestJobStatusCompleted), "none")
 	return nil
 }
@@ -149,27 +161,27 @@ func shouldHandleKnowledgeJob(jobID uint64) bool {
 	}
 }
 
-func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload) (int, error) {
+func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload) (int, knowledgeIngestStats, error) {
 	manager, err := milvus.GetMilvusManager()
 	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to get milvus manager", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to get milvus manager", err)
 	}
 	if manager.GetChunkingStrategy() == nil || manager.GetIndexerService() == nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "milvus services are not initialized", nil)
 	}
 
 	docRecord, err := model.KBDocumentDao.GetByID(payload.DocumentID)
 	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load source document", err)
 	}
 	normalizedDoc, normalizedPath, err := extractNormalizedKnowledgeDocument(ctx, payload.FilePath, payload.FileType, docRecord.FileName)
 	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "failed to normalize source document", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "failed to normalize source document", err)
 	}
 
 	kbRecord, err := model.KBKnowledgeBaseDao.GetByID(payload.KBID)
 	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load knowledge base", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeUnknown, "failed to load knowledge base", err)
 	}
 	tenantID := kbRecord.TenantID
 	if tenantID == 0 {
@@ -178,10 +190,14 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 
 	collection, err := resolveKnowledgeBaseCollectionForIngest(payload.KBID, payload.Collection)
 	if err != nil {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to resolve knowledge base collection", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to resolve knowledge base collection", err)
 	}
 
 	baseMeta := milvus.NewKBDocumentMetadata(tenantID, payload.OperatorAdminID, payload.KBID, payload.DocumentID, docRecord.FileName)
+	sourceFileType := chunkmeta.NormalizeSourceFileType(payload.FileType, docRecord.FileName)
+	baseMeta.SourceFileType = sourceFileType
+	baseMeta.SplitStrategy = chunkmeta.DefaultSplitStrategyForSourceType(sourceFileType)
+	baseMeta.SplitVersion = chunkmeta.VersionForStrategy(baseMeta.SplitStrategy)
 	baseMeta.Extra["collection"] = collection
 	baseMeta.Extra["normalized_path"] = normalizedPath
 	chunks, err := manager.GetChunkingStrategy().Split(ctx, chunking.Request{
@@ -191,10 +207,10 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 	})
 	if err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
-		return 0, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(errorCode, "failed to split knowledge document", err)
 	}
 	if len(chunks) == 0 {
-		return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "empty chunks after split", nil)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeParse, "empty chunks after split", nil)
 	}
 
 	totalChunks := len(chunks)
@@ -206,20 +222,47 @@ func ingestKnowledgeDocument(ctx context.Context, payload KnowledgeIngestPayload
 			chunk.ID = fmt.Sprintf("kb_%d_doc_%d_chunk_%d_%d", payload.KBID, payload.DocumentID, i, time.Now().UnixNano())
 		}
 	}
+	chunkmeta.PrepareChunksForIndexing(chunks, chunkmeta.ContextOptions{
+		Enabled:               config.Global.DocumentSplitter.ContextualEmbeddingEnabled,
+		Strategy:              config.Global.DocumentSplitter.ContextualEmbeddingStrategy,
+		MaxPrefixChars:        config.Global.DocumentSplitter.ContextualEmbeddingMaxPrefixChars,
+		MaxContentChars:       config.Global.DocumentSplitter.ContextualEmbeddingMaxContentChars,
+		SaveContentForDebug:   config.Global.DocumentSplitter.SaveEmbeddingContentForDebug,
+		StoredContentMaxChars: config.Global.DocumentSplitter.EmbeddingContentMaxLength,
+	})
+	ingestStats := summarizeKnowledgeChunks(chunks)
 	indexerService := manager.GetIndexerService()
 	if strings.TrimSpace(collection) != "" {
 		indexerService, err = manager.NewIndexerServiceForCollection(ctx, collection)
 		if err != nil {
-			return 0, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to create collection-specific indexer", err)
+			return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(knowledgeIngestErrorTypeMilvus, "failed to create collection-specific indexer", err)
 		}
 	}
 
 	if _, err := indexerService.Store(ctx, chunks); err != nil {
 		errorCode := classifyKnowledgeIngestError(err)
-		return 0, buildKnowledgeIngestError(errorCode, "failed to store chunks to milvus", err)
+		return 0, knowledgeIngestStats{}, buildKnowledgeIngestError(errorCode, "failed to store chunks to milvus", err)
 	}
 
-	return totalChunks, nil
+	return totalChunks, ingestStats, nil
+}
+
+type knowledgeDocumentSplitter interface {
+	Split(ctx context.Context, docs []*schema.Document) ([]*schema.Document, error)
+	SplitMarkdownDocument(ctx context.Context, doc *schema.Document) ([]*schema.Document, error)
+}
+
+func splitKnowledgeDocument(ctx context.Context, splitter knowledgeDocumentSplitter, doc *schema.Document, sourceFileType string) ([]*schema.Document, error) {
+	if splitter == nil {
+		return nil, fmt.Errorf("splitter is nil")
+	}
+
+	switch chunkmeta.NormalizeSourceFileType(sourceFileType, "") {
+	case chunkmeta.SourceFileTypeMarkdown:
+		return splitter.SplitMarkdownDocument(ctx, doc)
+	default:
+		return splitter.Split(ctx, []*schema.Document{doc})
+	}
 }
 
 func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr error, startedAt time.Time) {
@@ -240,7 +283,7 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 			log.Printf("[KB Ingest] failed to mark failed: job_id=%d err=%v", payload.JobID, err)
 		}
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, knowledgeIngestStats{}, time.Since(startedAt))
 		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
 		return
 	}
@@ -258,7 +301,7 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 			false,
 		)
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, time.Since(startedAt))
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusFailed), errorDetail, 0, knowledgeIngestStats{}, time.Since(startedAt))
 		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusFailed), string(errorCode))
 		return
 	}
@@ -286,7 +329,7 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 			log.Printf("[KB Ingest Retry] failed to mark dead: job_id=%d err=%v", payload.JobID, err)
 		}
 		_ = model.KBDocumentDao.UpdateStatus(payload.DocumentID, model.KBDocumentStatusFailed, errorDetail)
-		logKnowledgeIngest(payload, string(model.KBIngestJobStatusDead), errorDetail, 0, time.Since(startedAt))
+		logKnowledgeIngest(payload, string(model.KBIngestJobStatusDead), errorDetail, 0, knowledgeIngestStats{}, time.Since(startedAt))
 		metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusDead), string(errorCode))
 		return
 	}
@@ -316,7 +359,7 @@ func handleKnowledgeIngestFailure(payload KnowledgeIngestPayload, ingestErr erro
 		errorCode,
 		errorDetail,
 	)
-	logKnowledgeIngest(payload, string(model.KBIngestJobStatusRetrying), errorDetail, 0, time.Since(startedAt))
+	logKnowledgeIngest(payload, string(model.KBIngestJobStatusRetrying), errorDetail, 0, knowledgeIngestStats{}, time.Since(startedAt))
 	metrics.ObserveIngest(time.Since(startedAt), string(model.KBIngestJobStatusRetrying), string(errorCode))
 }
 
@@ -409,9 +452,75 @@ func runKnowledgeRetryCompensation(ctx context.Context) {
 	}
 }
 
-func logKnowledgeIngest(payload KnowledgeIngestPayload, status, errorMsg string, chunkCount int, duration time.Duration) {
+func summarizeKnowledgeChunks(chunks []*schema.Document) knowledgeIngestStats {
+	if len(chunks) == 0 {
+		return knowledgeIngestStats{}
+	}
+
+	chunkLens := make([]int, 0, len(chunks))
+	embeddingLens := make([]int, 0, len(chunks))
+	totalChunkChars := 0
+	totalEmbeddingChars := 0
+	semanticResplitCount := 0
+	markdownStructureCount := 0
+
+	for _, chunk := range chunks {
+		if chunk == nil {
+			continue
+		}
+		chunkLen := len([]rune(strings.TrimSpace(chunk.Content)))
+		chunkLens = append(chunkLens, chunkLen)
+		totalChunkChars += chunkLen
+
+		if chunk.MetaData != nil {
+			if value, ok := chunk.MetaData[chunkmeta.KeyEmbeddingContent].(string); ok {
+				embeddingLen := len([]rune(strings.TrimSpace(value)))
+				embeddingLens = append(embeddingLens, embeddingLen)
+				totalEmbeddingChars += embeddingLen
+			}
+			if enabled, ok := chunk.MetaData[chunkmeta.KeySemanticSplitEnabled].(bool); ok && enabled {
+				semanticResplitCount++
+			}
+			if strategy, ok := chunk.MetaData[chunkmeta.KeySplitStrategy].(string); ok && strategy == chunkmeta.SplitStrategyMarkdownV1 {
+				markdownStructureCount++
+			}
+		}
+	}
+
+	return knowledgeIngestStats{
+		AvgChunkChars:               float64(totalChunkChars) / float64(maxInt(len(chunkLens), 1)),
+		P95ChunkChars:               percentileIntValues(chunkLens, 95),
+		AvgEmbeddingChars:           float64(totalEmbeddingChars) / float64(maxInt(len(embeddingLens), 1)),
+		SemanticResplitCount:        semanticResplitCount,
+		MarkdownStructureChunkCount: markdownStructureCount,
+	}
+}
+
+func percentileIntValues(values []int, percentile int) int {
+	if len(values) == 0 {
+		return 0
+	}
+	sort.Ints(values)
+	rank := int(math.Ceil((float64(percentile)/100.0)*float64(len(values)))) - 1
+	if rank < 0 {
+		rank = 0
+	}
+	if rank >= len(values) {
+		rank = len(values) - 1
+	}
+	return values[rank]
+}
+
+func maxInt(a, b int) int {
+	if a > b {
+		return a
+	}
+	return b
+}
+
+func logKnowledgeIngest(payload KnowledgeIngestPayload, status, errorMsg string, chunkCount int, stats knowledgeIngestStats, duration time.Duration) {
 	log.Printf(
-		"[KB Ingest] job_id=%d document_id=%d kb_id=%d user_id=%d status=%s error_msg=%q chunk_count=%d duration_ms=%d",
+		"[KB Ingest] job_id=%d document_id=%d kb_id=%d user_id=%d status=%s error_msg=%q chunk_count=%d avg_chunk_chars=%.2f p95_chunk_chars=%d avg_embedding_chars=%.2f semantic_resplit_count=%d markdown_structure_chunk_count=%d duration_ms=%d",
 		payload.JobID,
 		payload.DocumentID,
 		payload.KBID,
@@ -419,6 +528,11 @@ func logKnowledgeIngest(payload KnowledgeIngestPayload, status, errorMsg string,
 		status,
 		errorMsg,
 		chunkCount,
+		stats.AvgChunkChars,
+		stats.P95ChunkChars,
+		stats.AvgEmbeddingChars,
+		stats.SemanticResplitCount,
+		stats.MarkdownStructureChunkCount,
 		duration.Milliseconds(),
 	)
 }

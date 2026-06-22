@@ -73,6 +73,12 @@ func (r *Runner) Run(ctx context.Context, dataset []DatasetCase, profiles []Stra
 				CitationPrecision:           computeCitationPrecision(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
 				CitationRecall:              computeCitationRecall(item.CitationTargets, item.RelevantIDs, outcome.Items, topK),
 				LongDocCompleteness:         computeLongDocCompleteness(outcome.Items, topK),
+				ContextualRecallGain:        outcome.ContextualRecallGain,
+				ChunkPurity:                 outcome.ChunkPurity,
+				ChunkSelfContainedRate:      outcome.ChunkSelfContained,
+				IngestLatencyMS:             outcome.IngestLatencyMS,
+				EmbeddingTextLength:         outcome.EmbeddingTextLength,
+				ChunksPerDocument:           outcome.ChunksPerDocument,
 				Refused:                     outcome.Refused,
 				RefusalReason:               outcome.RefusalReason,
 				RefusalExpected:             refusalExpected,
@@ -156,6 +162,9 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 			CitationPrecisionDelta:    current.Metrics.CitationPrecision - prev.Metrics.CitationPrecision,
 			CitationRecallDelta:       current.Metrics.CitationRecall - prev.Metrics.CitationRecall,
 			LongDocCompletenessDelta:  current.Metrics.LongDocCompleteness - prev.Metrics.LongDocCompleteness,
+			ContextualRecallGainDelta: current.Metrics.ContextualRecallGain - prev.Metrics.ContextualRecallGain,
+			ChunkPurityDelta:          current.Metrics.ChunkPurity - prev.Metrics.ChunkPurity,
+			ChunkSelfContainedDelta:   current.Metrics.ChunkSelfContainedRate - prev.Metrics.ChunkSelfContainedRate,
 			ParentFillGainDelta:       current.Metrics.ParentFillGain - prev.Metrics.ParentFillGain,
 			RefusalFalsePositiveDelta: current.Metrics.RefusalFalsePositiveRate - prev.Metrics.RefusalFalsePositiveRate,
 			DenseHitRateDelta:         current.Metrics.DenseHitRate - prev.Metrics.DenseHitRate,
@@ -165,6 +174,12 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 			PrimaryDenseRateDelta:     current.Metrics.PrimaryDenseRate - prev.Metrics.PrimaryDenseRate,
 			PrimarySparseRateDelta:    current.Metrics.PrimarySparseRate - prev.Metrics.PrimarySparseRate,
 			EmptyRateDelta:            current.Metrics.EmptyRate - prev.Metrics.EmptyRate,
+			IngestP95DeltaMS:          current.Metrics.IngestP95MS - prev.Metrics.IngestP95MS,
+			IngestP95DeltaRatio:       computeDeltaRatio(prev.Metrics.IngestP95MS, current.Metrics.IngestP95MS),
+			AvgEmbeddingLengthDelta:   current.Metrics.AvgEmbeddingTextLength - prev.Metrics.AvgEmbeddingTextLength,
+			P95EmbeddingLengthDelta:   current.Metrics.P95EmbeddingTextLength - prev.Metrics.P95EmbeddingTextLength,
+			AvgChunksPerDocDelta:      current.Metrics.AvgChunksPerDocument - prev.Metrics.AvgChunksPerDocument,
+			P95ChunksPerDocDelta:      current.Metrics.P95ChunksPerDocument - prev.Metrics.P95ChunksPerDocument,
 			P95LatencyDeltaMS:         current.Metrics.P95LatencyMS - prev.Metrics.P95LatencyMS,
 		})
 	}
@@ -172,10 +187,6 @@ func buildContribution(results []StrategyResult) []StrategyDelta {
 }
 
 func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
-	ratio := 0.0
-	if baseline.Metrics.P95LatencyMS > 0 {
-		ratio = (candidate.Metrics.P95LatencyMS - baseline.Metrics.P95LatencyMS) / baseline.Metrics.P95LatencyMS
-	}
 	return ComparisonSummary{
 		Baseline:                     baseline.Strategy.Name,
 		Candidate:                    candidate.Strategy.Name,
@@ -188,6 +199,9 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 		CitationPrecisionDelta:       candidate.Metrics.CitationPrecision - baseline.Metrics.CitationPrecision,
 		CitationRecallDelta:          candidate.Metrics.CitationRecall - baseline.Metrics.CitationRecall,
 		LongDocCompletenessDelta:     candidate.Metrics.LongDocCompleteness - baseline.Metrics.LongDocCompleteness,
+		ContextualRecallGainDelta:    candidate.Metrics.ContextualRecallGain - baseline.Metrics.ContextualRecallGain,
+		ChunkPurityDelta:             candidate.Metrics.ChunkPurity - baseline.Metrics.ChunkPurity,
+		ChunkSelfContainedDelta:      candidate.Metrics.ChunkSelfContainedRate - baseline.Metrics.ChunkSelfContainedRate,
 		ParentFillGainDelta:          candidate.Metrics.ParentFillGain - baseline.Metrics.ParentFillGain,
 		EvidenceRefusalRateDelta:     candidate.Metrics.EvidenceRefusalRate - baseline.Metrics.EvidenceRefusalRate,
 		RefusalFalsePositiveRate:     candidate.Metrics.RefusalFalsePositiveRate,
@@ -201,8 +215,14 @@ func buildComparison(baseline, candidate StrategyResult) ComparisonSummary {
 		PrimaryDenseRateDelta:        candidate.Metrics.PrimaryDenseRate - baseline.Metrics.PrimaryDenseRate,
 		PrimarySparseRateDelta:       candidate.Metrics.PrimarySparseRate - baseline.Metrics.PrimarySparseRate,
 		EmptyRateDelta:               candidate.Metrics.EmptyRate - baseline.Metrics.EmptyRate,
+		IngestP95DeltaMS:             candidate.Metrics.IngestP95MS - baseline.Metrics.IngestP95MS,
+		IngestP95DeltaRatio:          computeDeltaRatio(baseline.Metrics.IngestP95MS, candidate.Metrics.IngestP95MS),
+		AvgEmbeddingLengthDelta:      candidate.Metrics.AvgEmbeddingTextLength - baseline.Metrics.AvgEmbeddingTextLength,
+		P95EmbeddingLengthDelta:      candidate.Metrics.P95EmbeddingTextLength - baseline.Metrics.P95EmbeddingTextLength,
+		AvgChunksPerDocDelta:         candidate.Metrics.AvgChunksPerDocument - baseline.Metrics.AvgChunksPerDocument,
+		P95ChunksPerDocDelta:         candidate.Metrics.P95ChunksPerDocument - baseline.Metrics.P95ChunksPerDocument,
 		P95LatencyDeltaMS:            candidate.Metrics.P95LatencyMS - baseline.Metrics.P95LatencyMS,
-		P95LatencyDeltaRatio:         ratio,
+		P95LatencyDeltaRatio:         computeDeltaRatio(baseline.Metrics.P95LatencyMS, candidate.Metrics.P95LatencyMS),
 		CandidateModelRewrite:        candidate.Strategy.EnableModelAssistedRewrite,
 	}
 }
@@ -262,6 +282,13 @@ func resolvePrimaryRoute(outcome SearchOutcome) string {
 	default:
 		return ""
 	}
+}
+
+func computeDeltaRatio(baseline, candidate float64) float64 {
+	if baseline <= 0 {
+		return 0
+	}
+	return (candidate - baseline) / baseline
 }
 
 func resolveStrategyResult(results []StrategyResult, explicitName string, preferBaseline, preferCandidate bool) *StrategyResult {

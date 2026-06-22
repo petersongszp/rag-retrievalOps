@@ -5,7 +5,10 @@ import (
 	"strings"
 	"testing"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
+	"github.com/cloudwego/eino/components/embedding"
 	"github.com/cloudwego/eino/schema"
 )
 
@@ -14,8 +17,9 @@ func TestSplitMarkdownDocumentAnnotatesHeadingHierarchy(t *testing.T) {
 	doc := &schema.Document{
 		Content: "# Handbook\n\n## API Layer\nThe API layer handles routing, validation, authentication, throttling, and audit logging for every request.\nIt also normalizes request metadata before dispatch.\n\n## Storage Layer\nThe storage layer persists vectors and metadata for retrieval.\n",
 		MetaData: map[string]interface{}{
-			"document_id": uint64(42),
-			"title":       "Handbook",
+			"document_id":      uint64(42),
+			"title":            "Handbook",
+			"source_file_type": chunkmeta.SourceFileTypeMarkdown,
 		},
 	}
 
@@ -34,6 +38,21 @@ func TestSplitMarkdownDocumentAnnotatesHeadingHierarchy(t *testing.T) {
 		}
 		if chunk.MetaData["document_id"] != uint64(42) {
 			t.Fatalf("expected document_id to be preserved, got %v", chunk.MetaData["document_id"])
+		}
+		if chunk.MetaData[chunkmeta.KeySplitStrategy] != chunkmeta.SplitStrategyMarkdownV1 {
+			t.Fatalf("expected markdown split strategy, got %v", chunk.MetaData[chunkmeta.KeySplitStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeySplitVersion] != "v1" {
+			t.Fatalf("expected split version v1, got %v", chunk.MetaData[chunkmeta.KeySplitVersion])
+		}
+		if chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy] != chunkmeta.EmbeddingBuildStrategyRaw {
+			t.Fatalf("expected raw embedding build strategy, got %v", chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeyContextVersion] != chunkmeta.ContextVersionRawContent {
+			t.Fatalf("expected raw context version, got %v", chunk.MetaData[chunkmeta.KeyContextVersion])
+		}
+		if chunk.MetaData[chunkmeta.KeySourceFileType] != chunkmeta.SourceFileTypeMarkdown {
+			t.Fatalf("expected markdown source file type, got %v", chunk.MetaData[chunkmeta.KeySourceFileType])
 		}
 		if chunk.MetaData["child_id"] == "" || chunk.MetaData["parent_id"] == "" {
 			t.Fatalf("expected child_id/parent_id to be populated, got child=%v parent=%v", chunk.MetaData["child_id"], chunk.MetaData["parent_id"])
@@ -88,6 +107,12 @@ func TestSplitPreservesChildParentOffsets(t *testing.T) {
 		if childStart < 0 || childEnd < childStart || childEnd > len(content) {
 			t.Fatalf("invalid child offsets: start=%d end=%d len=%d", childStart, childEnd, len(content))
 		}
+		if chunk.MetaData[chunkmeta.KeySplitStrategy] != chunkmeta.SplitStrategyRecursiveV1 {
+			t.Fatalf("expected recursive split strategy, got %v", chunk.MetaData[chunkmeta.KeySplitStrategy])
+		}
+		if chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy] != chunkmeta.EmbeddingBuildStrategyRaw {
+			t.Fatalf("expected raw embedding build strategy, got %v", chunk.MetaData[chunkmeta.KeyEmbeddingBuildStrategy])
+		}
 		if parentStart > childStart || parentEnd < childEnd {
 			t.Fatalf("expected parent span to contain child span, parent=[%d,%d) child=[%d,%d)", parentStart, parentEnd, childStart, childEnd)
 		}
@@ -137,6 +162,78 @@ func TestLongHeadingSectionUsesTruncatedParentWindow(t *testing.T) {
 	}
 }
 
+func TestSemanticSecondarySplitMarksLongBlocks(t *testing.T) {
+	service := mustNewTestSplitter(t, 500, 20)
+	service.ConfigureSemanticSplit(SemanticSplitConfig{
+		Enabled:              true,
+		MinBlockSize:         80,
+		TargetChunkSize:      60,
+		MaxChunkSize:         90,
+		BreakpointPercentile: 50,
+		MinSentencesPerChunk: 2,
+		Embedder:             &fakeSemanticEmbedder{},
+	})
+
+	doc := &schema.Document{
+		Content: "Alpha topic introduces the incident and the first mitigation. Alpha topic continues with more operational detail. Beta topic switches to cost controls and exception handling. Beta topic adds alerts and escalation steps.",
+		MetaData: map[string]interface{}{
+			"document_id": uint64(501),
+			"title":       "Semantic Guide",
+		},
+	}
+
+	chunks, err := service.Split(context.Background(), []*schema.Document{doc})
+	if err != nil {
+		t.Fatalf("Split failed: %v", err)
+	}
+	if len(chunks) < 2 {
+		t.Fatalf("expected semantic split to produce multiple chunks, got %d", len(chunks))
+	}
+
+	foundSemanticChunk := false
+	for _, chunk := range chunks {
+		if chunk.MetaData[chunkmeta.KeySemanticSplitEnabled] == true {
+			foundSemanticChunk = true
+			if chunk.MetaData[chunkmeta.KeySemanticBreakpointMethod] != chunkmeta.SemanticBreakpointEmbeddingV1 {
+				t.Fatalf("expected semantic breakpoint method, got %v", chunk.MetaData[chunkmeta.KeySemanticBreakpointMethod])
+			}
+		}
+	}
+	if !foundSemanticChunk {
+		t.Fatalf("expected at least one chunk to record semantic split metadata")
+	}
+}
+
+func TestAgenticShadowOnlyAnnotatesMetadata(t *testing.T) {
+	service := mustNewTestSplitter(t, 120, 10)
+	service.ConfigureAgenticShadow(true, chunkmeta.AgenticChunkingModeShadow, 1000, []uint64{88})
+
+	doc := &schema.Document{
+		Content: "# Shadow\n\nThis document keeps the default chunking path but records agentic shadow metadata.",
+		MetaData: map[string]interface{}{
+			"kb_id":       uint64(88),
+			"document_id": uint64(700),
+			"title":       "Shadow",
+		},
+	}
+
+	chunks, err := service.SplitMarkdownDocument(context.Background(), doc)
+	if err != nil {
+		t.Fatalf("SplitMarkdownDocument failed: %v", err)
+	}
+	if len(chunks) == 0 {
+		t.Fatalf("expected chunks")
+	}
+	for _, chunk := range chunks {
+		if chunk.MetaData[chunkmeta.KeyAgenticChunkingMode] != chunkmeta.AgenticChunkingModeShadow {
+			t.Fatalf("expected agentic shadow mode metadata, got %v", chunk.MetaData[chunkmeta.KeyAgenticChunkingMode])
+		}
+		if chunk.MetaData[chunkmeta.KeyAgenticShadowGenerated] != true {
+			t.Fatalf("expected agentic shadow generated flag, got %v", chunk.MetaData[chunkmeta.KeyAgenticShadowGenerated])
+		}
+	}
+}
+
 func mustNewTestSplitter(t *testing.T, chunkSize, overlap int) *DocumentSplitterService {
 	t.Helper()
 
@@ -149,6 +246,21 @@ func mustNewTestSplitter(t *testing.T, chunkSize, overlap int) *DocumentSplitter
 		t.Fatalf("NewDocumentSplitterService failed: %v", err)
 	}
 	return service
+}
+
+type fakeSemanticEmbedder struct{}
+
+func (f *fakeSemanticEmbedder) EmbedStrings(_ context.Context, texts []string, _ ...embedding.Option) ([][]float64, error) {
+	vectors := make([][]float64, 0, len(texts))
+	for idx := range texts {
+		switch {
+		case idx < 2:
+			vectors = append(vectors, []float64{1, 0})
+		default:
+			vectors = append(vectors, []float64{0, 1})
+		}
+	}
+	return vectors, nil
 }
 
 func asString(t *testing.T, value interface{}) string {

@@ -8,8 +8,8 @@ services:
       context: ./backend
       dockerfile: Dockerfile.rag
     restart: unless-stopped
-    # ports:
-    #   - "8899:8899"  # 容器内部网络访问即可，无需暴露到宿主机
+    ports:
+      - "8899:8899"
     environment:
       APP_ENV: ${APP_ENV:-dev}
       DB_HOST: mysql
@@ -116,8 +116,8 @@ services:
     image: mysql:8.0
     restart: unless-stopped
     command: --default-authentication-plugin=mysql_native_password
-    # ports:
-    #   - "3308:3306"  # 仅本地开发时需要暴露，容器间通过内部网络访问
+    ports:
+      - "3308:3306"
     environment:
       MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:-root}
       MYSQL_DATABASE: ${DB_NAME:-interview_agent}
@@ -137,8 +137,8 @@ services:
     image: redis:7-alpine
     restart: unless-stopped
     command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-root}
-    # ports:
-    #   - "6380:6379"  # 仅本地开发时需要暴露，容器间通过内部网络访问
+    ports:
+      - "6380:6379"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD:-root}
     volumes:
@@ -159,9 +159,9 @@ services:
     environment:
       ETCD_USE_EMBED: "true"
       COMMON_STORAGETYPE: local
-    # ports:
-    #   - "19531:19530"  # 仅本地开发时需要暴露，容器间通过内部网络访问
-    #   - "9092:9091"    # 健康检查在容器内完成，无需暴露到宿主机
+    ports:
+      - "19531:19530"
+      - "9092:9091"
     volumes:
       - milvus-data:/var/lib/milvus
     healthcheck:

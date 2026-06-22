@@ -97,9 +97,16 @@ export function WeeklyReportsPage() {
 
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
-      <Card title="Weekly Reports">
+      <Card title="周报列表">
         {items.length === 0 ? (
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有周报记录" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="当前没有周报记录。可以先生成一份周报，汇总本周风险、质量变化和后续动作。"
+          >
+            <Button icon={<PlusOutlined />} type="primary" onClick={() => void createReport()}>
+              生成周报
+            </Button>
+          </Empty>
         ) : (
           <Table rowKey="id" columns={columns} dataSource={items} pagination={false} />
         )}

@@ -19,6 +19,12 @@ type DebugDocument struct {
 	Collection         string                 `json:"collection,omitempty"`
 	SectionTitle       string                 `json:"section_title,omitempty"`
 	HierarchyPath      string                 `json:"hierarchy_path,omitempty"`
+	SplitStrategy      string                 `json:"split_strategy,omitempty"`
+	EmbeddingStrategy  string                 `json:"embedding_build_strategy,omitempty"`
+	ContextVersion     string                 `json:"context_version,omitempty"`
+	SemanticSplit      bool                   `json:"semantic_split_enabled,omitempty"`
+	ContextPrefix      string                 `json:"context_prefix,omitempty"`
+	OriginalChild      string                 `json:"original_child_content,omitempty"`
 	ParentFillApplied  bool                   `json:"parent_fill_applied,omitempty"`
 	ParentFillStrategy string                 `json:"parent_fill_strategy,omitempty"`
 	ParentFillReason   string                 `json:"parent_fill_reason,omitempty"`
@@ -26,22 +32,22 @@ type DebugDocument struct {
 }
 
 type RouteDebugHit struct {
-	Route                  string         `json:"route"`
-	Query                  string         `json:"query,omitempty"`
-	Hits                   []DebugDocument `json:"hits,omitempty"`
-	HitsCount              int            `json:"hits_count,omitempty"`
-	ParticipationCount     int            `json:"participation_count,omitempty"`
-	PrimaryCount           int            `json:"primary_count,omitempty"`
-	Contribution           int            `json:"contribution"`
-	SparseTerms            []string       `json:"sparse_terms,omitempty"`
-	FallbackReason         string         `json:"fallback_reason,omitempty"`
+	Route                  string            `json:"route"`
+	Query                  string            `json:"query,omitempty"`
+	Hits                   []DebugDocument   `json:"hits,omitempty"`
+	HitsCount              int               `json:"hits_count,omitempty"`
+	ParticipationCount     int               `json:"participation_count,omitempty"`
+	PrimaryCount           int               `json:"primary_count,omitempty"`
+	Contribution           int               `json:"contribution"`
+	SparseTerms            []string          `json:"sparse_terms,omitempty"`
+	FallbackReason         string            `json:"fallback_reason,omitempty"`
 	TermSources            map[string]string `json:"term_sources,omitempty"`
 	DroppedTerms           map[string]string `json:"dropped_terms,omitempty"`
-	PerTermCandidateCounts map[string]int `json:"per_term_candidate_counts,omitempty"`
-	CandidateCountBefore   int            `json:"candidate_count_before_bm25,omitempty"`
-	CandidateCountAfter    int            `json:"candidate_count_after_bm25,omitempty"`
-	LatencyMs              int64          `json:"latency_ms,omitempty"`
-	Error                  string         `json:"error,omitempty"`
+	PerTermCandidateCounts map[string]int    `json:"per_term_candidate_counts,omitempty"`
+	CandidateCountBefore   int               `json:"candidate_count_before_bm25,omitempty"`
+	CandidateCountAfter    int               `json:"candidate_count_after_bm25,omitempty"`
+	LatencyMs              int64             `json:"latency_ms,omitempty"`
+	Error                  string            `json:"error,omitempty"`
 }
 
 type FusionDebugInfo struct {
@@ -69,11 +75,11 @@ type RerankDebugInfo struct {
 }
 
 type FilterDebugInfo struct {
-	BeforeCount    int               `json:"before_count"`
-	AfterCount     int               `json:"after_count"`
-	Removed        []DebugDocument   `json:"removed,omitempty"`
-	DropReasons    map[string]int    `json:"drop_reasons,omitempty"`
-	TruncateReason string            `json:"truncate_reason,omitempty"`
+	BeforeCount    int             `json:"before_count"`
+	AfterCount     int             `json:"after_count"`
+	Removed        []DebugDocument `json:"removed,omitempty"`
+	DropReasons    map[string]int  `json:"drop_reasons,omitempty"`
+	TruncateReason string          `json:"truncate_reason,omitempty"`
 }
 
 type ParentChildDebugInfo struct {
@@ -123,6 +129,12 @@ func SnapshotDocuments(docs []*schema.Document) []DebugDocument {
 			Collection:         firstNonEmptyString(getStringMetadata(metadata, "collection"), getStringMetadata(metadata, "source.collection")),
 			SectionTitle:       getStringMetadata(metadata, "section_title"),
 			HierarchyPath:      getStringMetadata(metadata, "hierarchy_path"),
+			SplitStrategy:      getStringMetadata(metadata, "split_strategy"),
+			EmbeddingStrategy:  getStringMetadata(metadata, "embedding_build_strategy"),
+			ContextVersion:     getStringMetadata(metadata, "context_version"),
+			SemanticSplit:      debugBoolMetadata(metadata, "semantic_split_enabled"),
+			ContextPrefix:      getStringMetadata(metadata, "context_prefix"),
+			OriginalChild:      getStringMetadata(metadata, "original_child_content"),
 			ParentFillApplied:  debugBoolMetadata(metadata, "parent_fill_applied"),
 			ParentFillStrategy: getStringMetadata(metadata, "parent_fill_strategy"),
 			ParentFillReason:   getStringMetadata(metadata, "parent_fill_reason"),

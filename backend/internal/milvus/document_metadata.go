@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 
+	"interview-agents/internal/milvus/chunkmeta"
 	"interview-agents/internal/milvus/retrieval"
 
 	"github.com/cloudwego/eino/schema"
@@ -80,6 +81,24 @@ type DocumentMetadata struct {
 
 	ParentChildAvailable bool `json:"parent_child_available,omitempty"`
 
+	SplitStrategy string `json:"split_strategy,omitempty"`
+
+	SplitVersion string `json:"split_version,omitempty"`
+
+	SplitStage string `json:"split_stage,omitempty"`
+
+	SourceFileType string `json:"source_file_type,omitempty"`
+
+	SemanticSplitEnabled bool `json:"semantic_split_enabled,omitempty"`
+
+	SemanticSplitScore float64 `json:"semantic_split_score,omitempty"`
+
+	SemanticParentSectionID string `json:"semantic_parent_section_id,omitempty"`
+
+	EmbeddingBuildStrategy string `json:"embedding_build_strategy,omitempty"`
+
+	ContextVersion string `json:"context_version,omitempty"`
+
 	CreatedAt string `json:"created_at"`
 
 	Extra map[string]interface{} `json:"extra,omitempty"`
@@ -92,28 +111,34 @@ func NewDocumentMetadata(filePath string, language DocumentLanguage, category Do
 	title := strings.TrimSuffix(fileName, filepath.Ext(fileName))
 
 	return &DocumentMetadata{
-		Language:  language,
-		Category:  category,
-		FilePath:  filePath,
-		FileName:  fileName,
-		Title:     title,
-		CreatedAt: time.Now().Format(time.RFC3339),
-		Extra:     make(map[string]interface{}),
+		Language:               language,
+		Category:               category,
+		FilePath:               filePath,
+		FileName:               fileName,
+		Title:                  title,
+		SplitStage:             chunkmeta.SplitStagePrimary,
+		EmbeddingBuildStrategy: chunkmeta.EmbeddingBuildStrategyRaw,
+		ContextVersion:         chunkmeta.ContextVersionRawContent,
+		CreatedAt:              time.Now().Format(time.RFC3339),
+		Extra:                  make(map[string]interface{}),
 	}
 }
 
 func NewKBDocumentMetadata(tenantID uint64, operatorAdminID uint, kbID, documentID uint64, fileName string) *DocumentMetadata {
 	return &DocumentMetadata{
-		OperatorAdminID: operatorAdminID,
-		KBScope:         "global",
-		TenantID:        tenantID,
-		KBID:            kbID,
-		DocumentID:      documentID,
-		FileName:        fileName,
-		ChunkIndex:      0,
-		TotalChunks:     0,
-		CreatedAt:       time.Now().UTC().Format(time.RFC3339),
-		Extra:           make(map[string]interface{}),
+		OperatorAdminID:        operatorAdminID,
+		KBScope:                "global",
+		TenantID:               tenantID,
+		KBID:                   kbID,
+		DocumentID:             documentID,
+		FileName:               fileName,
+		ChunkIndex:             0,
+		TotalChunks:            0,
+		SplitStage:             chunkmeta.SplitStagePrimary,
+		EmbeddingBuildStrategy: chunkmeta.EmbeddingBuildStrategyRaw,
+		ContextVersion:         chunkmeta.ContextVersionRawContent,
+		CreatedAt:              time.Now().UTC().Format(time.RFC3339),
+		Extra:                  make(map[string]interface{}),
 	}
 }
 
@@ -190,6 +215,33 @@ func (m *DocumentMetadata) ToMap() map[string]interface{} {
 	}
 	if m.ParentChildAvailable {
 		result["parent_child_available"] = true
+	}
+	if m.SplitStrategy != "" {
+		result[chunkmeta.KeySplitStrategy] = m.SplitStrategy
+	}
+	if m.SplitVersion != "" {
+		result[chunkmeta.KeySplitVersion] = m.SplitVersion
+	}
+	if m.SplitStage != "" {
+		result[chunkmeta.KeySplitStage] = m.SplitStage
+	}
+	if m.SourceFileType != "" {
+		result[chunkmeta.KeySourceFileType] = m.SourceFileType
+	}
+	if m.SemanticSplitEnabled {
+		result[chunkmeta.KeySemanticSplitEnabled] = true
+	}
+	if m.SemanticSplitScore != 0 {
+		result[chunkmeta.KeySemanticSplitScore] = m.SemanticSplitScore
+	}
+	if m.SemanticParentSectionID != "" {
+		result[chunkmeta.KeySemanticParentSection] = m.SemanticParentSectionID
+	}
+	if m.EmbeddingBuildStrategy != "" {
+		result[chunkmeta.KeyEmbeddingBuildStrategy] = m.EmbeddingBuildStrategy
+	}
+	if m.ContextVersion != "" {
+		result[chunkmeta.KeyContextVersion] = m.ContextVersion
 	}
 
 	for k, v := range m.Extra {

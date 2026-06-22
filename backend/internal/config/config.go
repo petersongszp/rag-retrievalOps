@@ -527,6 +527,9 @@ func LoadConfig(configPath string) (*Config, error) {
 	if err := cfg.writePhase3BaselineSnapshot(configPath); err != nil {
 		return nil, err
 	}
+	if err := cfg.writePhase3ChunkingBaselineSnapshot(configPath); err != nil {
+		return nil, err
+	}
 
 	Global = cfg
 	log.Printf("閰嶇疆鍔犺浇鎴愬姛 env=%s files=%s version=%s", cfg.RAG.Environment, strings.Join(loadedPaths, ","), cfg.ConfigVersion)
@@ -934,6 +937,39 @@ func (c *Config) applyRAGDefaults() {
 	}
 	if c.RAG.Phase3.ModelRewriteShadowRatio <= 0 {
 		c.RAG.Phase3.ModelRewriteShadowRatio = 0.1
+	}
+	if strings.TrimSpace(c.DocumentSplitter.ContextualEmbeddingStrategy) == "" {
+		c.DocumentSplitter.ContextualEmbeddingStrategy = "title_section_v1"
+	}
+	if c.DocumentSplitter.ContextualEmbeddingMaxPrefixChars <= 0 {
+		c.DocumentSplitter.ContextualEmbeddingMaxPrefixChars = 400
+	}
+	if c.DocumentSplitter.ContextualEmbeddingMaxContentChars <= 0 {
+		c.DocumentSplitter.ContextualEmbeddingMaxContentChars = 3000
+	}
+	if c.DocumentSplitter.EmbeddingContentMaxLength <= 0 {
+		c.DocumentSplitter.EmbeddingContentMaxLength = 1200
+	}
+	if c.DocumentSplitter.SemanticMinBlockSize <= 0 {
+		c.DocumentSplitter.SemanticMinBlockSize = 1200
+	}
+	if c.DocumentSplitter.SemanticTargetChunkSize <= 0 {
+		c.DocumentSplitter.SemanticTargetChunkSize = 1000
+	}
+	if c.DocumentSplitter.SemanticMaxChunkSize <= 0 {
+		c.DocumentSplitter.SemanticMaxChunkSize = 1400
+	}
+	if c.DocumentSplitter.SemanticBreakpointPercentile <= 0 {
+		c.DocumentSplitter.SemanticBreakpointPercentile = 20
+	}
+	if c.DocumentSplitter.SemanticMinSentencesPerChunk <= 0 {
+		c.DocumentSplitter.SemanticMinSentencesPerChunk = 2
+	}
+	if strings.TrimSpace(c.DocumentSplitter.AgenticChunkingMode) == "" {
+		c.DocumentSplitter.AgenticChunkingMode = "shadow"
+	}
+	if c.DocumentSplitter.AgenticChunkingMaxDocumentChars <= 0 {
+		c.DocumentSplitter.AgenticChunkingMaxDocumentChars = 30000
 	}
 }
 
@@ -1869,6 +1905,96 @@ func (c *Config) writePhase3BaselineSnapshot(configPath string) error {
 	return nil
 }
 
+func (c *Config) writePhase3ChunkingBaselineSnapshot(configPath string) error {
+	if c == nil {
+		return fmt.Errorf("config is nil")
+	}
+	baseDir := filepath.Dir(configPath)
+	snapshotDir := filepath.Join(baseDir, "docs", "baseline", "phase3")
+	if err := os.MkdirAll(snapshotDir, 0755); err != nil {
+		return fmt.Errorf("failed to create phase3 chunking baseline dir: %w", err)
+	}
+	snapshotPath := filepath.Join(snapshotDir, "chunking_baseline_snapshot.json")
+	if _, err := os.Stat(snapshotPath); err == nil {
+		return nil
+	} else if !os.IsNotExist(err) {
+		return fmt.Errorf("failed to check phase3 chunking baseline snapshot: %w", err)
+	}
+
+	payload := map[string]interface{}{
+		"snapshot_type":   "phase3_chunking_l0_baseline",
+		"generated_at":    time.Now().UTC().Format(time.RFC3339),
+		"config_version":  c.ConfigVersion,
+		"strategy_digest": c.buildRAGStrategyDigest(),
+		"document_splitter": map[string]interface{}{
+			"chunk_size":    c.DocumentSplitter.ChunkSize,
+			"overlap_size":  c.DocumentSplitter.OverlapSize,
+			"separators":    c.DocumentSplitter.Separators,
+			"keep_type":     c.DocumentSplitter.KeepType,
+			"source":        "DocumentSplitter",
+			"roadmap_stage": "L0",
+		},
+		"retrieval_baseline": map[string]interface{}{
+			"enable_parent_child_retrieval": c.RAG.FeatureFlags.EnableParentChildRetrieval,
+			"parent_child_fill_strategy":    c.RAG.Phase3.ParentChildFillStrategy,
+			"parent_child_window_size":      c.RAG.Phase3.ParentChildWindowSize,
+			"parent_child_max_tokens":       c.RAG.Phase3.ParentChildMaxTokens,
+			"milvus_topk":                   c.Milvus.TopK,
+		},
+		"evaluation_baseline": map[string]interface{}{
+			"dataset_path":      "scripts/evaluation/chunking_dataset.example.json",
+			"profile_path":      "scripts/evaluation/chunking_strategy_profiles.example.json",
+			"gate_path":         "scripts/evaluation/chunking_gate_thresholds.example.json",
+			"baseline_profile":  "baseline_recursive",
+			"candidate_profile": "parent_child_enabled",
+			"experiment_groups": []string{
+				"baseline_recursive",
+				"markdown_structure",
+				"contextual_embedding",
+				"parent_child_enabled",
+				"semantic_resplit",
+				"agentic_shadow",
+			},
+		},
+		"metrics_snapshot": map[string]interface{}{
+			"recall_at_k":               nil,
+			"mrr":                       nil,
+			"ndcg":                      nil,
+			"citation_precision":        nil,
+			"parent_fill_gain":          nil,
+			"contextual_recall_gain":    nil,
+			"chunk_purity":              nil,
+			"chunk_self_contained_rate": nil,
+			"ingest_p95_ms":             nil,
+			"avg_embedding_text_length": nil,
+			"p95_embedding_text_length": nil,
+			"avg_chunks_per_document":   nil,
+			"p95_chunks_per_document":   nil,
+			"notes":                     "Fill in after the frozen chunking regression run completes.",
+		},
+		"rollback_contract": map[string]interface{}{
+			"independent_switches_required": true,
+			"rollback_order": []string{
+				"AgenticChunkingEnabled",
+				"SemanticSecondarySplitEnabled",
+				"ContextualEmbeddingEnabled",
+				"enable_parent_child_retrieval",
+				"markdown_structure_route",
+			},
+			"safe_fallback": "recursive splitter + raw content embedding",
+		},
+	}
+	data, err := json.MarshalIndent(payload, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal phase3 chunking baseline snapshot: %w", err)
+	}
+	if err := os.WriteFile(snapshotPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write phase3 chunking baseline snapshot: %w", err)
+	}
+	log.Printf("[RAG:L0] phase3 chunking baseline snapshot created: %s", snapshotPath)
+	return nil
+}
+
 func isValidParentChildFillStrategy(strategy string) bool {
 	switch strings.TrimSpace(strategy) {
 	case "parent_only", "sibling_window", "section_window", "child_first_with_parent_summary":
@@ -2040,10 +2166,26 @@ func (c *MilvusConfig) GetCollection(name string) string {
 
 // SplitterConfig 鏂囨。鍒嗗壊鍣ㄩ厤缃?
 type SplitterConfig struct {
-	ChunkSize   int      `yaml:"ChunkSize"`   // 鐩爣鐗囨澶у皬锛堝瓧绗︽暟锛?
-	OverlapSize int      `yaml:"OverlapSize"` // 鐗囨閲嶅彔澶у皬锛堝瓧绗︽暟锛?
-	Separators  []string `yaml:"Separators"`  // 鍒嗛殧绗﹀垪琛?
-	KeepType    int      `yaml:"KeepType"`    // 鍒嗛殧绗︿繚鐣欑瓥鐣ワ細0=涓嶄繚鐣? 1=淇濈暀鍦ㄥ紑澶? 2=淇濈暀鍦ㄧ粨灏?
+	ChunkSize                          int      `yaml:"ChunkSize"`   // 鐩爣鐗囨澶у皬锛堝瓧绗︽暟锛?
+	OverlapSize                        int      `yaml:"OverlapSize"` // 鐗囨閲嶅彔澶у皬锛堝瓧绗︽暟锛?
+	Separators                         []string `yaml:"Separators"`  // 鍒嗛殧绗﹀垪琛?
+	KeepType                           int      `yaml:"KeepType"`    // 鍒嗛殧绗︿繚鐣欑瓥鐣ワ細0=涓嶄繚鐣? 1=淇濈暀鍦ㄥ紑澶? 2=淇濈暀鍦ㄧ粨灏?
+	ContextualEmbeddingEnabled         bool     `yaml:"ContextualEmbeddingEnabled"`
+	ContextualEmbeddingStrategy        string   `yaml:"ContextualEmbeddingStrategy"`
+	ContextualEmbeddingMaxPrefixChars  int      `yaml:"ContextualEmbeddingMaxPrefixChars"`
+	ContextualEmbeddingMaxContentChars int      `yaml:"ContextualEmbeddingMaxContentChars"`
+	SaveEmbeddingContentForDebug       bool     `yaml:"SaveEmbeddingContentForDebug"`
+	EmbeddingContentMaxLength          int      `yaml:"EmbeddingContentMaxLength"`
+	SemanticSecondarySplitEnabled      bool     `yaml:"SemanticSecondarySplitEnabled"`
+	SemanticMinBlockSize               int      `yaml:"SemanticMinBlockSize"`
+	SemanticTargetChunkSize            int      `yaml:"SemanticTargetChunkSize"`
+	SemanticMaxChunkSize               int      `yaml:"SemanticMaxChunkSize"`
+	SemanticBreakpointPercentile       int      `yaml:"SemanticBreakpointPercentile"`
+	SemanticMinSentencesPerChunk       int      `yaml:"SemanticMinSentencesPerChunk"`
+	AgenticChunkingEnabled             bool     `yaml:"AgenticChunkingEnabled"`
+	AgenticChunkingMode                string   `yaml:"AgenticChunkingMode"`
+	AgenticChunkingMaxDocumentChars    int      `yaml:"AgenticChunkingMaxDocumentChars"`
+	AgenticChunkingAllowedKBIDs        []uint64 `yaml:"AgenticChunkingAllowedKBIDs"`
 }
 
 // ExpandEnv 灞曞紑閰嶇疆涓殑鐜鍙橀噺寮曠敤

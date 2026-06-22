@@ -478,6 +478,10 @@ rag:
 	if _, err := os.Stat(phase3SnapshotPath); err != nil {
 		t.Fatalf("expected phase3 baseline snapshot to be created, got err: %v", err)
 	}
+	chunkingSnapshotPath := filepath.Join(tempDir, "docs", "baseline", "phase3", "chunking_baseline_snapshot.json")
+	if _, err := os.Stat(chunkingSnapshotPath); err != nil {
+		t.Fatalf("expected phase3 chunking baseline snapshot to be created, got err: %v", err)
+	}
 }
 
 func TestLoadConfig_ExpandsEmbeddingProvider(t *testing.T) {

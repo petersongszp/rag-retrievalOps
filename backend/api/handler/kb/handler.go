@@ -107,19 +107,33 @@ type citation struct {
 }
 
 type source struct {
-	Route                string  `json:"route"`
-	Collection           string  `json:"collection"`
-	RetrieverVersion     string  `json:"retriever_version"`
-	ParentID             string  `json:"parent_id"`
-	ChildID              string  `json:"child_id"`
-	SectionTitle         string  `json:"section_title"`
-	HierarchyPath        string  `json:"hierarchy_path"`
-	ParentFillStrategy   string  `json:"parent_fill_strategy"`
-	ParentFillTokens     int     `json:"parent_fill_tokens"`
-	CitationSupported    bool    `json:"citation_supported"`
-	CitationSupportScore float64 `json:"citation_support_score"`
-	CitationCheckVersion string  `json:"citation_check_version"`
-	LowSupportCitation   bool    `json:"low_support_citation"`
+	Route                   string  `json:"route"`
+	Collection              string  `json:"collection"`
+	RetrieverVersion        string  `json:"retriever_version"`
+	SplitStrategy           string  `json:"split_strategy"`
+	SplitVersion            string  `json:"split_version"`
+	SourceFileType          string  `json:"source_file_type"`
+	EmbeddingBuildStrategy  string  `json:"embedding_build_strategy"`
+	ContextVersion          string  `json:"context_version"`
+	EmbeddingContentHash    string  `json:"embedding_content_hash"`
+	ContextPrefixHash       string  `json:"context_prefix_hash"`
+	SemanticSplitEnabled    bool    `json:"semantic_split_enabled"`
+	SemanticBreakpoint      string  `json:"semantic_breakpoint_method"`
+	AgenticChunkingMode     string  `json:"agentic_chunking_mode"`
+	AgenticShadowGenerated  bool    `json:"agentic_shadow_generated"`
+	AgenticShadowCandidates int     `json:"agentic_shadow_candidate_count"`
+	ParentChildAvailable    bool    `json:"parent_child_available"`
+	ParentID                string  `json:"parent_id"`
+	ChildID                 string  `json:"child_id"`
+	SectionTitle            string  `json:"section_title"`
+	HierarchyPath           string  `json:"hierarchy_path"`
+	ParentFillStrategy      string  `json:"parent_fill_strategy"`
+	ParentFillTokens        int     `json:"parent_fill_tokens"`
+	ParentFillReason        string  `json:"parent_fill_reason"`
+	CitationSupported       bool    `json:"citation_supported"`
+	CitationSupportScore    float64 `json:"citation_support_score"`
+	CitationCheckVersion    string  `json:"citation_check_version"`
+	LowSupportCitation      bool    `json:"low_support_citation"`
 }
 
 type retrieveItem struct {
@@ -1425,19 +1439,33 @@ func Retrieve(ctx context.Context, c *app.RequestContext) {
 				SnippetOffset: computeSnippetOffset(doc.Content, queryLower),
 			},
 			Source: source{
-				Route:                route,
-				Collection:           firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
-				RetrieverVersion:     firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
-				ParentID:             getStringMetadata(doc.MetaData, "parent_id"),
-				ChildID:              firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),
-				SectionTitle:         getStringMetadata(doc.MetaData, "section_title"),
-				HierarchyPath:        getStringMetadata(doc.MetaData, "hierarchy_path"),
-				ParentFillStrategy:   getStringMetadata(doc.MetaData, "parent_fill_strategy"),
-				ParentFillTokens:     getIntMetadata(doc.MetaData, "parent_fill_tokens"),
-				CitationSupported:    getBoolMetadata(doc.MetaData, "citation_supported"),
-				CitationSupportScore: getFloat64Metadata(doc.MetaData, "citation_support_score"),
-				CitationCheckVersion: getStringMetadata(doc.MetaData, "citation_check_version"),
-				LowSupportCitation:   getBoolMetadata(doc.MetaData, "low_support_citation"),
+				Route:                   route,
+				Collection:              firstNonEmptyString(getStringMetadata(doc.MetaData, "collection"), collection),
+				RetrieverVersion:        firstNonEmptyString(getStringMetadata(doc.MetaData, "retriever_version"), searchMetrics.RetrieverVersion),
+				SplitStrategy:           getStringMetadata(doc.MetaData, "split_strategy"),
+				SplitVersion:            getStringMetadata(doc.MetaData, "split_version"),
+				SourceFileType:          getStringMetadata(doc.MetaData, "source_file_type"),
+				EmbeddingBuildStrategy:  getStringMetadata(doc.MetaData, "embedding_build_strategy"),
+				ContextVersion:          getStringMetadata(doc.MetaData, "context_version"),
+				EmbeddingContentHash:    getStringMetadata(doc.MetaData, "embedding_content_hash"),
+				ContextPrefixHash:       getStringMetadata(doc.MetaData, "context_prefix_hash"),
+				SemanticSplitEnabled:    getBoolMetadata(doc.MetaData, "semantic_split_enabled"),
+				SemanticBreakpoint:      getStringMetadata(doc.MetaData, "semantic_breakpoint_method"),
+				AgenticChunkingMode:     getStringMetadata(doc.MetaData, "agentic_chunking_mode"),
+				AgenticShadowGenerated:  getBoolMetadata(doc.MetaData, "agentic_shadow_generated"),
+				AgenticShadowCandidates: getIntMetadata(doc.MetaData, "agentic_shadow_candidate_count"),
+				ParentChildAvailable:    getBoolMetadata(doc.MetaData, "parent_child_available"),
+				ParentID:                getStringMetadata(doc.MetaData, "parent_id"),
+				ChildID:                 firstNonEmptyString(getStringMetadata(doc.MetaData, "child_id"), firstNonEmptyString(doc.ID, getStringMetadata(doc.MetaData, "chunk_id"))),
+				SectionTitle:            getStringMetadata(doc.MetaData, "section_title"),
+				HierarchyPath:           getStringMetadata(doc.MetaData, "hierarchy_path"),
+				ParentFillStrategy:      getStringMetadata(doc.MetaData, "parent_fill_strategy"),
+				ParentFillTokens:        getIntMetadata(doc.MetaData, "parent_fill_tokens"),
+				ParentFillReason:        getStringMetadata(doc.MetaData, "parent_fill_reason"),
+				CitationSupported:       getBoolMetadata(doc.MetaData, "citation_supported"),
+				CitationSupportScore:    getFloat64Metadata(doc.MetaData, "citation_support_score"),
+				CitationCheckVersion:    getStringMetadata(doc.MetaData, "citation_check_version"),
+				LowSupportCitation:      getBoolMetadata(doc.MetaData, "low_support_citation"),
 			},
 		})
 	}

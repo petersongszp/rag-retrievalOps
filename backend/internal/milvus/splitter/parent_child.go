@@ -7,6 +7,8 @@ import (
 	"math"
 	"strings"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino/schema"
 )
@@ -43,7 +45,7 @@ type parentBlock struct {
 	Truncated     bool
 }
 
-func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document, chunks []*schema.Document) []*schema.Document {
+func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document, chunks []*schema.Document, defaultSplitStrategy string) []*schema.Document {
 	if len(chunks) == 0 {
 		return chunks
 	}
@@ -58,6 +60,7 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 	chunkSpans := locateChunkOffsets(originalContent, chunks, s.config)
 	blocks := buildParentBlocks(originalContent, baseMeta, chunkSpans, s.config)
 	documentKey := resolveDocumentKey(baseMeta, originalContent)
+	agenticShadowEnabled := s.shouldGenerateAgenticShadow(original)
 
 	for i, chunk := range chunks {
 		if chunk == nil {
@@ -68,6 +71,7 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 		for key, value := range cloneMetadataMap(chunk.MetaData) {
 			mergedMeta[key] = value
 		}
+		mergedMeta = chunkmeta.ApplyDefaults(mergedMeta, defaultSplitStrategy)
 
 		chunkID := fmt.Sprintf("%s-child-%03d", documentKey, i)
 		block := pickParentBlock(blocks, chunkSpans[i])
@@ -111,6 +115,16 @@ func (s *DocumentSplitterService) annotateSplitChunks(original *schema.Document,
 			mergedMeta["parent_start_offset"] = parentStart
 			mergedMeta["parent_end_offset"] = parentEnd
 			mergedMeta["parent_token_count"] = parentTokenCount
+		}
+		if semanticEnabled, ok := mergedMeta[chunkmeta.KeySemanticSplitEnabled].(bool); ok && semanticEnabled {
+			if _, exists := mergedMeta[chunkmeta.KeySemanticParentSection]; !exists {
+				mergedMeta[chunkmeta.KeySemanticParentSection] = firstNonEmptyString(parentID, hierarchyPath, sectionTitle)
+			}
+		}
+		if agenticShadowEnabled {
+			mergedMeta[chunkmeta.KeyAgenticChunkingMode] = chunkmeta.AgenticChunkingModeShadow
+			mergedMeta[chunkmeta.KeyAgenticShadowGenerated] = true
+			mergedMeta[chunkmeta.KeyAgenticShadowCandidates] = len(chunks)
 		}
 
 		chunk.MetaData = mergedMeta

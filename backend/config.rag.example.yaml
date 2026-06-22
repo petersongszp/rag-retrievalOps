@@ -170,6 +170,22 @@ DocumentSplitter:
     - "! "
     - "? "
   KeepType: 0
+  ContextualEmbeddingEnabled: false
+  ContextualEmbeddingStrategy: "title_section_v1"
+  ContextualEmbeddingMaxPrefixChars: 400
+  ContextualEmbeddingMaxContentChars: 3000
+  SaveEmbeddingContentForDebug: false
+  EmbeddingContentMaxLength: 1200
+  SemanticSecondarySplitEnabled: false
+  SemanticMinBlockSize: 1200
+  SemanticTargetChunkSize: 1000
+  SemanticMaxChunkSize: 1400
+  SemanticBreakpointPercentile: 20
+  SemanticMinSentencesPerChunk: 2
+  AgenticChunkingEnabled: false
+  AgenticChunkingMode: "shadow"
+  AgenticChunkingMaxDocumentChars: 30000
+  AgenticChunkingAllowedKBIDs: []
 
 rag_platform:
   enabled: true

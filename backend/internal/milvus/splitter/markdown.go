@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 
+	"interview-agents/internal/milvus/chunkmeta"
+
 	"github.com/cloudwego/eino-ext/components/document/transformer/splitter/recursive"
 	"github.com/cloudwego/eino/schema"
 )
@@ -74,8 +76,9 @@ func (s *DocumentSplitterService) SplitMarkdownDocument(ctx context.Context, doc
 	if err != nil {
 		return nil, fmt.Errorf("failed to split markdown document: %w", err)
 	}
+	results = s.applySemanticSecondarySplit(ctx, results)
 
-	return s.annotateSplitChunks(doc, results), nil
+	return s.annotateSplitChunks(doc, results, chunkmeta.SplitStrategyMarkdownV1), nil
 }
 
 // SplitMarkdownDocuments 批量切割多个 Markdown 文档
@@ -134,7 +137,8 @@ func (s *DocumentSplitterService) SplitMarkdownDocuments(ctx context.Context, do
 		if err != nil {
 			return nil, fmt.Errorf("failed to split markdown documents: %w", err)
 		}
-		results = append(results, s.annotateSplitChunks(doc, splitResults)...)
+		splitResults = s.applySemanticSecondarySplit(ctx, splitResults)
+		results = append(results, s.annotateSplitChunks(doc, splitResults, chunkmeta.SplitStrategyMarkdownV1)...)
 	}
 
 	return results, nil

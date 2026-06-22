@@ -43,7 +43,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthShell title="登录管理台" description="使用你的租户账号进入受保护的 Admin 控制台。">
+    <AuthShell title="登录平台" description="使用账号进入智能知识库管理平台。">
       <Space direction="vertical" size={20} className="w-full">
         {noticeMessage ? <Alert type="success" showIcon message={noticeMessage} /> : null}
         {error ? <Alert type="error" showIcon message={error} /> : null}
@@ -75,13 +75,13 @@ export default function LoginPage() {
 
         <div className="rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3">
           <Paragraph className="mb-1 text-sm text-slate-700">
-            登录后我们会通过 JWT 读取当前用户、当前租户和角色信息，不会在页面里输出 token。
+            登录后我们会通过 JWT 读取当前用户、当前组织和角色信息，不会在页面里输出 token。
           </Paragraph>
           <Text type="secondary">如果你还没有账号，请先完成注册。</Text>
         </div>
 
         <Text type="secondary">
-          还没有账号？<Link href="/register">创建 owner 租户</Link>
+          还没有账号？<Link href="/register">创建组织管理员账号</Link>
         </Text>
       </Space>
     </AuthShell>

@@ -160,7 +160,7 @@ describe('CostOpsCostPage', () => {
     render(<CostOpsCostPage />);
 
     await waitFor(() => {
-      expect(screen.getByText('高成本 Query Top 10')).toBeInTheDocument();
+      expect(screen.getByText('高成本查询 Top 10')).toBeInTheDocument();
     });
 
     await user.click(screen.getByText('列表'));

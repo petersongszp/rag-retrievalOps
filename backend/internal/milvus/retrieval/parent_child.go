@@ -37,6 +37,7 @@ type ParentChildFillStats struct {
 	FallbackCount int
 	FilledTokens  int
 	Strategy      string
+	Reason        string
 }
 
 type parentChildQueryExecutor func(ctx context.Context, collection string, expr string, limit int) ([]*schema.Document, error)
@@ -110,9 +111,10 @@ func (p *parentChildPostProcessor) Fill(ctx context.Context, docs []*schema.Docu
 
 	filled := make([]*schema.Document, 0, len(docs))
 	for _, doc := range docs {
-		out, applied, tokens, err := p.fillDocument(ctx, doc)
+		out, applied, tokens, reason, err := p.fillDocument(ctx, doc)
 		if err != nil {
 			stats.FallbackCount++
+			stats.Reason = firstNonEmptyString(stats.Reason, ParentFillReasonQueryFailed)
 			fallbackDoc := cloneDocumentWithMetadata(doc)
 			annotateParentFillMetadata(fallbackDoc, parentFillStrategyChildOnly, 0, 0, readDocScore(doc), false, ParentFillReasonQueryFailed)
 			normalizeRetrievedDocumentContent(fallbackDoc)
@@ -122,6 +124,9 @@ func (p *parentChildPostProcessor) Fill(ctx context.Context, docs []*schema.Docu
 		if applied {
 			stats.FilledCount++
 			stats.FilledTokens += tokens
+			stats.Reason = reason
+		} else if stats.Reason == "" {
+			stats.Reason = reason
 		}
 		normalizeRetrievedDocumentContent(out)
 		filled = append(filled, out)
@@ -199,9 +204,9 @@ func filledParentDedupeKey(doc *schema.Document) string {
 	return documentID + ":parent:" + parentID
 }
 
-func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema.Document) (*schema.Document, bool, int, error) {
+func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema.Document) (*schema.Document, bool, int, string, error) {
 	if doc == nil {
-		return nil, false, 0, nil
+		return nil, false, 0, "", nil
 	}
 
 	base := cloneDocumentWithMetadata(doc)
@@ -213,7 +218,7 @@ func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema
 	parentID := readMetadataString(base, "parent_id")
 	if !castBool(base.MetaData["parent_child_available"]) || parentID == "" {
 		annotateParentFillMetadata(base, parentFillStrategyChildOnly, 0, 0, readDocScore(doc), false, ParentFillReasonSkippedUnavailable)
-		return base, false, 0, nil
+		return base, false, 0, ParentFillReasonSkippedUnavailable, nil
 	}
 
 	collection := readCollectionFromDoc(base)
@@ -222,29 +227,29 @@ func (p *parentChildPostProcessor) fillDocument(ctx context.Context, doc *schema
 	}
 	if collection == "" || p.query == nil {
 		annotateParentFillMetadata(base, parentFillStrategyChildOnly, 0, 0, readDocScore(doc), false, ParentFillReasonQueryFailed)
-		return base, false, 0, nil
+		return base, false, 0, ParentFillReasonQueryFailed, nil
 	}
 
 	candidates, err := p.fetchCandidates(ctx, base, collection)
 	if err != nil {
-		return nil, false, 0, err
+		return nil, false, 0, ParentFillReasonQueryFailed, err
 	}
 
 	selected := p.selectCandidates(base, candidates)
 	if len(selected) <= 1 {
 		annotateParentFillMetadata(base, p.config.FillStrategy, 0, 0, readDocScore(doc), false, ParentFillReasonSkippedInsufficient)
-		return base, false, 0, nil
+		return base, false, 0, ParentFillReasonSkippedInsufficient, nil
 	}
 
 	filledContent, addedCount, addedTokens, reason := p.buildFilledContent(base, selected)
 	if strings.TrimSpace(filledContent) == "" || addedCount == 0 || addedTokens == 0 {
 		annotateParentFillMetadata(base, p.config.FillStrategy, 0, 0, readDocScore(doc), false, reason)
-		return base, false, 0, nil
+		return base, false, 0, reason, nil
 	}
 
 	base.Content = filledContent
 	annotateParentFillMetadata(base, p.config.FillStrategy, addedCount, addedTokens, readDocScore(doc), true, reason)
-	return base, true, addedTokens, nil
+	return base, true, addedTokens, reason, nil
 }
 
 func (p *parentChildPostProcessor) fetchCandidates(ctx context.Context, doc *schema.Document, collection string) ([]*schema.Document, error) {

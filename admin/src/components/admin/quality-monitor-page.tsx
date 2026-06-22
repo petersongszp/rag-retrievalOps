@@ -108,12 +108,24 @@ export function QualityMonitorPage() {
         <Card loading />
       ) : !latestRun || !latestReport ? (
         <Card>
-          <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="还没有成功的评测报告可供展示" />
+          <Empty
+            image={Empty.PRESENTED_IMAGE_SIMPLE}
+            description="还没有成功完成的评测运行，暂时无法生成质量摘要。"
+          >
+            <Space wrap>
+              <Link href="/evaluation/runs">
+                <Button type="primary">去创建评测运行</Button>
+              </Link>
+              <Link href="/evaluation/datasets">
+                <Button>先准备评测集</Button>
+              </Link>
+            </Space>
+          </Empty>
         </Card>
       ) : (
         <>
           <Card
-            title="最近一次成功报告"
+            title="最近一次成功评测"
             extra={
               <Link href={`/evaluation/reports/${latestRun.run_id}`}>
                 <Button type="primary" icon={<ArrowRightOutlined />}>
@@ -125,28 +137,28 @@ export function QualityMonitorPage() {
             <Space direction="vertical" size="middle" className="w-full">
               <Space size="large" wrap>
                 <div>
-                  <Text type="secondary">Run ID</Text>
+                  <Text type="secondary">运行 ID</Text>
                   <div>
                     <Text code>{latestRun.run_id}</Text>
                   </div>
                 </div>
                 <div>
-                  <Text type="secondary">Generated At</Text>
+                  <Text type="secondary">生成时间</Text>
                   <div>{formatTime(latestReport.generated_at)}</div>
                 </div>
                 <div>
-                  <Text type="secondary">Baseline</Text>
+                  <Text type="secondary">基线策略</Text>
                   <div>{latestReport.baseline}</div>
                 </div>
                 <div>
-                  <Text type="secondary">Candidate</Text>
+                  <Text type="secondary">候选策略</Text>
                   <div>{latestReport.candidate}</div>
                 </div>
                 <div>
-                  <Text type="secondary">Gate</Text>
+                  <Text type="secondary">门禁结果</Text>
                   <div>
                     <Tag color={latestReport.gate.passed ? 'success' : 'error'}>
-                      {latestReport.gate.passed ? 'passed' : 'failed'}
+                      {latestReport.gate.passed ? '通过' : '未通过'}
                     </Tag>
                   </div>
                 </div>
@@ -157,7 +169,7 @@ export function QualityMonitorPage() {
           <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
             <Card>
               <Statistic
-                title="Recall@K Delta"
+                title="Recall@K 变化"
                 value={latestReport.comparison.recall_delta}
                 precision={4}
                 valueStyle={{ color: metricColor(latestReport.comparison.recall_delta) }}
@@ -165,7 +177,7 @@ export function QualityMonitorPage() {
             </Card>
             <Card>
               <Statistic
-                title="MRR Delta"
+                title="MRR 变化"
                 value={latestReport.comparison.mrr_delta}
                 precision={4}
                 valueStyle={{ color: metricColor(latestReport.comparison.mrr_delta) }}
@@ -173,7 +185,7 @@ export function QualityMonitorPage() {
             </Card>
             <Card>
               <Statistic
-                title="nDCG Delta"
+                title="nDCG 变化"
                 value={latestReport.comparison.ndcg_delta}
                 precision={4}
                 valueStyle={{ color: metricColor(latestReport.comparison.ndcg_delta) }}
@@ -181,7 +193,7 @@ export function QualityMonitorPage() {
             </Card>
             <Card>
               <Statistic
-                title="Citation Delta"
+                title="引用准确率变化"
                 value={latestReport.comparison.citation_accuracy_delta}
                 precision={4}
                 valueStyle={{ color: metricColor(latestReport.comparison.citation_accuracy_delta) }}
@@ -189,7 +201,7 @@ export function QualityMonitorPage() {
             </Card>
             <Card>
               <Statistic
-                title="P95 Latency Delta"
+                title="P95 延迟变化"
                 value={latestReport.comparison.p95_latency_delta_ms}
                 precision={0}
                 suffix="ms"
@@ -198,24 +210,31 @@ export function QualityMonitorPage() {
             </Card>
             <Card>
               <Statistic
-                title="P95 Latency Ratio"
+                title="P95 延迟变化比例"
                 value={latestReport.comparison.p95_latency_delta_ratio}
                 precision={4}
                 valueStyle={{ color: metricColor(-latestReport.comparison.p95_latency_delta_ratio) }}
               />
             </Card>
             <Card>
-              <Statistic title="Dataset Size" value={latestReport.dataset_size} precision={0} />
+              <Statistic title="样本规模" value={latestReport.dataset_size} precision={0} />
             </Card>
             <Card>
-              <Statistic title="Gate Checks" value={latestReport.gate.checks.length} precision={0} />
+              <Statistic title="门禁检查数" value={latestReport.gate.checks.length} precision={0} />
             </Card>
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <Card title="Gate 摘要">
+            <Card title="门禁摘要">
               {quickChecks.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前报告没有 gate 细项" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="当前报告还没有门禁检查明细。"
+                >
+                  <Link href={`/evaluation/reports/${latestRun.run_id}`}>
+                    <Button type="primary">查看完整报告</Button>
+                  </Link>
+                </Empty>
               ) : (
                 <List
                   dataSource={quickChecks}
@@ -225,11 +244,11 @@ export function QualityMonitorPage() {
                         <Space>
                           <Text strong>{item.name}</Text>
                           <Tag color={item.passed ? 'success' : 'error'}>
-                            {item.passed ? 'passed' : 'failed'}
+                            {item.passed ? '通过' : '未通过'}
                           </Tag>
                         </Space>
                         <Text type="secondary">
-                          actual={item.actual} expected={item.expected}
+                          实际值 {item.actual} / 阈值 {item.expected}
                         </Text>
                         <Text>{item.message}</Text>
                       </Space>
@@ -241,7 +260,14 @@ export function QualityMonitorPage() {
 
             <Card title="贡献摘要">
               {quickContribution.length === 0 ? (
-                <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前报告没有贡献分析数据" />
+                <Empty
+                  image={Empty.PRESENTED_IMAGE_SIMPLE}
+                  description="当前报告还没有可展示的策略贡献分析。"
+                >
+                  <Link href={`/evaluation/reports/${latestRun.run_id}`}>
+                    <Button type="primary">查看完整报告</Button>
+                  </Link>
+                </Empty>
               ) : (
                 <List
                   dataSource={quickContribution}
@@ -255,7 +281,7 @@ export function QualityMonitorPage() {
                           <Text>Recall {item.recall_delta.toFixed(4)}</Text>
                           <Text>MRR {item.mrr_delta.toFixed(4)}</Text>
                           <Text>nDCG {item.ndcg_delta.toFixed(4)}</Text>
-                          <Text>Citation {item.citation_accuracy_delta.toFixed(4)}</Text>
+                          <Text>引用 {item.citation_accuracy_delta.toFixed(4)}</Text>
                           <Text>P95 {item.p95_latency_delta_ms.toFixed(0)} ms</Text>
                         </Space>
                       </Space>

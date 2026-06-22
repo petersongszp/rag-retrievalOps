@@ -38,6 +38,34 @@ import { useKnowledgeBaseContext } from './knowledge-base-provider';
 
 const { Paragraph, Text, Title } = Typography;
 
+const KNOWLEDGE_BASE_STATUS_LABELS: Record<string, string> = {
+  active: '可用',
+  processing: '处理中',
+  building: '处理中',
+  syncing: '处理中',
+  failed: '异常',
+  error: '异常',
+  inactive: '停用',
+  disabled: '停用',
+};
+
+const DOCUMENT_STATUS_LABELS: Record<string, string> = {
+  pending: '待入库',
+  processing: '处理中',
+  completed: '已完成',
+  failed: '失败',
+};
+
+const JOB_STATUS_LABELS: Record<string, string> = {
+  pending: '待处理',
+  processing: '处理中',
+  completed: '已完成',
+  failed: '失败',
+  retrying: '重试中',
+  dead: '已终止',
+  canceled: '已取消',
+};
+
 const STATUS_COLOR_MAP: Record<string, string> = {
   pending: 'default',
   processing: 'processing',
@@ -57,12 +85,148 @@ interface PaginatedResponse<T> {
   page_size?: number;
 }
 
+type JobStageKey =
+  | 'parse'
+  | 'chunk'
+  | 'embed'
+  | 'write'
+  | 'completed'
+  | 'failed'
+  | 'pending'
+  | 'processing'
+  | 'retrying'
+  | 'canceled';
+
 function formatContractField(value: unknown): string {
   if (value === undefined || value === null || value === '') {
-    return 'Contract gap';
+    return '暂未返回';
   }
 
   return String(value);
+}
+
+function getKnowledgeBaseStatusLabel(status?: string): string {
+  if (!status) {
+    return '未知';
+  }
+
+  return KNOWLEDGE_BASE_STATUS_LABELS[status] ?? status;
+}
+
+function getDocumentStatusLabel(status?: string): string {
+  if (!status) {
+    return '未知';
+  }
+
+  return DOCUMENT_STATUS_LABELS[status] ?? status;
+}
+
+function getJobStatusLabel(status?: string): string {
+  if (!status) {
+    return '未知';
+  }
+
+  return JOB_STATUS_LABELS[status] ?? status;
+}
+
+function normalizeJobStage(value: unknown): JobStageKey | null {
+  if (typeof value !== 'string') {
+    return null;
+  }
+
+  const normalized = value.toLowerCase();
+  if (normalized.includes('parse')) {
+    return 'parse';
+  }
+  if (normalized.includes('chunk') || normalized.includes('split')) {
+    return 'chunk';
+  }
+  if (normalized.includes('embed') || normalized.includes('vector')) {
+    return 'embed';
+  }
+  if (normalized.includes('write') || normalized.includes('milvus') || normalized.includes('index')) {
+    return 'write';
+  }
+  if (normalized.includes('retry')) {
+    return 'retrying';
+  }
+  if (normalized.includes('cancel')) {
+    return 'canceled';
+  }
+  if (normalized.includes('complete') || normalized.includes('success') || normalized.includes('done')) {
+    return 'completed';
+  }
+  if (normalized.includes('fail') || normalized.includes('dead') || normalized.includes('error')) {
+    return 'failed';
+  }
+  if (normalized.includes('pending') || normalized.includes('queue')) {
+    return 'pending';
+  }
+  if (normalized.includes('process') || normalized.includes('running')) {
+    return 'processing';
+  }
+
+  return null;
+}
+
+function getJobStageKey(job: KBIngestJob): JobStageKey {
+  const record = job as KBIngestJob & Record<string, unknown>;
+  const candidates = [
+    record.stage,
+    record.current_stage,
+    record.currentStage,
+    record.last_stage,
+    record.lastStage,
+    record.operation,
+    record.last_error_code,
+    record.last_error_detail,
+    record.error_msg,
+  ];
+
+  for (const candidate of candidates) {
+    const stage = normalizeJobStage(candidate);
+    if (stage) {
+      return stage;
+    }
+  }
+
+  const statusStage = normalizeJobStage(job.status);
+  return statusStage ?? 'processing';
+}
+
+function getJobStageLabel(job: KBIngestJob): string {
+  const stage = getJobStageKey(job);
+
+  switch (stage) {
+    case 'parse':
+      return '解析中';
+    case 'chunk':
+      return '切分中';
+    case 'embed':
+      return '向量化中';
+    case 'write':
+      return '写入中';
+    case 'completed':
+      return '完成';
+    case 'failed':
+      return '失败';
+    case 'pending':
+      return '待处理';
+    case 'retrying':
+      return '重试中';
+    case 'canceled':
+      return '已取消';
+    default:
+      return '处理中';
+  }
+}
+
+function getJobFailureCode(job: KBIngestJob): string {
+  if (job.last_error_code) {
+    return job.last_error_code;
+  }
+
+  return `JOB-${job.id}`;
 }
 
 export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
@@ -91,6 +255,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const [uploadLoading, setUploadLoading] = useState(false);
   const [actionLoadingId, setActionLoadingId] = useState<number | null>(null);
   const [deleteLoading, setDeleteLoading] = useState(false);
+  const [activeTabKey, setActiveTabKey] = useState('documents');
   const pollTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const allowUpload = canUploadDocument(user?.role);
   const allowDeleteKnowledgeBase = canDeleteKB(user?.role);
@@ -105,6 +270,10 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
   const documentsPageSizeRef = useRef(10);
   const jobsPageRef = useRef(1);
   const jobsPageSizeRef = useRef(10);
+  const failedJobs = useMemo(
+    () => jobs.filter((job) => job.status === 'failed' || job.status === 'dead'),
+    [jobs]
+  );
 
   const refreshJobs = useCallback(
     async (page?: number, pageSize?: number) => {
@@ -203,6 +372,48 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     onChange: ({ fileList: nextFileList }) => setFileList(nextFileList),
     accept: '.pdf,.md,.txt,.markdown,.docx,.html,.htm',
   };
+
+  const copyErrorCode = useCallback(async (job: KBIngestJob) => {
+    const code = getJobFailureCode(job);
+
+    try {
+      await navigator.clipboard.writeText(code);
+      if (job.last_error_code) {
+        message.success(`错误编号已复制：${code}`);
+      } else {
+        message.success(`当前任务未返回错误编号，已复制任务编号：${code}`);
+      }
+    } catch {
+      message.error('复制失败，请手动记录任务编号');
+    }
+  }, []);
+
+  const showFailureReason = useCallback((job: KBIngestJob) => {
+    Modal.info({
+      title: `任务 ${job.id} 失败原因`,
+      okText: '我知道了',
+      width: 640,
+      content: (
+        <Space direction="vertical" size={12} className="w-full">
+          <Text>
+            当前阶段：<Tag color="error">{getJobStageLabel(job)}</Tag>
+          </Text>
+          <Text>
+            错误编号：<Text code>{getJobFailureCode(job)}</Text>
+          </Text>
+          <Text>
+            错误摘要：{job.error_msg || '暂无摘要，建议结合任务编号排查后端日志。'}
+          </Text>
+          <Text>
+            补充信息：{job.last_error_detail || '暂未返回补充信息。'}
+          </Text>
+          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
+            建议先确认文档内容与格式是否完整，再检查解析、切分或向量服务状态，确认后可直接回到任务列表重试。
+          </Paragraph>
+        </Space>
+      ),
+    });
+  }, []);
 
   const handleDeleteDocument = (document: KBDocument) => {
     Modal.confirm({
@@ -329,7 +540,9 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => <Tag color={STATUS_COLOR_MAP[value] || 'default'}>{value}</Tag>,
+      render: (value: string) => (
+        <Tag color={STATUS_COLOR_MAP[value] || 'default'}>{getDocumentStatusLabel(value)}</Tag>
+      ),
     },
     {
       title: '操作',
@@ -353,16 +566,44 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
     { title: '任务 ID', dataIndex: 'id', key: 'id' },
     { title: '文档 ID', dataIndex: 'document_id', key: 'document_id' },
     {
+      title: '当前阶段',
+      key: 'stage',
+      render: (_, record) => {
+        const stageLabel = getJobStageLabel(record);
+        const stageKey = getJobStageKey(record);
+        const color =
+          stageKey === 'completed'
+            ? 'success'
+            : stageKey === 'failed'
+              ? 'error'
+              : stageKey === 'canceled'
+                ? 'default'
+                : 'processing';
+
+        return <Tag color={color}>{stageLabel}</Tag>;
+      },
+    },
+    {
       title: '状态',
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => <Tag color={STATUS_COLOR_MAP[value] || 'default'}>{value}</Tag>,
+      render: (value: string) => <Tag color={STATUS_COLOR_MAP[value] || 'default'}>{getJobStatusLabel(value)}</Tag>,
     },
     {
       title: '重试次数',
       dataIndex: 'retry_count',
       key: 'retry_count',
       render: (value: number | undefined) => formatContractField(value),
+    },
+    {
+      title: '错误编号',
+      key: 'error_code',
+      render: (_, record) =>
+        record.status === 'failed' || record.status === 'dead' ? (
+          <Text code>{getJobFailureCode(record)}</Text>
+        ) : (
+          <Text type="secondary">-</Text>
+        ),
     },
     {
       title: '错误信息',
@@ -376,6 +617,11 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
       render: (_, record) => (
         <Space>
           {(record.status === 'failed' || record.status === 'dead') && (
+            <Button type="text" onClick={() => showFailureReason(record)}>
+              查看原因
+            </Button>
+          )}
+          {(record.status === 'failed' || record.status === 'dead') && (
             <Button
               type="text"
               icon={<ReloadOutlined />}
@@ -385,6 +631,11 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
               onClick={() => handleRetryJob(record)}
             >
               重试
+            </Button>
+          )}
+          {(record.status === 'failed' || record.status === 'dead') && (
+            <Button type="text" onClick={() => void copyErrorCode(record)}>
+              复制错误编号
             </Button>
           )}
           {!['completed', 'canceled', 'dead'].includes(record.status) && (
@@ -431,6 +682,24 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           description="当前账号无权访问知识库数据（403）。请联系管理员确认权限配置。"
         />
       ) : null}
+      {failedJobs.length > 0 ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={`当前有 ${failedJobs.length} 个失败的入库任务待处理`}
+          description="建议先查看失败原因并记录错误编号，确认文档或服务状态后再执行重试。"
+          action={
+            <Button
+              size="small"
+              onClick={() => {
+                setActiveTabKey('jobs');
+              }}
+            >
+              前往入库任务
+            </Button>
+          }
+        />
+      ) : null}
 
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
@@ -438,7 +707,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
             {base?.name ?? '知识库详情'}
           </Title>
           <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            在这里管理文档上传、入库任务和基础知识库信息。
+            在这里维护文档资产、跟进入库任务，并持续校验知识库是否已经准备好服务检索问答。
           </Paragraph>
         </div>
         <Space wrap>
@@ -446,7 +715,7 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
             刷新
           </Button>
           <Link href="/retrieval-lab">
-            <Button icon={<SearchOutlined />}>打开检索实验室</Button>
+            <Button icon={<SearchOutlined />}>进入检索调优</Button>
           </Link>
           <Button
             danger
@@ -496,27 +765,52 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           <Text>
             状态：{' '}
             <Tag color={base?.status === 'active' ? 'success' : 'default'}>
-              {base?.status ?? '未知'}
+              {getKnowledgeBaseStatusLabel(base?.status)}
             </Tag>
           </Text>
-          <Text>Collection: {base?.vector_collection || 'Contract gap'}</Text>
-          <Text>描述：{base?.description || '暂无描述。'}</Text>
+          <Text>向量集合：{base?.vector_collection || '待系统生成'}</Text>
+          <Text>描述：{base?.description || '暂无说明，建议补充知识范围和维护场景。'}</Text>
           <Text>创建时间：{base?.created_at ?? '未知'}</Text>
         </Space>
       </Card>
 
       <Spin spinning={isLoading || isBasesLoading} indicator={<SyncOutlined spin />}>
         <Tabs
+          activeKey={activeTabKey}
+          onChange={setActiveTabKey}
           items={[
             {
               key: 'documents',
               label: `文档（${documentsTotal}）`,
               children: (
                 <Card>
+                  <Paragraph type="secondary">
+                    上传文档后，系统会依次完成解析、切分、向量化和写入，处理进度可在下方入库任务中持续跟踪。
+                  </Paragraph>
                   <Table
                     rowKey="id"
                     columns={documentColumns}
                     dataSource={documents}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description="还没有文档。先上传第一份文档，系统会自动创建对应的入库任务。"
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        >
+                          <Space>
+                            <Button
+                              type="primary"
+                              icon={<UploadOutlined />}
+                              disabled={isPermissionDenied || !allowUpload}
+                              onClick={() => setUploadOpen(true)}
+                            >
+                              上传第一份文档
+                            </Button>
+                            <Button onClick={() => void refreshDocuments()}>刷新文档列表</Button>
+                          </Space>
+                        </Empty>
+                      ),
+                    }}
                     pagination={{
                       current: documentsPage,
                       pageSize: documentsPageSize,
@@ -541,6 +835,34 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
                     rowKey="id"
                     columns={jobColumns}
                     dataSource={jobs}
+                    locale={{
+                      emptyText: (
+                        <Empty
+                          description={
+                            documentsTotal > 0
+                              ? '暂时还没有入库任务。可刷新列表，或重新上传文档以触发新的处理流程。'
+                              : '还没有入库任务。请先上传文档，系统会自动生成对应的入库任务。'
+                          }
+                          image={Empty.PRESENTED_IMAGE_SIMPLE}
+                        >
+                          <Space>
+                            {documentsTotal > 0 ? (
+                              <Button onClick={() => void refreshJobs()}>刷新任务列表</Button>
+                            ) : (
+                              <Button
+                                type="primary"
+                                icon={<UploadOutlined />}
+                                disabled={isPermissionDenied || !allowUpload}
+                                onClick={() => setUploadOpen(true)}
+                              >
+                                先上传文档
+                              </Button>
+                            )}
+                            <Button onClick={() => setActiveTabKey('documents')}>查看文档列表</Button>
+                          </Space>
+                        </Empty>
+                      ),
+                    }}
                     pagination={{
                       current: jobsPage,
                       pageSize: jobsPageSize,
@@ -572,14 +894,16 @@ export function KnowledgeBaseDetailPage({ kbId }: { kbId: number }) {
           setFileList([]);
         }}
         onOk={() => void handleUpload()}
-        destroyOnClose
+        destroyOnHidden
       >
         <Space direction="vertical" className="w-full">
           <Text type="secondary">当前知识库：{base?.name ?? `#${kbId}`}</Text>
           <Upload {...uploadProps} maxCount={10}>
             <Button icon={<UploadOutlined />}>选择文件</Button>
           </Upload>
-          <Text type="secondary">支持格式：PDF、MD、TXT、MARKDOWN、DOCX、HTML、HTM</Text>
+          <Text type="secondary">
+            上传后会自动进入解析、切分、向量化和写入流程。支持格式：PDF、MD、TXT、MARKDOWN、DOCX、HTML、HTM
+          </Text>
         </Space>
       </Modal>
     </div>

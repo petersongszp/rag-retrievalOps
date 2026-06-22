@@ -5,10 +5,11 @@ import type { KBRetrieveLog, ListResponse } from '@/types/kb';
 
 const mockPush = vi.fn();
 const mockReplace = vi.fn();
+const mockSearchParams = new URLSearchParams('');
 
 vi.mock('next/navigation', () => ({
   useRouter: () => ({ push: mockPush, replace: mockReplace }),
-  useSearchParams: () => new URLSearchParams(''),
+  useSearchParams: () => mockSearchParams,
 }));
 
 vi.mock('@/services/api/client', () => ({
@@ -148,8 +149,8 @@ describe('RetrievalLogsPage cache UI', () => {
       expect(screen.getByText('cached query')).toBeInTheDocument();
     });
 
-    expect(screen.getByText('Hit')).toBeInTheDocument();
-    expect(screen.getByText('Miss')).toBeInTheDocument();
+    expect(screen.getAllByText('命中').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('未命中').length).toBeGreaterThan(0);
   });
 
   it('renders semantic cache and embedding cache details in the drawer', async () => {
@@ -162,14 +163,14 @@ describe('RetrievalLogsPage cache UI', () => {
     fireEvent.click(screen.getByText('cached query'));
 
     await waitFor(() => {
-      expect(screen.getByText('Semantic Cache')).toBeInTheDocument();
+      expect(screen.getAllByText('语义缓存').length).toBeGreaterThan(0);
     });
 
-    expect(screen.getAllByText('Hit').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('命中').length).toBeGreaterThan(0);
     expect(screen.getByText('threshold_passed')).toBeInTheDocument();
     expect(screen.getByText('entry_123')).toBeInTheDocument();
     expect(screen.getByText('0.9321')).toBeInTheDocument();
-    expect(screen.getByText('Embedding Cache')).toBeInTheDocument();
+    expect(screen.getAllByText('向量缓存').length).toBeGreaterThan(0);
     expect(screen.getByText('hit')).toBeInTheDocument();
   });
 });

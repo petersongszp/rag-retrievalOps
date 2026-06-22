@@ -37,6 +37,9 @@ import type {
   StrategyRollbackResult,
   StrategyVersion,
 } from '@/types/kb';
+import { ActionEmpty } from './ui/action-empty';
+import { MetricCard } from './ui/metric-card';
+import { PageHeader } from './ui/page-header';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -81,19 +84,75 @@ function statusColor(status?: string): string {
 
 function renderMetric(value?: number, digits = 3) {
   if (value === undefined || value === null) {
-    return <Tag color="warning">Contract gap</Tag>;
+    return <Tag color="warning">字段暂缺</Tag>;
   }
   return value.toFixed(digits);
 }
 
 function renderValue(value?: string | number | boolean | null) {
   if (value === undefined || value === null || value === '') {
-    return <Tag color="warning">Contract gap</Tag>;
+    return <Tag color="warning">字段暂缺</Tag>;
   }
   if (typeof value === 'boolean') {
-    return value ? 'true' : 'false';
+    return value ? '是' : '否';
   }
   return String(value);
+}
+
+function formatStrategyStatus(status?: string): string {
+  switch (status) {
+    case 'enabled':
+      return '已启用';
+    case 'disabled':
+      return '已停用';
+    case 'shadow':
+      return '影子模式';
+    case 'canary':
+      return '灰度中';
+    case 'rolling_back':
+      return '回退中';
+    case 'error':
+      return '异常';
+    default:
+      return '未知';
+  }
+}
+
+function formatRiskLevel(riskLevel?: string): string {
+  switch (riskLevel) {
+    case 'high':
+      return '高风险';
+    case 'medium':
+      return '中风险';
+    case 'low':
+      return '低风险';
+    default:
+      return '未知';
+  }
+}
+
+function riskTagColor(riskLevel?: string): string {
+  switch (riskLevel) {
+    case 'high':
+      return 'error';
+    case 'medium':
+      return 'warning';
+    case 'low':
+      return 'success';
+    default:
+      return 'default';
+  }
+}
+
+function formatImpactRange(range: MetricsRange): string {
+  switch (range) {
+    case '1h':
+      return '近 1 小时';
+    case '7d':
+      return '近 7 天';
+    default:
+      return '近 24 小时';
+  }
 }
 
 type EditStrategyFormValues = {
@@ -182,21 +241,21 @@ export function StrategyCenterPage() {
         dataIndex: 'status',
         key: 'status',
         width: 110,
-        render: (value?: string) => <Tag color={statusColor(value)}>{value || 'unknown'}</Tag>,
+        render: (value?: string) => <Tag color={statusColor(value)}>{formatStrategyStatus(value)}</Tag>,
       },
       {
         title: '灰度',
         dataIndex: 'rollout_percentage',
         key: 'rollout_percentage',
         width: 90,
-        render: (value?: number) => (value === undefined ? <Tag color="warning">gap</Tag> : `${value}%`),
+        render: (value?: number) => (value === undefined ? <Tag color="warning">字段暂缺</Tag> : `${value}%`),
       },
       {
         title: '风险',
         dataIndex: 'risk_level',
         key: 'risk_level',
         width: 90,
-        render: (value?: string) => <Tag>{value || 'unknown'}</Tag>,
+        render: (value?: string) => <Tag color={riskTagColor(value)}>{formatRiskLevel(value)}</Tag>,
       },
     ],
     []
@@ -204,16 +263,16 @@ export function StrategyCenterPage() {
 
   const versionColumns = useMemo<ColumnsType<StrategyVersion>>(
     () => [
-      { title: 'Version ID', dataIndex: 'version_id', key: 'version_id', ellipsis: true },
-      { title: 'Created By', dataIndex: 'created_by', key: 'created_by', width: 120 },
+      { title: '版本 ID', dataIndex: 'version_id', key: 'version_id', ellipsis: true },
+      { title: '创建人', dataIndex: 'created_by', key: 'created_by', width: 120 },
       {
-        title: 'Gate',
+        title: '门禁',
         dataIndex: 'gate_status',
         key: 'gate_status',
         width: 120,
         render: (value?: string) => <Tag color={statusColor(value)}>{value || 'pending'}</Tag>,
       },
-      { title: 'Created At', dataIndex: 'created_at', key: 'created_at', width: 180 },
+      { title: '创建时间', dataIndex: 'created_at', key: 'created_at', width: 180 },
     ],
     []
   );
@@ -221,34 +280,34 @@ export function StrategyCenterPage() {
   const operationColumns = useMemo<ColumnsType<StrategyOperationLog>>(
     () => [
       {
-        title: 'Operation',
+        title: '操作类型',
         dataIndex: 'operation',
         key: 'operation',
         width: 120,
-        render: (value?: string) => value || <Tag color="warning">Contract gap</Tag>,
+        render: (value?: string) => value || <Tag color="warning">字段暂缺</Tag>,
       },
       {
-        title: 'From',
+        title: '原状态',
         dataIndex: 'from_status',
         key: 'from_status',
         width: 110,
-        render: (value?: string) => <Tag color={statusColor(value)}>{value || 'n/a'}</Tag>,
+        render: (value?: string) => <Tag color={statusColor(value)}>{value ? formatStrategyStatus(value) : '无'}</Tag>,
       },
       {
-        title: 'To',
+        title: '目标状态',
         dataIndex: 'to_status',
         key: 'to_status',
         width: 110,
-        render: (value?: string) => <Tag color={statusColor(value)}>{value || 'n/a'}</Tag>,
+        render: (value?: string) => <Tag color={statusColor(value)}>{value ? formatStrategyStatus(value) : '无'}</Tag>,
       },
       {
-        title: 'Reason',
+        title: '原因',
         dataIndex: 'reason',
         key: 'reason',
         ellipsis: true,
       },
       {
-        title: 'Time',
+        title: '时间',
         dataIndex: 'created_at',
         key: 'created_at',
         width: 180,
@@ -447,41 +506,45 @@ export function StrategyCenterPage() {
     editForm.getFieldValue('status') !== 'canary';
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       {contextHolder}
 
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <Title level={2} style={{ marginBottom: 8 }}>
-            策略中心
-          </Title>
-          <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-            查看 Phase 3 高级检索策略的状态、影响、版本和最小操作日志，并在需要时安全地做灰度或回滚。
-          </Paragraph>
-        </div>
-        <Space wrap>
-          <Link href="/evaluation/runs">
-            <Button>查看评测运行</Button>
-          </Link>
-          <Button icon={<ReloadOutlined />} onClick={() => void loadFlags()}>
-            刷新
-          </Button>
-        </Space>
-      </div>
+      <PageHeader
+        title="策略管理"
+        subtitle="查看检索策略的状态、影响、版本和操作记录，并在确认风险后进行灰度或回退。"
+        extra={
+          <>
+            <Link href="/evaluation/runs">
+              <Button>查看评测任务</Button>
+            </Link>
+            <Button icon={<ReloadOutlined />} onClick={() => void loadFlags()}>
+              刷新
+            </Button>
+          </>
+        }
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <Card>
-          <Statistic title="启用策略数" value={enabledCount} prefix={<SettingOutlined />} />
-        </Card>
-        <Card>
-          <Statistic title="Canary 策略数" value={canaryCount} />
-        </Card>
-        <Card>
-          <Statistic title="Error 策略数" value={errorCount} />
-        </Card>
-        <Card>
-          <Statistic title="最近回滚次数" value={rollbackCount} prefix={<RollbackOutlined />} />
-        </Card>
+        <MetricCard
+          label="启用策略数"
+          value={<Statistic value={enabledCount} prefix={<SettingOutlined />} />}
+          helper="当前处于启用状态的策略总数"
+        />
+        <MetricCard
+          label="小流量试用策略数"
+          value={<Statistic value={canaryCount} />}
+          helper="正在小范围放量观察的策略数量"
+        />
+        <MetricCard
+          label="异常策略数"
+          value={<Statistic value={errorCount} />}
+          helper="需要优先检查的异常策略数量"
+        />
+        <MetricCard
+          label="最近回退次数"
+          value={<Statistic value={rollbackCount} prefix={<RollbackOutlined />} />}
+          helper="近期执行过的策略回退次数"
+        />
       </div>
 
       {flagsError ? (
@@ -498,13 +561,21 @@ export function StrategyCenterPage() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[minmax(440px,520px)_minmax(0,1fr)]">
-        <Card title="Feature Flags">
+        <Card title="策略开关" className="admin-section-card">
           {flagsLoading ? (
             <div className="flex justify-center py-10">
               <Spin />
             </div>
           ) : flags.length === 0 ? (
-            <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有可展示的策略开关。" />
+            <ActionEmpty
+              title="当前没有可展示的策略开关"
+              description="请先确认后端是否已返回策略配置，或稍后刷新重试。"
+              action={
+                <Button type="primary" onClick={() => void loadFlags()}>
+                  重新加载策略
+                </Button>
+              }
+            />
           ) : (
             <Table<StrategyFlag>
               rowKey="flag_key"
@@ -529,8 +600,12 @@ export function StrategyCenterPage() {
 
         <Space direction="vertical" size="large" className="w-full">
           {!selectedFlag ? (
-            <Card>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="请选择一个策略查看详情。" />
+            <Card className="admin-section-card">
+              <ActionEmpty
+                title="请选择一个策略查看详情"
+                description="选择后可以查看影响分析、门禁摘要、版本记录和操作日志。"
+                action={<Button onClick={() => void loadFlags()}>刷新策略列表</Button>}
+              />
             </Card>
           ) : (
             <>
@@ -540,44 +615,47 @@ export function StrategyCenterPage() {
                   <Space wrap>
                     <Select
                       value={selectedRange}
-                      options={impactRanges.map((value) => ({ label: value, value }))}
+                      options={impactRanges.map((value) => ({ label: formatImpactRange(value), value }))}
                       onChange={(value) => setSelectedRange(value)}
                       style={{ width: 120 }}
                     />
                     <Button onClick={openEditModal}>修改策略</Button>
                     <Button onClick={() => openRollbackModal(false)}>回滚当前策略</Button>
                     <Button danger onClick={() => openRollbackModal(true)}>
-                      回滚到 Phase2 Baseline
+                      回退到稳定检索策略
                     </Button>
                   </Space>
                 }
+                className="admin-section-card"
               >
                 <Descriptions column={2} size="small" bordered>
-                  <Descriptions.Item label="flag_key">{selectedFlag.flag_key}</Descriptions.Item>
-                  <Descriptions.Item label="label">{renderValue(selectedFlag.label)}</Descriptions.Item>
-                  <Descriptions.Item label="status">
-                    <Tag color={statusColor(selectedFlag.status)}>{selectedFlag.status || 'unknown'}</Tag>
-                  </Descriptions.Item>
-                  <Descriptions.Item label="enabled">{renderValue(selectedFlag.enabled)}</Descriptions.Item>
-                  <Descriptions.Item label="rollout_percentage">
-                    {renderValue(selectedFlag.rollout_percentage)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="strategy_version">
-                    {renderValue(selectedFlag.strategy_version)}
-                  </Descriptions.Item>
-                  <Descriptions.Item label="risk_level">
-                    <Tag color={selectedFlag.risk_level === 'high' ? 'error' : 'default'}>
-                      {selectedFlag.risk_level || 'unknown'}
+                  <Descriptions.Item label="策略标识">{selectedFlag.flag_key}</Descriptions.Item>
+                  <Descriptions.Item label="策略名称">{renderValue(selectedFlag.label)}</Descriptions.Item>
+                  <Descriptions.Item label="当前状态">
+                    <Tag color={statusColor(selectedFlag.status)}>
+                      {formatStrategyStatus(selectedFlag.status)}
                     </Tag>
                   </Descriptions.Item>
-                  <Descriptions.Item label="updated_at">
+                  <Descriptions.Item label="是否启用">{renderValue(selectedFlag.enabled)}</Descriptions.Item>
+                  <Descriptions.Item label="灰度比例">
+                    {renderValue(selectedFlag.rollout_percentage)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="策略版本">
+                    {renderValue(selectedFlag.strategy_version)}
+                  </Descriptions.Item>
+                  <Descriptions.Item label="风险等级">
+                    <Tag color={riskTagColor(selectedFlag.risk_level)}>
+                      {formatRiskLevel(selectedFlag.risk_level)}
+                    </Tag>
+                  </Descriptions.Item>
+                  <Descriptions.Item label="最近更新时间">
                     {renderValue(selectedFlag.updated_at)}
                   </Descriptions.Item>
                 </Descriptions>
               </Card>
 
               <div className="grid gap-4 xl:grid-cols-2">
-                <Card title="Impact 分析">
+                <Card title="影响分析">
                   {impactLoading ? (
                     <Spin />
                   ) : impactError ? (
@@ -591,82 +669,82 @@ export function StrategyCenterPage() {
                         <Alert
                           type="warning"
                           showIcon
-                          message="Impact 存在契约缺口"
+                          message="影响分析存在字段缺口"
                           description={impact.contract_gaps.join(', ')}
                         />
                       ) : null}
                       <Descriptions column={1} size="small" bordered>
-                        <Descriptions.Item label="sample_size">
+                        <Descriptions.Item label="样本量">
                           {renderValue(impact.sample_size)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="parent_fill_gain">
+                        <Descriptions.Item label="父子召回补全收益">
                           {renderMetric(impact.parent_fill_gain)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="rewrite_gain">
+                        <Descriptions.Item label="查询改写收益">
                           {renderMetric(impact.rewrite_gain)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="evidence_refusal_rate">
+                        <Descriptions.Item label="证据不足拒答率">
                           {renderMetric(impact.evidence_refusal_rate)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="refusal_false_positive_rate">
+                        <Descriptions.Item label="拒答误判率">
                           {renderMetric(impact.refusal_false_positive_rate)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="citation_support_score">
+                        <Descriptions.Item label="引用支撑评分">
                           {renderMetric(impact.citation_support_score)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="p95_latency_delta_ms">
+                        <Descriptions.Item label="P95 延迟变化（ms）">
                           {renderMetric(impact.p95_latency_delta_ms, 0)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="avg_context_tokens_delta">
+                        <Descriptions.Item label="平均上下文 Token 变化">
                           {renderMetric(impact.avg_context_tokens_delta, 0)}
                         </Descriptions.Item>
-                        <Descriptions.Item label="route_contribution">
+                        <Descriptions.Item label="路由贡献">
                           {impact.route_contribution ? (
                             <Space direction="vertical" size="small">
-                              <Text>dense: {renderMetric(impact.route_contribution.dense)}</Text>
-                              <Text>sparse: {renderMetric(impact.route_contribution.sparse)}</Text>
+                              <Text>稠密检索：{renderMetric(impact.route_contribution.dense)}</Text>
+                              <Text>稀疏检索：{renderMetric(impact.route_contribution.sparse)}</Text>
                             </Space>
                           ) : (
-                            <Tag color="warning">Contract gap</Tag>
+                            <Tag color="warning">字段暂缺</Tag>
                           )}
                         </Descriptions.Item>
                       </Descriptions>
                     </Space>
                   ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有 impact 数据。" />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有影响分析数据。" />
                   )}
                 </Card>
 
-                <Card title="Gate 摘要">
+                <Card title="门禁摘要">
                   {gateLoading ? (
                     <Spin />
                   ) : gateError ? (
                     <Alert type="error" showIcon message={gateError} />
                   ) : gates ? (
                     <Descriptions column={1} size="small" bordered>
-                      <Descriptions.Item label="gate_status">
+                      <Descriptions.Item label="门禁状态">
                         <Tag color={gates.passed ? 'success' : 'warning'}>
                           {gates.gate_status || 'unknown'}
                         </Tag>
                       </Descriptions.Item>
-                      <Descriptions.Item label="passed">
-                        {gates.passed ? <Tag color="success">true</Tag> : <Tag color="error">false</Tag>}
+                      <Descriptions.Item label="是否通过">
+                        {gates.passed ? <Tag color="success">是</Tag> : <Tag color="error">否</Tag>}
                       </Descriptions.Item>
-                      <Descriptions.Item label="failed_rules">
-                        {gates.failed_rules?.length ? gates.failed_rules.join(', ') : <Tag color="default">none</Tag>}
+                      <Descriptions.Item label="未通过规则">
+                        {gates.failed_rules?.length ? gates.failed_rules.join(', ') : <Tag color="default">无</Tag>}
                       </Descriptions.Item>
-                      <Descriptions.Item label="baseline_report_id">
+                      <Descriptions.Item label="基线报告 ID">
                         {renderValue(gates.baseline_report_id)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="candidate_report_id">
+                      <Descriptions.Item label="候选报告 ID">
                         {renderValue(gates.candidate_report_id)}
                       </Descriptions.Item>
-                      <Descriptions.Item label="last_eval_run_id">
+                      <Descriptions.Item label="最近评测运行 ID">
                         {renderValue(gates.last_eval_run_id)}
                       </Descriptions.Item>
                     </Descriptions>
                   ) : (
-                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有 gate 数据。" />
+                    <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="当前没有门禁摘要数据。" />
                   )}
                 </Card>
               </div>
@@ -716,7 +794,7 @@ export function StrategyCenterPage() {
                   message={`最近回滚：${lastRollbackResult.rollback_id || 'rollback'}`}
                   description={
                     lastRollbackResult.changed_flags?.length
-                      ? `Changed flags: ${lastRollbackResult.changed_flags
+                      ? `已变更策略：${lastRollbackResult.changed_flags
                           .map((item) => item.label || item.flag_key)
                           .join(', ')}`
                       : undefined
@@ -741,7 +819,7 @@ export function StrategyCenterPage() {
               type="warning"
               showIcon
               message="高风险策略"
-              description="从 disabled 到 enabled 时建议先走 shadow 或 canary，避免直接全量开启。"
+              description="从停用直接切到启用前，建议先走影子模式或灰度发布，避免一次性全量放开。"
             />
           ) : null}
           {highRiskDirectEnable ? (
@@ -749,28 +827,33 @@ export function StrategyCenterPage() {
               type="error"
               showIcon
               message="当前选择会触发后端高风险校验"
-              description="请优先选择 shadow 或 canary，再逐步扩大 rollout。"
+              description="请优先选择影子模式或灰度发布，再逐步扩大灰度比例。"
             />
           ) : null}
           <Form form={editForm} layout="vertical">
-            <Form.Item label="Enabled" name="enabled" rules={[{ required: true }]}>
+            <Form.Item label="是否启用" name="enabled" rules={[{ required: true }]}>
               <Select
                 options={[
-                  { label: 'true', value: true },
-                  { label: 'false', value: false },
+                  { label: '是', value: true },
+                  { label: '否', value: false },
                 ]}
               />
             </Form.Item>
-            <Form.Item label="Status" name="status" rules={[{ required: true }]}>
-              <Select options={strategyStatuses.map((value) => ({ label: value, value }))} />
+            <Form.Item label="发布状态" name="status" rules={[{ required: true }]}>
+              <Select
+                options={strategyStatuses.map((value) => ({
+                  label: formatStrategyStatus(value),
+                  value,
+                }))}
+              />
             </Form.Item>
-            <Form.Item label="Rollout Percentage" name="rollout_percentage" rules={[{ required: true }]}>
+            <Form.Item label="灰度比例" name="rollout_percentage" rules={[{ required: true }]}>
               <InputNumber min={0} max={100} className="w-full" />
             </Form.Item>
             <Form.Item
-              label="Reason"
+              label="调整原因"
               name="reason"
-              rules={[{ required: true, message: '请填写 reason' }]}
+              rules={[{ required: true, message: '请填写调整原因' }]}
             >
               <Input.TextArea rows={4} placeholder="说明这次策略调整的原因" />
             </Form.Item>
@@ -779,7 +862,7 @@ export function StrategyCenterPage() {
       </Modal>
 
       <Modal
-        title={rollbackAll ? '回滚到 Phase2 Baseline' : '回滚当前策略'}
+        title={rollbackAll ? '回退到 Phase 2 基线策略' : '回滚当前策略'}
         open={rollbackOpen}
         confirmLoading={actionLoading}
         onCancel={() => setRollbackOpen(false)}
@@ -792,15 +875,15 @@ export function StrategyCenterPage() {
             message={rollbackAll ? '将按后端冻结顺序做全量回滚' : '将仅回滚当前策略'}
             description={
               rollbackAll
-                ? '影响范围：全部 Phase 3 flags，目标版本为 phase2_baseline。'
+                ? '影响范围：全部高级检索策略开关，目标版本为当前稳定基线。'
                 : `影响范围：${selectedFlag?.label || selectedFlag?.flag_key || '当前策略'}。`
             }
           />
           <Form form={rollbackForm} layout="vertical">
             <Form.Item
-              label="Reason"
+              label="回滚原因"
               name="reason"
-              rules={[{ required: true, message: '请填写 reason' }]}
+              rules={[{ required: true, message: '请填写回滚原因' }]}
             >
               <Input.TextArea rows={4} placeholder="说明回滚原因，例如延迟回退或质量异常" />
             </Form.Item>

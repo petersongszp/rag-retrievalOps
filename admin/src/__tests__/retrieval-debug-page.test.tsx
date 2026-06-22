@@ -139,7 +139,7 @@ describe('RetrievalDebugPage', () => {
     }, WAIT_OPTS);
   });
 
-  it('renders Contract gap tags for missing fields', async () => {
+  it('renders fallback tags for missing fields', async () => {
     mockedGet.mockResolvedValueOnce({
       request_id: 'req_gap',
       debug_available: false,
@@ -147,7 +147,7 @@ describe('RetrievalDebugPage', () => {
     } as RetrievalDebugTrace);
     render(<RetrievalDebugPage />);
     await waitFor(() => {
-      expect(screen.getAllByText('Contract gap').length).toBeGreaterThan(0);
+      expect(screen.getAllByText('暂未返回').length).toBeGreaterThan(0);
     }, WAIT_OPTS);
   });
 
@@ -219,9 +219,9 @@ describe('RetrievalDebugPage', () => {
     mockedGet.mockResolvedValueOnce(fullTrace);
     render(<RetrievalDebugPage />);
     await waitFor(() => {
-      expect(screen.getAllByText(/min_rerank_score/).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText(/min_density/).length).toBeGreaterThanOrEqual(1);
-      expect(screen.getAllByText(/min_citation_coverage/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/最低重排得分/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/最低证据密度/).length).toBeGreaterThanOrEqual(1);
+      expect(screen.getAllByText(/最低引用覆盖率/).length).toBeGreaterThanOrEqual(1);
     }, WAIT_OPTS);
   });
 });

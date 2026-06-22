@@ -32,6 +32,8 @@ import { KB_ADMIN_API } from '@/config/api';
 import apiClient from '@/services/api/client';
 import type { EvalDataset, ListResponse, RetrieveItem, RetrieveResponse } from '@/types/kb';
 import { useKnowledgeBaseContext } from './knowledge-base-provider';
+import { ActionEmpty } from './ui/action-empty';
+import { PageHeader } from './ui/page-header';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -63,47 +65,47 @@ type SaveCaseFormValues = {
 const FIELD_META: Record<string, Omit<ContractGapEntry, 'field'>> = {
   score: {
     interface: 'POST /admin/kb/retrieve -> items[].score',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: true,
   },
   citation: {
     interface: 'POST /admin/kb/retrieve -> items[].citation',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: true,
   },
   'citation.file_name': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.file_name',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'citation.chunk_index': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.chunk_index',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'citation.chunk_id': {
     interface: 'POST /admin/kb/retrieve -> items[].citation.chunk_id',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   source: {
     interface: 'POST /admin/kb/retrieve -> items[].source',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.route': {
     interface: 'POST /admin/kb/retrieve -> items[].source.route',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.collection': {
     interface: 'POST /admin/kb/retrieve -> items[].source.collection',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
   'source.retriever_version': {
     interface: 'POST /admin/kb/retrieve -> items[].source.retriever_version',
-    affectedPage: '检索实验室',
+    affectedPage: '检索调优',
     blocksAcceptance: false,
   },
 };
@@ -345,19 +347,15 @@ export function RetrievalLabPage() {
   };
 
   return (
-    <div className="space-y-6">
+    <div className="admin-page">
       {contextHolder}
 
-      <div>
-        <Title level={2} style={{ marginBottom: 8 }}>
-          检索实验室
-        </Title>
-        <Paragraph type="secondary" style={{ marginBottom: 0 }}>
-          运行检索测试、检查 request_id 与契约字段，并把一次检索沉淀为评测样本草稿。
-        </Paragraph>
-      </div>
+      <PageHeader
+        title="检索调优"
+        subtitle="输入问题，查看相关结果、引用来源和本次检索链路编号，并把结果沉淀为评测样本。"
+      />
 
-      <Card>
+      <Card className="admin-section-card">
         <Form
           form={retrieveForm}
           layout="vertical"
@@ -391,7 +389,7 @@ export function RetrievalLabPage() {
             />
           </Form.Item>
           <Button type="primary" htmlType="submit" icon={<SearchOutlined />} loading={loading}>
-            运行检索测试
+            开始检索验证
           </Button>
         </Form>
       </Card>
@@ -399,37 +397,37 @@ export function RetrievalLabPage() {
       {error ? <Alert type="error" showIcon message={error} /> : null}
 
       {!result ? (
-        <Card>
-          <Empty
-            image={Empty.PRESENTED_IMAGE_SIMPLE}
+        <Card className="admin-section-card">
+          <ActionEmpty
+            title={selectedBase ? `开始验证 ${selectedBase.name} 的检索效果` : '请选择知识库并开始检索验证'}
             description={
               selectedBase
-                ? `对 ${selectedBase.name} 运行测试，检查 request_id、score、citation 与 source 字段。`
-                : '请选择知识库并运行检索测试。'
+                ? '输入一个真实问题，查看相关结果、引用来源和链路编号。'
+                : '先选择知识库，再输入问题查看检索结果。'
             }
           />
         </Card>
       ) : (
         <Space direction="vertical" size="large" className="w-full">
-          <Card>
+          <Card className="admin-section-card">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <Space direction="vertical" size={4}>
-                <Text strong>Request ID</Text>
-                <Text code>{result.request_id || 'Contract gap: request_id'}</Text>
+                <Text strong>请求编号</Text>
+                <Text code>{result.request_id || '暂未返回请求编号'}</Text>
               </Space>
               <Space wrap>
                 <Button
                   icon={<CopyOutlined />}
                   onClick={async () => {
                     if (!result.request_id) {
-                      messageApi.warning('后端未返回 request_id');
+                      messageApi.warning('当前结果暂未返回请求编号');
                       return;
                     }
                     await navigator.clipboard.writeText(result.request_id);
-                    messageApi.success('request_id 已复制');
+                    messageApi.success('请求编号已复制');
                   }}
                 >
-                  复制 request_id
+                  复制请求编号
                 </Button>
                 <Button
                   disabled={!result.request_id}
@@ -442,7 +440,7 @@ export function RetrievalLabPage() {
                     );
                   }}
                 >
-                  查看 Trace
+                  查看链路追踪
                 </Button>
                 <Button
                   disabled={!result.request_id}
@@ -455,7 +453,7 @@ export function RetrievalLabPage() {
                     );
                   }}
                 >
-                  查看调试视图
+                  查看链路分析
                 </Button>
                 <Button type="primary" icon={<SaveOutlined />} onClick={() => void openSaveModal()}>
                   保存为评测样本
@@ -465,31 +463,39 @@ export function RetrievalLabPage() {
           </Card>
 
           {result.items.length === 0 ? (
-            <Card>
-              <Empty image={Empty.PRESENTED_IMAGE_SIMPLE} description="未返回检索结果。" />
+            <Card className="admin-section-card">
+              <ActionEmpty
+                title="本次未返回检索结果"
+                description="可以尝试换一种问法、放宽关键词，或先检查知识库中是否已有相关内容。"
+              />
             </Card>
           ) : (
             result.items.map((item, index) => {
               const gaps = findContractGaps(item);
 
               return (
-                <Card key={`${item.citation?.chunk_id ?? 'row'}-${index}`}>
+                <Card key={`${item.citation?.chunk_id ?? 'row'}-${index}`} className="admin-section-card">
                   <Space direction="vertical" size={12} className="w-full">
                     <div className="flex flex-wrap items-center justify-between gap-3">
                       <Tag color="blue">结果 {index + 1}</Tag>
-                      <Text>Score: {item.score ?? 'Contract gap'}</Text>
+                      <Text>相关度：{item.score ?? '暂未返回'}</Text>
                     </div>
                     <Text>{item.content}</Text>
                     <Space wrap>
-                      <Tag>文件：{item.citation?.file_name || 'Contract gap'}</Tag>
-                      <Tag>Chunk Index：{item.citation?.chunk_index ?? 'Contract gap'}</Tag>
-                      <Tag>Chunk ID：{item.citation?.chunk_id || 'Contract gap'}</Tag>
-                      <Tag>Route：{item.source?.route || 'Contract gap'}</Tag>
-                      <Tag>Collection：{item.source?.collection || 'Contract gap'}</Tag>
-                      <Tag>Retriever：{item.source?.retriever_version || 'Contract gap'}</Tag>
+                      <Tag>引用来源：{item.citation?.file_name || '暂未返回'}</Tag>
+                      <Tag>分块序号：{item.citation?.chunk_index ?? '暂未返回'}</Tag>
+                      <Tag>分块编号：{item.citation?.chunk_id || '暂未返回'}</Tag>
+                      <Tag>召回路线：{item.source?.route || '暂未返回'}</Tag>
+                      <Tag>数据集合：{item.source?.collection || '暂未返回'}</Tag>
+                      <Tag>检索版本：{item.source?.retriever_version || '暂未返回'}</Tag>
                     </Space>
                     {gaps.length > 0 ? (
-                      <Alert type="warning" showIcon message={`Contract gaps: ${gaps.join(', ')}`} />
+                      <Alert
+                        type="warning"
+                        showIcon
+                        message="返回信息完整性检查"
+                        description={`当前结果仍缺少以下字段：${gaps.join('、')}`}
+                      />
                     ) : null}
                   </Space>
                 </Card>
@@ -505,7 +511,7 @@ export function RetrievalLabPage() {
                   label: (
                     <Space>
                       <WarningOutlined style={{ color: '#faad14' }} />
-                      <Text>契约缺口记录（{gapLog.length} 项）</Text>
+                      <Text>返回信息完整性检查（{gapLog.length} 项）</Text>
                     </Space>
                   ),
                   children: (
