@@ -1,4 +1,19 @@
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || '/api';
+const rawAPIBaseURL = process.env.NEXT_PUBLIC_API_BASE_URL?.trim();
+
+function normalizeAPIBaseURL(baseURL?: string) {
+  if (!baseURL) {
+    return '/api';
+  }
+
+  if (/^https?:\/\//i.test(baseURL)) {
+    return '/api';
+  }
+
+  const normalized = baseURL.startsWith('/') ? baseURL : `/${baseURL}`;
+  return normalized.replace(/\/$/, '') || '/api';
+}
+
+export const API_BASE_URL = normalizeAPIBaseURL(rawAPIBaseURL);
 
 export const AUTH_API = {
   REGISTER: '/v1/auth/register',

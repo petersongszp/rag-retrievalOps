@@ -554,3 +554,30 @@ type SearchKnowledgeBaseResult struct {
 - 所有设计与开发，都服务于“把项目开发好”和“把项目讲明白”这两个目标。
 
 这份文档作为当前阶段的集成设计基线，后续开发和讲解都应以此为依据推进。
+
+## 19. 当前实现状态
+
+截至当前轮次，已经完成以下落地内容：
+
+- `zhihangAI` 的 `Agent` 模型新增 `ragConfig`，支持保存 RAG provider 配置。
+- `zhihangAI` 的创建 / 更新 Agent 请求已支持 `ragConfig`。
+- `zhihangAI` 的统一检索结果结构已扩展为支持 `content`、`score`、`sourceName`、`metadata`。
+- `zhihangAI` 已新增 `retrievalops` 远程检索 client，并完成最小单元测试。
+- `zhihangAI` 的 Agent 聊天链路已支持根据 `ragConfig.provider` 在本地 knowledge 与 `rag-retrievalOps` 之间分发。
+- `zhihangAI` 的 Agent 创建弹窗已增加最小版 RAG 配置项，包括 provider、external KB IDs、topK、strategyProfile。
+
+### 19.1 已验证内容
+
+- `app/internal/integrations/retrievalops` 包的 client 测试已通过。
+
+### 19.2 当前已知阻塞
+
+- 后端大范围 `go test` 仍然较重，完整回归还需要继续分批验证。
+- 前端 `pnpm type-check` 当前存在仓库原有问题：项目中混入了多份 `*.vue.js` 文件，导致 TypeScript 在未开启 `allowJs` 时直接失败。这一问题不是本轮 `ragConfig` 改造引入的，需要在后续单独清理或调整前端类型检查配置。
+
+### 19.3 下一步开发重点
+
+- 补齐 `retrievalOps` 运行时配置读取与注入。
+- 继续完善 Agent 编辑 / 管理页对 `ragConfig` 的完整编辑能力。
+- 做后端更多定向测试和必要的服务层验证。
+- 继续补齐教学交付文档，确保项目开发与学员讲解同步推进。

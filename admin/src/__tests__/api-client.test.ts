@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import apiClient, { refreshClient, setUnauthorizedHandler } from '@/services/api/client';
+import { API_BASE_URL } from '@/config/api';
 import { clearStoredSession, getStoredSession, resetSessionCache, setStoredSession } from '@/services/auth/session';
 
 type AdapterConfig = {
@@ -114,5 +115,19 @@ describe('api client refresh flow', () => {
 
     expect(getStoredSession()).toBeNull();
     expect(unauthorizedSpy).toHaveBeenCalledTimes(1);
+  });
+
+  it('normalizes duplicated api prefixes for admin routes', async () => {
+    let requestedURL = '';
+
+    apiClient.defaults.adapter = async (config) => {
+      requestedURL = String(config.url || '');
+      return makeSuccess(config, { code: 200, message: 'Success', data: { ok: true } });
+    };
+
+    const result = await apiClient.get(`${API_BASE_URL}/admin/kb/bases`);
+
+    expect(result).toEqual({ ok: true });
+    expect(requestedURL).toBe('/admin/kb/bases');
   });
 });

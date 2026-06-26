@@ -38,7 +38,8 @@ npm start
 创建 `.env.local` 文件：
 
 ```
-NEXT_PUBLIC_API_BASE_URL=http://localhost:8899/api
+NEXT_PUBLIC_API_BASE_URL=/api
+API_PROXY_TARGET=http://localhost:8899
 ```
 
 ## 项目结构
