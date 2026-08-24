@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"errors"
 	"interview-agents/internal/model"
 
 	"gorm.io/gorm"
@@ -21,13 +22,22 @@ func (r *RAGUserRepository) Create(user *model.RAGUser) error {
 func (r *RAGUserRepository) GetByID(id uint64) (*model.RAGUser, error) {
 	var user model.RAGUser
 	err := r.db.Where("id = ?", id).First(&user).Error
-	return &user, err
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *RAGUserRepository) GetByEmail(email string) (*model.RAGUser, error) {
 	var user model.RAGUser
 	err := r.db.Where("email = ?", email).First(&user).Error
-	return &user, err
+	if errors.Is(err, gorm.ErrRecordNotFound) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	return &user, nil
 }
 
 func (r *RAGUserRepository) Update(user *model.RAGUser) error {

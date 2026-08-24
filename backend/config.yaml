@@ -135,7 +135,7 @@ Embedding:
   Region: "${EMBEDDING_REGION}"
   Timeout: 30s
   RetryTimes: 3
-  Dimensions: 2048
+  Dimensions: 1024
   BatchSize: 10
   User: ""
   EnableCache: true

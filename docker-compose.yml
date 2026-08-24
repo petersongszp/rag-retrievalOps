@@ -42,6 +42,7 @@ services:
     volumes:
       - ./backend/config.yaml:/app/config.yaml:ro
       - ./backend/logs:/app/logs
+      - rag-uploads:/app/uploads
     networks:
       - rag-network
 
@@ -209,6 +210,7 @@ volumes:
   mysql-data:
   redis-data:
   milvus-data:
+  rag-uploads:
 
 networks:
   rag-network:

@@ -143,22 +143,20 @@ func newOpenAIEmbedder(ctx context.Context, cfg *config.EmbeddingConfig) (embedd
 		return nil, fmt.Errorf("openai provider requires APIKey")
 	}
 
-	var dimensions *int
-	if cfg.Dimensions > 0 {
-		dimensions = &cfg.Dimensions
-	}
-
+	// NOTE: Do not pass Dimensions to the OpenAI-compatible embedder.
+	// Many providers (SiliconFlow, DashScope, etc.) do not support the
+	// optional "dimensions" request field. The runtime probe determines
+	// the actual dimension from the API response instead.
 	var user *string
 	if cfg.User != "" {
 		user = &cfg.User
 	}
 
 	openaiCfg := &einoopenai.EmbeddingConfig{
-		Model:      cfg.Model,
-		APIKey:     cfg.APIKey,
-		BaseURL:    cfg.BaseURL,
-		Dimensions: dimensions,
-		User:       user,
+		Model:   cfg.Model,
+		APIKey:  cfg.APIKey,
+		BaseURL: cfg.BaseURL,
+		User:    user,
 	}
 	return einoopenai.NewEmbedder(ctx, openaiCfg)
 }

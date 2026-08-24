@@ -21,7 +21,7 @@ func Login(ctx context.Context, c *app.RequestContext) {
 
 	// 查找用户
 	user, err := userRepo.GetByEmail(req.Email)
-	if err != nil {
+	if err != nil || user == nil {
 		response.Error(ctx, c, 401, "Invalid email or password")
 		return
 	}
