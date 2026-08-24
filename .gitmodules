@@ -1,0 +1,4 @@
+[submodule "integrations/agent-desk"]
+	path = integrations/agent-desk
+	url = https://github.com/petersongszp/agent-desk.git
+	branch = main

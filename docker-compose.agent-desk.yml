@@ -1,0 +1,30 @@
+services:
+  agent-desk:
+    build:
+      context: ./integrations/agent-desk
+      dockerfile: Dockerfile
+    image: rag-platform-agent-desk:local
+    restart: unless-stopped
+    env_file:
+      - .env.agent-desk.local
+    environment:
+      TZ: Asia/Shanghai
+      AGENT_DESK_DB_TYPE: sqlite
+      AGENT_DESK_DB_DSN: file:/app/data/app.db?_busy_timeout=5000
+      AGENT_DESK_RETRIEVAL_PROVIDER: retrieval_ops
+      AGENT_DESK_RETRIEVAL_BASE_URL: http://rag-server:8899
+      AGENT_DESK_RETRIEVAL_TIMEOUT_MS: 5000
+      AGENT_DESK_RETRIEVAL_FAIL_CLOSED: "true"
+    ports:
+      - "8083:8083"
+    volumes:
+      - agent-desk-data:/app/data
+      - ./integrations/agent-desk/docker/agent-desk.yaml:/app/config/config.yaml:ro
+    depends_on:
+      rag-server:
+        condition: service_healthy
+    networks:
+      - rag-network
+
+volumes:
+  agent-desk-data:

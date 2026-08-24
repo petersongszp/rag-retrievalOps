@@ -9,6 +9,7 @@ frontend/next/
 
 .idea
 .env
+.env.agent-desk.local
 # 忽略营销文档
 doc/营销/
 # 忽略学习文档
